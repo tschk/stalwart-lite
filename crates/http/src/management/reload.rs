@@ -146,21 +146,7 @@ impl ManageReload for Server {
                 }))
                 .into_http_response())
             }
-            (Some("webadmin"), &Method::GET) => {
-                // Validate the access token
-                access_token.assert_has_permission(Permission::WebadminUpdate)?;
-
-                self.inner
-                    .data
-                    .webadmin
-                    .update_and_unpack(&self.core)
-                    .await?;
-
-                Ok(JsonResponse::new(json!({
-                    "data": (),
-                }))
-                .into_http_response())
-            }
+            (Some("webadmin"), &Method::GET) => Err(trc::ManageEvent::NotSupported.into_err()),
             _ => Err(trc::ResourceEvent::NotFound.into_err()),
         }
     }

@@ -370,38 +370,13 @@ impl BootManager {
                         insert_keys.push(ConfigKey::from(*key));
                     }
                 }
-
-                // Download webadmin if missing
+                // Webadmin intentionally disabled in the Unthought fork
                 if let Some(blob_store) = config
                     .value("storage.blob")
                     .and_then(|id| stores.blob_stores.get(id))
                 {
                     match blob_store.get_blob(WEBADMIN_KEY, 0..usize::MAX).await {
-                        Ok(Some(_)) => (),
-                        Ok(None) => match manager.fetch_resource("webadmin").await {
-                            Ok(bytes) => match blob_store.put_blob(WEBADMIN_KEY, &bytes).await {
-                                Ok(_) => {
-                                    trc::event!(
-                                        Resource(trc::ResourceEvent::DownloadExternal),
-                                        Id = "webadmin"
-                                    );
-                                }
-                                Err(err) => {
-                                    config.new_build_error(
-                                        "*",
-                                        format!("Failed to store webadmin blob: {err}"),
-                                    );
-                                }
-                            },
-                            Err(err) => {
-                                config.new_build_error(
-                                    "*",
-                                    format!("Failed to download webadmin: {err}"),
-                                );
-                            }
-                        },
-                        Err(err) => config
-                            .new_build_error("*", format!("Failed to access webadmin blob: {err}")),
+                        Ok(Some(_)) | Ok(None) | Err(_) => (),
                     }
                 }
 

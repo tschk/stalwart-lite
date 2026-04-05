@@ -603,12 +603,6 @@ impl ParseHttp for Server {
                         trc::error!(err.span_id(session.session_id));
                     }
                 }
-
-                let resource = self.inner.data.webadmin.get("logo.svg").await?;
-
-                if !resource.is_empty() {
-                    return Ok(resource.into_http_response());
-                }
             }
             // SPDX-SnippetEnd
             "form" => {
@@ -633,19 +627,7 @@ impl ParseHttp for Server {
                     }
                 }
             }
-            _ => {
-                let path = req.uri().path();
-                let resource = self
-                    .inner
-                    .data
-                    .webadmin
-                    .get(path.strip_prefix('/').unwrap_or(path))
-                    .await?;
-
-                if !resource.is_empty() {
-                    return Ok(resource.into_http_response());
-                }
-            }
+            _ => {}
         }
 
         // Block dangerous URLs
