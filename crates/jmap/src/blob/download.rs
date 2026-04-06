@@ -8,14 +8,13 @@ use common::{Server, auth::AccessToken};
 use email::cache::MessageCacheFetch;
 use email::cache::email::MessageCacheAccess;
 use email::message::metadata::MessageMetadata;
-use groupware::cache::GroupwareCache;
 use store::ValueKey;
 use store::write::{AlignedBytes, Archive};
 use std::future::Future;
 use trc::AddContext;
 use types::acl::Acl;
 use types::blob::{BlobClass, BlobId};
-use types::collection::{Collection, SyncCollection};
+use types::collection::Collection;
 use types::field::EmailField;
 use utils::chained_bytes::ChainedBytes;
 
@@ -120,18 +119,6 @@ impl BlobDownload for Server {
                                 .await
                                 .caused_by(trc::location!())?
                                 .shared_messages(access_token, Acl::ReadItems)
-                                .contains(*document_id),
-                            collection @ (Collection::FileNode
-                            | Collection::ContactCard
-                            | Collection::CalendarEvent) => self
-                                .fetch_dav_resources(
-                                    access_token,
-                                    *account_id,
-                                    SyncCollection::from(collection),
-                                )
-                                .await
-                                .caused_by(trc::location!())?
-                                .shared_items(access_token, [Acl::ReadItems], true)
                                 .contains(*document_id),
                             _ => false,
                         }

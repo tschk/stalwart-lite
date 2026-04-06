@@ -27,11 +27,9 @@ use common::{
     listener::{SessionData, SessionManager, SessionStream},
     manager::webadmin::Resource,
 };
-use dav::{DavMethod, request::DavRequestHandler};
 use directory::Permission;
-use groupware::{DavResourceName, calendar::itip::ItipIngest};
 use http_proto::{
-    DownloadResponse, HtmlResponse, HttpContext, HttpRequest, HttpResponse, HttpResponseBody,
+    DownloadResponse, HttpContext, HttpRequest, HttpResponse, HttpResponseBody,
     HttpSessionData, JsonProblemResponse, ToHttpResponse, form_urlencoded, request::fetch_body,
 };
 use hyper::{
@@ -223,54 +221,13 @@ impl ParseHttp for Server {
                 }
             }
             "dav" => {
-                let response = match (
-                    path.next().and_then(DavResourceName::parse),
-                    DavMethod::parse(req.method()),
-                ) {
-                    (Some(_), Some(DavMethod::OPTIONS)) => HttpResponse::new(StatusCode::OK)
-                        .with_header(
-                            "DAV",
-                            concat!(
-                                "1, 2, 3, access-control, extended-mkcol, calendar-access, ",
-                                "calendar-auto-schedule, calendar-no-timezone, addressbook"
-                            ),
-                        )
-                        .with_header(
-                            "Allow",
-                            concat!(
-                                "OPTIONS, GET, HEAD, POST, PUT, DELETE, COPY, MOVE, MKCALENDAR, ",
-                                "MKCOL, PROPFIND, PROPPATCH, LOCK, UNLOCK, REPORT, ACL"
-                            ),
-                        ),
-                    (Some(resource), Some(method)) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        self.handle_dav_request(req, access_token, &session, resource, method)
-                            .await
-                    }
-                    (_, None) => HttpResponse::new(StatusCode::METHOD_NOT_ALLOWED),
-                    (None, _) => HttpResponse::new(StatusCode::NOT_FOUND),
-                };
-
-                return Ok(response);
+                return Ok(HttpResponse::new(StatusCode::NOT_FOUND));
             }
             ".well-known" => match (path.next().unwrap_or_default(), req.method()) {
                 ("jmap", &Method::GET) => {
                     return Ok(HttpResponse::new(StatusCode::TEMPORARY_REDIRECT)
                         .with_no_cache()
                         .with_location("/jmap/session"));
-                }
-                ("caldav", _) => {
-                    return Ok(HttpResponse::new(StatusCode::TEMPORARY_REDIRECT)
-                        .with_no_cache()
-                        .with_location(DavResourceName::Cal.base_path()));
-                }
-                ("carddav", _) => {
-                    return Ok(HttpResponse::new(StatusCode::TEMPORARY_REDIRECT)
-                        .with_no_cache()
-                        .with_location(DavResourceName::Card.base_path()));
                 }
                 ("oauth-authorization-server", &Method::GET) => {
                     // Limit anonymous requests
@@ -473,35 +430,6 @@ impl ParseHttp for Server {
                         .await?;
 
                     return self.handle_autoconfig_request(&req).await;
-                }
-            }
-            "calendar" => {
-                // Limit anonymous requests
-                self.is_http_anonymous_request_allowed(&session.remote_ip)
-                    .await?;
-
-                if self.core.groupware.itip_http_rsvp_url.is_some()
-                    && req.method() == Method::GET
-                    && path.next().unwrap_or_default() == "rsvp"
-                {
-                    return self
-                        .http_rsvp_handle(
-                            req.uri().query().unwrap_or_default(),
-                            req.headers()
-                                .get(header::ACCEPT_LANGUAGE)
-                                .and_then(|v| v.to_str().ok())
-                                .map(|lang| {
-                                    let lang = lang.split_once(',').map_or(lang, |(l, _)| l);
-                                    lang.split_once(';').map_or(lang, |(l, _)| l)
-                                })
-                                .unwrap_or("en"),
-                        )
-                        .await
-                        .map(|response| {
-                            HtmlResponse::new(response)
-                                .into_http_response()
-                                .with_no_store()
-                        });
                 }
             }
             "autodiscover" | "Autodiscover" => {

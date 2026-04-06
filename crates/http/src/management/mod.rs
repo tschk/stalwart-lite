@@ -13,7 +13,6 @@ pub mod queue;
 pub mod reload;
 pub mod report;
 pub mod settings;
-pub mod spam;
 pub mod stores;
 pub mod troubleshoot;
 
@@ -45,7 +44,6 @@ use reload::ManageReload;
 use report::ManageReports;
 use serde::Serialize;
 use settings::ManageSettings;
-use spam::ManageSpamHandler;
 use std::future::Future;
 use std::{str::FromStr, sync::Arc};
 use store::write::now;
@@ -120,10 +118,6 @@ impl ManagementApi for Server {
             "update" => self.handle_manage_update(req, path, &access_token).await,
             "logs" if req.method() == Method::GET => {
                 self.handle_view_logs(req, &access_token).await
-            }
-            "spam-filter" => {
-                self.handle_manage_spam(req, path, body, session, &access_token)
-                    .await
             }
             "restart" if req.method() == Method::GET => {
                 // Validate the access token

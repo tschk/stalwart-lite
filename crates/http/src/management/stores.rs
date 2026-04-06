@@ -24,11 +24,6 @@ use email::{
     },
     sieve::SieveScript,
 };
-use groupware::{
-    calendar::{Calendar, CalendarEvent, CalendarEventNotification},
-    contact::{AddressBook, ContactCard},
-    file::FileNode,
-};
 use http_proto::{request::decode_path_element, *};
 use hyper::Method;
 use serde_json::json;
@@ -330,46 +325,13 @@ impl ManageStore for Server {
 pub async fn recalculate_quota(server: &Server, account_id: u32) -> trc::Result<()> {
     let mut quota = 0;
 
-    for collection in [
-        Collection::Email,
-        Collection::Calendar,
-        Collection::CalendarEvent,
-        Collection::CalendarEventNotification,
-        Collection::AddressBook,
-        Collection::ContactCard,
-        Collection::FileNode,
-    ] {
-        server
-            .archives(account_id, collection, &(), |_, archive| {
-                match collection {
-                    Collection::Email => {
-                        quota += archive.unarchive::<MessageData>()?.size.to_native() as i64;
-                    }
-                    Collection::Calendar => {
-                        quota += archive.unarchive::<Calendar>()?.size() as i64;
-                    }
-                    Collection::CalendarEvent => {
-                        quota += archive.unarchive::<CalendarEvent>()?.size() as i64;
-                    }
-                    Collection::CalendarEventNotification => {
-                        quota += archive.unarchive::<CalendarEventNotification>()?.size() as i64;
-                    }
-                    Collection::AddressBook => {
-                        quota += archive.unarchive::<AddressBook>()?.size() as i64;
-                    }
-                    Collection::ContactCard => {
-                        quota += archive.unarchive::<ContactCard>()?.size() as i64;
-                    }
-                    Collection::FileNode => {
-                        quota += archive.unarchive::<FileNode>()?.size() as i64;
-                    }
-                    _ => {}
-                }
-                Ok(true)
-            })
-            .await
-            .caused_by(trc::location!())?;
-    }
+    server
+        .archives(account_id, Collection::Email, &(), |_, archive| {
+            quota += archive.unarchive::<MessageData>()?.size.to_native() as i64;
+            Ok(true)
+        })
+        .await
+        .caused_by(trc::location!())?;
 
     let mut batch = BatchBuilder::new();
     batch
@@ -387,7 +349,6 @@ pub async fn destroy_account_blobs(server: &Server, account_id: u32) -> trc::Res
     let mut delete_keys = Vec::new();
     for (collection, field) in [
         (Collection::Email, u8::from(EmailField::Metadata)),
-        (Collection::FileNode, u8::from(Field::ARCHIVE)),
         (Collection::SieveScript, u8::from(Field::ARCHIVE)),
     ] {
         server
@@ -400,15 +361,6 @@ pub async fn destroy_account_blobs(server: &Server, account_id: u32) -> trc::Res
                             document_id,
                             BlobHash::from(&message.blob_hash),
                         ));
-                    }
-                    Collection::FileNode => {
-                        if let Some(file) = archive.unarchive::<FileNode>()?.file.as_ref() {
-                            delete_keys.push((
-                                collection,
-                                document_id,
-                                BlobHash::from(&file.blob_hash),
-                            ));
-                        }
                     }
                     Collection::SieveScript => {
                         let sieve = archive.unarchive::<SieveScript>()?;

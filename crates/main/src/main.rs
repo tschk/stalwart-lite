@@ -11,11 +11,8 @@
 
 use common::{config::server::ServerProtocol, core::BuildServer, manager::boot::BootManager};
 use http::HttpSessionManager;
-use imap::core::ImapSessionManager;
-use managesieve::core::ManageSieveSessionManager;
-use pop3::Pop3SessionManager;
 use services::{StartServices, broadcast::subscriber::spawn_broadcast_subscriber};
-use smtp::{StartQueueManager, core::SmtpSessionManager};
+use smtp::StartQueueManager;
 use std::time::Duration;
 use trc::Collector;
 use utils::wait_for_shutdown;
@@ -53,7 +50,6 @@ async fn main() -> std::io::Result<()> {
     // SPDX-SnippetBegin
     // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
     // SPDX-License-Identifier: LicenseRef-SEL
-    // Log licensing information
     #[cfg(feature = "enterprise")]
     init.inner.build_server().log_license_details();
     // SPDX-SnippetEnd
@@ -62,7 +58,7 @@ async fn main() -> std::io::Result<()> {
     let (shutdown_tx, shutdown_rx) = init.servers.spawn(|server, acceptor, shutdown_rx| {
         match &server.protocol {
             ServerProtocol::Smtp | ServerProtocol::Lmtp => server.spawn(
-                SmtpSessionManager::new(init.inner.clone()),
+                smtp::core::SmtpSessionManager::new(init.inner.clone()),
                 init.inner.clone(),
                 acceptor,
                 shutdown_rx,
@@ -73,24 +69,13 @@ async fn main() -> std::io::Result<()> {
                 acceptor,
                 shutdown_rx,
             ),
-            ServerProtocol::Imap => server.spawn(
-                ImapSessionManager::new(init.inner.clone()),
-                init.inner.clone(),
-                acceptor,
-                shutdown_rx,
-            ),
-            ServerProtocol::Pop3 => server.spawn(
-                Pop3SessionManager::new(init.inner.clone()),
-                init.inner.clone(),
-                acceptor,
-                shutdown_rx,
-            ),
-            ServerProtocol::ManageSieve => server.spawn(
-                ManageSieveSessionManager::new(init.inner.clone()),
-                init.inner.clone(),
-                acceptor,
-                shutdown_rx,
-            ),
+            _ => {
+                trc::event!(
+                    Server(trc::ServerEvent::StartupError),
+                    Details = "Protocol not supported in this build",
+                    Reason = format!("{:?}", server.protocol),
+                );
+            }
         };
     });
 

@@ -7,7 +7,6 @@
 use crate::{api::auth::JmapAuthorization, changes::state::JmapCacheState};
 use common::{Server, auth::AccessToken};
 use email::cache::MessageCacheFetch;
-use groupware::cache::GroupwareCache;
 use jmap_proto::{
     method::changes::{ChangesRequest, ChangesResponse},
     object::{JmapObject, NullObject, mailbox::MailboxProperty},
@@ -17,7 +16,6 @@ use jmap_proto::{
 };
 use std::future::Future;
 use store::query::log::{Change, Query};
-use trc::AddContext;
 use types::collection::{Collection, SyncCollection};
 
 pub trait ChangesLookup: Sync + Send {
@@ -68,41 +66,6 @@ impl ChangesLookup for Server {
 
                 (SyncCollection::EmailSubmission, false)
             }
-            MethodObject::AddressBook => {
-                access_token.assert_has_access(request.account_id, Collection::AddressBook)?;
-
-                (SyncCollection::AddressBook, true)
-            }
-            MethodObject::ContactCard => {
-                access_token.assert_has_access(request.account_id, Collection::ContactCard)?;
-
-                (SyncCollection::AddressBook, false)
-            }
-            MethodObject::FileNode => {
-                access_token.assert_has_access(request.account_id, Collection::FileNode)?;
-
-                (SyncCollection::FileNode, false)
-            }
-            MethodObject::Calendar => {
-                access_token.assert_has_access(request.account_id, Collection::Calendar)?;
-
-                (SyncCollection::Calendar, true)
-            }
-            MethodObject::CalendarEvent => {
-                access_token.assert_has_access(request.account_id, Collection::CalendarEvent)?;
-
-                (SyncCollection::Calendar, false)
-            }
-            MethodObject::CalendarEventNotification => {
-                access_token.assert_is_member(request.account_id)?;
-
-                (SyncCollection::CalendarEventNotification, false)
-            }
-            MethodObject::ShareNotification => {
-                access_token.assert_is_member(request.account_id)?;
-
-                (SyncCollection::ShareNotification, false)
-            }
             _ => {
                 return Err(trc::JmapEvent::CannotCalculateChanges.into_err());
             }
@@ -144,12 +107,6 @@ impl ChangesLookup for Server {
             }
             State::Exact(change_id) => {
                 let last_state = match collection {
-                    SyncCollection::Calendar | SyncCollection::AddressBook => self
-                        .fetch_dav_resources(access_token, account_id, collection)
-                        .await
-                        .caused_by(trc::location!())?
-                        .get_state(is_container)
-                        .into(),
                     SyncCollection::Email => self
                         .get_cached_messages(account_id)
                         .await?
