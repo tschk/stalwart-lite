@@ -8,16 +8,7 @@ members = [
     "crates/jmap",
     "crates/jmap-proto",
     "crates/email",
-    "crates/imap",
-    "crates/imap-proto",
     "crates/smtp",
-    "crates/managesieve",
-    "crates/pop3",
-    "crates/dav-proto",
-    "crates/dav",
-    "crates/groupware",
-    "crates/spam-filter",
-    "crates/nlp",
     "crates/store",
     "crates/directory",
     "crates/services",
@@ -25,8 +16,6 @@ members = [
     "crates/common",
     "crates/trc",
     "crates/migration",
-    "crates/cli",
-    "tests",
 ]
 
 [profile.dev]
