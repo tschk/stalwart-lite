@@ -16,7 +16,7 @@ types = { path = "../types" }
 jmap_proto = { path = "../jmap-proto" }
 directory = { path =  "../directory" }
 smtp-proto = { version = "0.2", features = ["rkyv", "serde"] }
-tokio = { version = "1.47", features = ["rt"] }
+tokio = { version = "1.51", features = ["rt"] }
 mail-parser = { version = "0.11", features = ["full_encoding", "rkyv"] }
 mail-builder = { version = "0.4" } 
 calcard = { version = "0.3", features = ["rkyv"] }

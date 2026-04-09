@@ -22,7 +22,7 @@ smtp-proto = { version = "0.2", features = ["rkyv", "serde"] }
 sieve-rs = { version = "0.7", features = ["rkyv"] } 
 calcard_latest = { package = "calcard", version = "0.3", features = ["rkyv"] }
 calcard_v01 = { package = "calcard", version = "0.1", features = ["rkyv"] }
-tokio = { version = "1.47", features = ["net", "macros"] }
+tokio = { version = "1.51", features = ["net", "macros"] }
 serde = { version = "1.0", features = ["derive"]}
 serde_json = "1.0"
 rkyv = { version = "0.8.10", features = ["little_endian"] }
@@ -38,4 +38,4 @@ test_mode = []
 enterprise = []
 
 [dev-dependencies]
-tokio = { version = "1.47", features = ["full"] }
+tokio = { version = "1.51", features = ["full"] }
