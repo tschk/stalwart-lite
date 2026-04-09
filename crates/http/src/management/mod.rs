@@ -13,6 +13,7 @@ pub mod queue;
 pub mod reload;
 pub mod report;
 pub mod settings;
+pub mod spam;
 pub mod stores;
 pub mod troubleshoot;
 
@@ -44,6 +45,7 @@ use reload::ManageReload;
 use report::ManageReports;
 use serde::Serialize;
 use settings::ManageSettings;
+use spam::ManageSpamHandler;
 use std::future::Future;
 use std::{str::FromStr, sync::Arc};
 use store::write::now;
@@ -108,6 +110,10 @@ impl ManagementApi for Server {
             "dns" => self.handle_manage_dns(req, path, &access_token).await,
             "store" => {
                 self.handle_manage_store(req, path, body, session, &access_token)
+                    .await
+            }
+            "spam-filter" => {
+                self.handle_manage_spam(req, path, body, session, &access_token)
                     .await
             }
             "reload" => self.handle_manage_reload(req, path, &access_token).await,

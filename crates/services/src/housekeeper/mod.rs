@@ -6,10 +6,11 @@
 
 use common::{
     Inner, KV_LOCK_HOUSEKEEPER, LONG_1D_SLUMBER, Server,
-    config::telemetry::OtelMetrics,
+    config::{spamfilter, telemetry::OtelMetrics},
     core::BuildServer,
     ipc::{BroadcastEvent, HousekeeperEvent, PurgeType},
 };
+use spam_filter::modules::classifier::SpamClassifier;
 use email::message::delete::EmailDeletion;
 use smtp::reporting::SmtpReporting;
 use std::{
@@ -45,6 +46,7 @@ enum ActionClass {
     Acme(String),
     OtelMetrics,
     CalculateMetrics,
+    TrainSpamClassifier,
     // SPDX-SnippetBegin
     // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
     // SPDX-License-Identifier: LicenseRef-SEL
@@ -98,6 +100,31 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                 }
             }
 
+
+            // Spam classifier training
+            if roles.spam_training.is_enabled_or_sharded()
+                && let Some(train_frequency) = server
+                    .core
+                    .spam
+                    .classifier
+                    .as_ref()
+                    .and_then(|c| c.train_frequency)
+            {
+                let next_train = match server.inner.data.spam_classifier.load().as_ref() {
+                    spamfilter::SpamClassifier::FhClassifier {
+                        last_trained_at, ..
+                    }
+                    | spamfilter::SpamClassifier::CcfhClassifier {
+                        last_trained_at, ..
+                    } => now().saturating_sub(*last_trained_at).min(train_frequency),
+                    spamfilter::SpamClassifier::Disabled => train_frequency,
+                };
+
+                queue.schedule(
+                    Instant::now() + Duration::from_secs(next_train),
+                    ActionClass::TrainSpamClassifier,
+                );
+            }
 
             // OTEL Push Metrics
             if roles.push_metrics.is_enabled_or_sharded()
@@ -538,6 +565,41 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                         }
                                     }
                                 });
+                            }
+
+                            ActionClass::TrainSpamClassifier => {
+                                if server
+                                    .core
+                                    .network
+                                    .roles
+                                    .spam_training
+                                    .is_enabled_or_sharded()
+                                    && let Some(train_frequency) = server
+                                        .core
+                                        .spam
+                                        .classifier
+                                        .as_ref()
+                                        .and_then(|c| c.train_frequency)
+                                {
+                                    trc::event!(
+                                        Housekeeper(trc::HousekeeperEvent::Run),
+                                        Type = "spam_classifier_train"
+                                    );
+
+                                    queue.schedule(
+                                        Instant::now() + Duration::from_secs(train_frequency),
+                                        ActionClass::TrainSpamClassifier,
+                                    );
+
+                                    let server = server.clone();
+                                    tokio::spawn(async move {
+                                        if let Err(err) = server.spam_train(false).await {
+                                            trc::error!(
+                                                err.details("Failed to train spam classifier")
+                                            );
+                                        }
+                                    });
+                                }
                             }
 
                             // SPDX-SnippetBegin

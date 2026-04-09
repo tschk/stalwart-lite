@@ -9,6 +9,8 @@ members = [
     "crates/jmap-proto",
     "crates/email",
     "crates/smtp",
+    "crates/spam-filter",
+    "crates/nlp",
     "crates/store",
     "crates/directory",
     "crates/services",
