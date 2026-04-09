@@ -12,7 +12,6 @@ trc = { path = "../trc" }
 directory = { path = "../directory" }
 types = { path = "../types" }
 jmap_proto = { path = "../jmap-proto" }
-imap_proto = { path = "../imap-proto" }
 sieve-rs = { version = "0.7", features = ["rkyv", "serde"] }
 mail-parser = { version = "0.11", features = ["full_encoding"] } 
 mail-builder = { version = "0.4" }

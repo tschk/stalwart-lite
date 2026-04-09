@@ -14,21 +14,19 @@ edition = "2024"
 name = "stalwart"
 path = "src/main.rs"
 
+[lib]
+name = "stalwart_lib"
+path = "src/lib.rs"
+
 [dependencies]
 store = { path = "../store" }
-jmap = { path = "../jmap" }
+imap = { path = "../imap" }
 types = { path = "../types" }
 smtp = { path = "../smtp" }
-imap = { path = "../imap" }
-pop3 = { path = "../pop3" }
-spam-filter = { path = "../spam-filter" }
-managesieve = { path = "../managesieve" }
 common = { path = "../common" }
 email = { path = "../email" }
 directory = { path = "../directory" }
 http = { path = "../http" }
-dav = { path = "../dav" }
-groupware = { path = "../groupware" }
 services = { path = "../services" }
 trc = { path = "../trc" }
 utils = { path = "../utils" }
@@ -52,17 +50,12 @@ nats = ["store/nats"]
 azure = ["store/azure"]
 zenoh = ["store/zenoh"]
 kafka = ["store/kafka"]
-enterprise = [ "jmap/enterprise", 
-               "smtp/enterprise", 
-               "common/enterprise", 
-               "store/enterprise", 
-               "managesieve/enterprise", 
-               "directory/enterprise", 
+enterprise = [ "smtp/enterprise",
+               "common/enterprise",
+               "store/enterprise",
+               "directory/enterprise",
                "email/enterprise",
-               "spam-filter/enterprise",
                "http/enterprise",
-               "dav/enterprise",
-               "groupware/enterprise",
                "trc/enterprise",
                "services/enterprise",
                "migration/enterprise" ]

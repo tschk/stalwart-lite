@@ -5,7 +5,6 @@
  */
 
 use crate::blob::UploadResponse;
-use calcard::jscalendar::JSCalendarDateTime;
 use common::ipc::{CalendarAlert, PushNotification};
 use http_proto::{HttpResponse, JsonResponse, ToHttpResponse};
 use hyper::StatusCode;
@@ -178,9 +177,7 @@ impl IntoPushObject for CalendarAlert {
             account_id: self.account_id.into(),
             calendar_event_id: self.event_id.into(),
             uid: self.uid,
-            recurrence_id: self
-                .recurrence_id
-                .map(|timestamp| JSCalendarDateTime::new(timestamp, true).to_rfc3339()),
+            recurrence_id: self.recurrence_id.map(|ts| ts.to_string()),
             alert_id: self.alert_id,
         }
     }

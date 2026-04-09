@@ -10,9 +10,9 @@ use common::{
     core::BuildServer,
     ipc::{BroadcastEvent, HousekeeperEvent, PurgeType},
 };
+use spam_filter::modules::classifier::SpamClassifier;
 use email::message::delete::EmailDeletion;
 use smtp::reporting::SmtpReporting;
-use spam_filter::modules::classifier::SpamClassifier;
 use std::{
     collections::BinaryHeap,
     future::Future,
@@ -46,6 +46,7 @@ enum ActionClass {
     Acme(String),
     OtelMetrics,
     CalculateMetrics,
+    TrainSpamClassifier,
     // SPDX-SnippetBegin
     // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
     // SPDX-License-Identifier: LicenseRef-SEL
@@ -56,7 +57,6 @@ enum ActionClass {
     #[cfg(feature = "enterprise")]
     RenewLicense,
     // SPDX-SnippetEnd
-    TrainSpamClassifier,
 }
 
 #[derive(Default)]
@@ -99,6 +99,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                     );
                 }
             }
+
 
             // Spam classifier training
             if roles.spam_training.is_enabled_or_sharded()
@@ -565,6 +566,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                     }
                                 });
                             }
+
                             ActionClass::TrainSpamClassifier => {
                                 if server
                                     .core
@@ -584,7 +586,6 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                         Type = "spam_classifier_train"
                                     );
 
-                                    // Schedule next training
                                     queue.schedule(
                                         Instant::now() + Duration::from_secs(train_frequency),
                                         ActionClass::TrainSpamClassifier,

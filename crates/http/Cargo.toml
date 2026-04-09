@@ -10,15 +10,11 @@ utils = { path =  "../utils" }
 trc = { path = "../trc" }
 email = { path = "../email" }
 smtp = { path = "../smtp" }
-jmap = { path = "../jmap" }
-dav = { path = "../dav" }
-groupware = { path = "../groupware" }
-spam-filter = { path = "../spam-filter" }
 http_proto = { path = "../http-proto" }
-jmap_proto = { path = "../jmap-proto" }
 types = { path = "../types" }
 directory = { path =  "../directory" }
 services = { path =  "../services" }
+spam-filter = { path = "../spam-filter" }
 smtp-proto = { version = "0.2" }
 mail-parser = { version = "0.11", features = ["full_encoding", "rkyv"] } 
 mail-builder = { version = "0.4" }
