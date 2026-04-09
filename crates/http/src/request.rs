@@ -29,29 +29,19 @@ use common::{
 };
 use directory::Permission;
 use http_proto::{
-    DownloadResponse, HttpContext, HttpRequest, HttpResponse, HttpResponseBody,
-    HttpSessionData, JsonProblemResponse, ToHttpResponse, form_urlencoded, request::fetch_body,
+    HttpContext, HttpRequest, HttpResponse, HttpResponseBody,
+    HttpSessionData, JsonProblemResponse, ToHttpResponse, request::fetch_body,
 };
 use hyper::{
     Method, StatusCode, body,
-    header::{self, CONTENT_TYPE},
+    header,
     server::conn::http1,
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
-use jmap::{
-    api::{
-        ToJmapHttpResponse, event_source::EventSourceHandler, request::RequestHandler,
-        session::SessionHandler,
-    },
-    blob::{download::BlobDownload, upload::BlobUpload},
-    websocket::upgrade::WebSocketUpgrade,
-};
-use jmap_proto::request::{Request, capability::Session};
-use std::{net::IpAddr, str::FromStr, sync::Arc};
+use std::{net::IpAddr, sync::Arc};
 use store::dispatch::lookup::KeyValue;
 use trc::SecurityEvent;
-use types::{blob::BlobId, id::Id};
 use utils::url_params::UrlParams;
 
 pub trait ParseHttp: Sync + Send {
@@ -84,151 +74,10 @@ impl ParseHttp for Server {
         }
 
         match path.next().unwrap_or_default() {
-            "jmap" => {
-                match (path.next().unwrap_or_default(), req.method()) {
-                    ("", &Method::POST) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        let bytes = fetch_body(
-                            &mut req,
-                            if !access_token.has_permission(Permission::UnlimitedUploads) {
-                                self.core.jmap.upload_max_size
-                            } else {
-                                0
-                            },
-                            session.session_id,
-                        )
-                        .await
-                        .ok_or_else(|| trc::LimitEvent::SizeRequest.into_err())?;
-
-                        return Ok(self
-                            .handle_jmap_request(
-                                Request::parse(
-                                    &bytes,
-                                    self.core.jmap.request_max_calls,
-                                    self.core.jmap.request_max_size,
-                                )?,
-                                access_token,
-                                &session,
-                            )
-                            .await
-                            .into_http_response());
-                    }
-                    ("download", &Method::GET) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        if let (Some(_), Some(blob_id), Some(name)) = (
-                            path.next().and_then(|p| Id::from_str(p).ok()),
-                            path.next().and_then(BlobId::from_base32),
-                            path.next(),
-                        ) {
-                            return match self.blob_download(&blob_id, &access_token).await? {
-                                Some(blob) => Ok(DownloadResponse {
-                                    filename: name.to_string(),
-                                    content_type: req
-                                        .uri()
-                                        .query()
-                                        .and_then(|q| {
-                                            form_urlencoded::parse(q.as_bytes())
-                                                .find(|(k, _)| k == "accept")
-                                                .map(|(_, v)| v.into_owned())
-                                        })
-                                        .unwrap_or("application/octet-stream".to_string()),
-                                    blob,
-                                }
-                                .into_http_response()),
-                                None => Err(trc::ResourceEvent::NotFound.into_err()),
-                            };
-                        }
-                    }
-                    ("upload", &Method::POST) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        if let Some(account_id) = path.next().and_then(|p| Id::from_str(p).ok()) {
-                            return match fetch_body(
-                                &mut req,
-                                if !access_token.has_permission(Permission::UnlimitedUploads) {
-                                    self.core.jmap.upload_max_size
-                                } else {
-                                    0
-                                },
-                                session.session_id,
-                            )
-                            .await
-                            {
-                                Some(bytes) => Ok(self
-                                    .blob_upload(
-                                        account_id,
-                                        req.headers()
-                                            .get(CONTENT_TYPE)
-                                            .and_then(|h| h.to_str().ok())
-                                            .unwrap_or("application/octet-stream"),
-                                        &bytes,
-                                        access_token,
-                                    )
-                                    .await?
-                                    .into_http_response()),
-                                None => Err(trc::LimitEvent::SizeUpload.into_err()),
-                            };
-                        }
-                    }
-                    ("eventsource", &Method::GET) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        return self.handle_event_source(req, access_token).await;
-                    }
-                    ("ws", &Method::GET) => {
-                        // Authenticate request
-                        let (_in_flight, access_token) =
-                            self.authenticate_headers(&req, &session, false).await?;
-
-                        return self
-                            .upgrade_websocket_connection(req, access_token, session)
-                            .await;
-                    }
-                    ("session", &Method::GET) => {
-                        return if req.headers().contains_key(header::AUTHORIZATION) {
-                            // Authenticate request
-                            let (_in_flight, access_token) =
-                                self.authenticate_headers(&req, &session, false).await?;
-
-                            self.handle_session_resource(
-                                ctx.resolve_response_url(self).await,
-                                access_token,
-                            )
-                            .await
-                            .map(|s| s.into_http_response())
-                        } else {
-                            Ok(Session::new(
-                                ctx.resolve_response_url(self).await,
-                                &self.core.jmap.capabilities,
-                            )
-                            .into_http_response())
-                        };
-                    }
-                    (_, &Method::OPTIONS) => {
-                        return Ok(JsonProblemResponse(StatusCode::NO_CONTENT).into_http_response());
-                    }
-                    _ => (),
-                }
-            }
             "dav" => {
                 return Ok(HttpResponse::new(StatusCode::NOT_FOUND));
             }
             ".well-known" => match (path.next().unwrap_or_default(), req.method()) {
-                ("jmap", &Method::GET) => {
-                    return Ok(HttpResponse::new(StatusCode::TEMPORARY_REDIRECT)
-                        .with_no_cache()
-                        .with_location("/jmap/session"));
-                }
                 ("oauth-authorization-server", &Method::GET) => {
                     // Limit anonymous requests
                     self.is_http_anonymous_request_allowed(&session.remote_ip)

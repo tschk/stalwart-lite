@@ -11,6 +11,7 @@
 
 use common::{config::server::ServerProtocol, core::BuildServer, manager::boot::BootManager};
 use http::HttpSessionManager;
+use imap::core::ImapSessionManager;
 use services::{StartServices, broadcast::subscriber::spawn_broadcast_subscriber};
 use smtp::StartQueueManager;
 use std::time::Duration;
@@ -65,6 +66,12 @@ async fn main() -> std::io::Result<()> {
             ),
             ServerProtocol::Http => server.spawn(
                 HttpSessionManager::new(init.inner.clone()),
+                init.inner.clone(),
+                acceptor,
+                shutdown_rx,
+            ),
+            ServerProtocol::Imap => server.spawn(
+                ImapSessionManager::new(init.inner.clone()),
                 init.inner.clone(),
                 acceptor,
                 shutdown_rx,

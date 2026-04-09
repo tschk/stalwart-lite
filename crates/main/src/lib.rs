@@ -7,7 +7,7 @@
 //! Stalwart Mail Server — public library API
 //!
 //! Provides simple functions to store, send, and retrieve email
-//! through the embedded JMAP server.
+//! through the embedded IMAP server.
 
 pub use common::{Server, manager::boot::BootManager};
 

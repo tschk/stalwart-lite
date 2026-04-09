@@ -35,8 +35,6 @@ use dkim::DkimManagement;
 use dns::DnsManagement;
 use http_proto::{request::fetch_body, *};
 use hyper::{Method, StatusCode, header};
-use jmap::api::{ToJmapHttpResponse, ToRequestError};
-use jmap_proto::error::request::RequestError;
 use log::LogManagement;
 use mail_parser::DateTime;
 use principal::PrincipalManager;
@@ -51,6 +49,78 @@ use std::{str::FromStr, sync::Arc};
 use store::write::now;
 use stores::ManageStore;
 use troubleshoot::TroubleshootApi;
+
+/// Convert a `trc::Error` to an `HttpResponse` using standard HTTP problem JSON.
+fn trc_error_to_http_response(err: &trc::Error) -> HttpResponse {
+    let details_or_reason = err
+        .value(trc::Key::Details)
+        .or_else(|| err.value(trc::Key::Reason))
+        .and_then(|v| v.as_str());
+
+    let (status, title, detail) = match err.as_ref() {
+        trc::EventType::Limit(cause) => match cause {
+            trc::LimitEvent::TooManyRequests => (
+                429u16,
+                "Too Many Requests",
+                "Your request has been rate limited. Please try again in a few seconds.",
+            ),
+            _ => (400, "Bad Request", "Request limit exceeded."),
+        },
+        trc::EventType::Auth(cause) => match cause {
+            trc::AuthEvent::TooManyAttempts => (
+                429,
+                "Too Many Authentication Attempts",
+                "Your request has been rate limited. Please try again in a few minutes.",
+            ),
+            _ => (401, "Unauthorized", "You have to authenticate first."),
+        },
+        trc::EventType::Security(cause) => match cause {
+            trc::SecurityEvent::Unauthorized => (
+                403,
+                "Forbidden",
+                "You do not have enough permissions to access this resource.",
+            ),
+            _ => (
+                429,
+                "Too Many Authentication Attempts",
+                "Your request has been rate limited. Please try again in a few minutes.",
+            ),
+        },
+        trc::EventType::Resource(cause) => match cause {
+            trc::ResourceEvent::NotFound => (
+                404,
+                "Not Found",
+                "The requested resource does not exist on this server.",
+            ),
+            trc::ResourceEvent::BadParameters => (
+                400,
+                "Invalid parameters",
+                details_or_reason.unwrap_or("One or multiple parameters could not be parsed."),
+            ),
+            _ => (
+                500,
+                "Internal Server Error",
+                "There was a problem while processing your request.",
+            ),
+        },
+        _ => (
+            500,
+            "Internal Server Error",
+            "There was a problem while processing your request.",
+        ),
+    };
+
+    let body = serde_json::json!({
+        "type": "about:blank",
+        "status": status,
+        "title": title,
+        "detail": detail,
+    });
+
+    HttpResponse::new(StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+        .with_content_type("application/problem+json")
+        .with_text_body(serde_json::to_string(&body).unwrap_or_default())
+}
 
 #[derive(Serialize)]
 #[serde(tag = "error")]
@@ -279,7 +349,7 @@ impl ToManageHttpResponse for &trc::Error {
             trc::EventType::Auth(
                 trc::AuthEvent::Failed | trc::AuthEvent::Error | trc::AuthEvent::TokenExpired,
             ) => HttpResponse::unauthorized(true),
-            _ => self.to_request_error().into_http_response(),
+            _ => trc_error_to_http_response(self),
         }
     }
 }
@@ -298,7 +368,7 @@ impl UnauthorizedResponse for HttpResponse {
             HttpResponse::new(StatusCode::UNAUTHORIZED)
         })
         .with_content_type("application/problem+json")
-        .with_text_body(serde_json::to_string(&RequestError::unauthorized()).unwrap_or_default())
+        .with_text_body(r#"{"type":"about:blank","status":401,"title":"Unauthorized","detail":"You have to authenticate first."}"#)
     }
 }
 
