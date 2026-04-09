@@ -13,7 +13,7 @@ foundationdb = { version = "0.9.2", features = ["embedded-fdb-include", "fdb-7_3
 rusqlite = { version = "0.37", features = ["bundled"], optional = true }
 #rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"], optional = true }
 rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls", "no-verify-ssl"], optional = true }
-async-nats = { version = "0.44", default-features = false, features = ["server_2_10", "server_2_11", "ring"], optional = true }
+async-nats = { version = "0.46", default-features = false, features = ["server_2_10", "server_2_11", "ring"], optional = true }
 azure_core = { version = "0.21.0", optional = true }
 azure_storage = { version = "0.21.0", default-features = false, features = ["enable_reqwest_rustls", "hmac_rust"], optional = true }
 azure_storage_blobs = { version = "0.21.0", default-features = false, features = ["enable_reqwest_rustls", "hmac_rust"], optional = true }
