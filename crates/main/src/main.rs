@@ -55,6 +55,25 @@ async fn main() -> std::io::Result<()> {
     init.inner.build_server().log_license_details();
     // SPDX-SnippetEnd
 
+    // Fail fast if any configured listener uses an unsupported protocol
+    for server in &init.servers.servers {
+        if !matches!(
+            server.protocol,
+            ServerProtocol::Smtp
+                | ServerProtocol::Lmtp
+                | ServerProtocol::Http
+                | ServerProtocol::Imap
+        ) {
+            trc::event!(
+                Server(trc::ServerEvent::StartupError),
+                Details = "Unsupported protocol in config — aborting startup. \
+                           Only SMTP, LMTP, HTTP, and IMAP are supported in this build.",
+                Reason = format!("{:?}", server.protocol),
+            );
+            return Ok(());
+        }
+    }
+
     // Spawn servers
     let (shutdown_tx, shutdown_rx) = init.servers.spawn(|server, acceptor, shutdown_rx| {
         match &server.protocol {
@@ -76,13 +95,7 @@ async fn main() -> std::io::Result<()> {
                 acceptor,
                 shutdown_rx,
             ),
-            _ => {
-                trc::event!(
-                    Server(trc::ServerEvent::StartupError),
-                    Details = "Protocol not supported in this build",
-                    Reason = format!("{:?}", server.protocol),
-                );
-            }
+            _ => unreachable!("pre-validated above"),
         };
     });
 
