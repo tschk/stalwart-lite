@@ -56,7 +56,7 @@ jobs:
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory -- --nocapture --test-threads=1
 
       - name: SMTP Tests
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp -- --nocapture
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp -- --nocapture --test-threads=1
 
       - name: IMAP Tests
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap -- --nocapture

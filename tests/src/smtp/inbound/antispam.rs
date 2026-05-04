@@ -184,6 +184,13 @@ async fn antispam() {
         std::env::var("SPAM_RULES_DIR")
             .unwrap_or_else(|_| "/Users/me/code/spam-filter".to_string()),
     );
+    if !base_path.exists() {
+        eprintln!(
+            "Skipping antispam integration test because {:?} does not exist.",
+            base_path
+        );
+        return;
+    }
     for section in ["rules", "lists"] {
         for entry in fs::read_dir(base_path.join(section)).unwrap() {
             let entry = entry.unwrap();

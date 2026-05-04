@@ -77,7 +77,16 @@ async fn virtual_queue() {
     // Start test server
     let remote = TestSMTP::new("smtp_virtual_queue_remote", REMOTE).await;
     let _rx = remote.start(&[ServerProtocol::Smtp]).await;
-    let local = TestSMTP::with_database("smtp_virtual_queue_local", LOCAL, "mysql").await;
+    let local = TestSMTP::with_database(
+        "smtp_virtual_queue_local",
+        LOCAL,
+        if cfg!(feature = "mysql") {
+            "mysql"
+        } else {
+            "rocksdb"
+        },
+    )
+    .await;
 
     // Validate parsing
     for value in ["a", "ab", "abcdefgh"] {

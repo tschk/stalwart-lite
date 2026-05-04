@@ -60,7 +60,16 @@ async fn concurrent_queue() {
     let remote = TestSMTP::new("smtp_concurrent_queue_remote", REMOTE).await;
     let _rx = remote.start(&[ServerProtocol::Smtp]).await;
 
-    let local = TestSMTP::with_database("smtp_concurrent_queue_local", LOCAL, "mysql").await;
+    let local = TestSMTP::with_database(
+        "smtp_concurrent_queue_local",
+        LOCAL,
+        if cfg!(feature = "mysql") {
+            "mysql"
+        } else {
+            "rocksdb"
+        },
+    )
+    .await;
 
     // Add mock DNS entries
     let core = local.build_smtp();
