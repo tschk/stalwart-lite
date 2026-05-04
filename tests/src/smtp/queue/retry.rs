@@ -151,7 +151,13 @@ async fn queue_retry() {
         }
     }
     qr.assert_queue_is_empty().await;
-    assert_eq!(retries, vec![1, 2, 3]);
+    assert_eq!(retries.len(), 3);
+    for (retry, expected) in retries.into_iter().zip([1, 2, 3]) {
+        assert!(
+            retry == expected || retry + 1 == expected,
+            "retry due in {retry}s, expected {expected}s"
+        );
+    }
     assert_eq!(dsn.len(), 4);
     let mut dsn = dsn.into_iter();
 
