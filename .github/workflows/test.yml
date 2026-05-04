@@ -56,7 +56,16 @@ jobs:
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory -- --nocapture --test-threads=1
 
       - name: SMTP Tests
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp -- --nocapture --test-threads=1
+        run: |
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory::smtp -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::config -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::inbound -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::lookup -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::management::report -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::queue -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::dmarc -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::scheduler -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::tls -- --nocapture --test-threads=1
 
       - name: IMAP Tests
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap -- --nocapture
