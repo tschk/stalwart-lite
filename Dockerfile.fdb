@@ -1,0 +1,66 @@
+FROM debian:trixie-slim AS chef
+RUN apt-get update && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt-get install -yq \
+    build-essential \
+    cmake \
+    clang \
+    curl \
+    protobuf-compiler \
+    adduser
+ENV RUSTUP_HOME=/opt/rust/rustup \
+    PATH=/home/root/.cargo/bin:/opt/rust/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+RUN curl https://sh.rustup.rs -sSf | \
+    env CARGO_HOME=/opt/rust/cargo \
+    sh -s -- -y --default-toolchain stable --profile minimal --no-modify-path && \
+    env CARGO_HOME=/opt/rust/cargo \
+    rustup component add rustfmt
+RUN curl -LO https://github.com/apple/foundationdb/releases/download/7.3.69/foundationdb-clients_7.3.69-1_amd64.deb && \
+    dpkg -i foundationdb-clients_7.3.69-1_amd64.deb
+RUN env CARGO_HOME=/opt/rust/cargo cargo install cargo-chef && \
+    rm -rf /opt/rust/cargo/registry/
+WORKDIR /app
+
+FROM chef AS planner
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY crates/ crates/
+COPY resources/ resources/
+COPY tests/ tests/
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY crates/ crates/
+COPY resources/ resources/
+COPY tests/ tests/
+RUN cargo build -p stalwart --no-default-features --features "foundationdb s3 redis azure nats enterprise" --release
+
+FROM debian:trixie-slim AS runtime
+
+COPY --from=builder --chmod=0755 /app/target/release/stalwart /usr/local/bin/stalwart
+RUN export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get install -yq --no-install-recommends ca-certificates curl libcap2-bin && \
+    curl -LO https://github.com/apple/foundationdb/releases/download/7.3.69/foundationdb-clients_7.3.69-1_amd64.deb && \
+    dpkg -i foundationdb-clients_7.3.69-1_amd64.deb && \
+    rm -f foundationdb-clients_7.3.69-1_amd64.deb && \
+    rm -rf /var/lib/apt/lists/* && \
+    groupadd -r -g 2000 stalwart && \
+    useradd -r -u 2000 -g 2000 -s /usr/sbin/nologin -M stalwart && \
+    mkdir -p /etc/stalwart /var/lib/stalwart && \
+    chown stalwart:stalwart /etc/stalwart /var/lib/stalwart && \
+    setcap 'cap_net_bind_service=+ep' /usr/local/bin/stalwart
+
+USER stalwart
+WORKDIR /var/lib/stalwart
+VOLUME ["/etc/stalwart", "/var/lib/stalwart"]
+EXPOSE	443 25 110 587 465 143 993 995 4190 8080
+ENV STALWART_HEALTHCHECK_URL=https://127.0.0.1:443/healthz/live
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -fsSk "$STALWART_HEALTHCHECK_URL" || curl -fsS http://127.0.0.1:8080/healthz/live || exit 1
+ENTRYPOINT ["/usr/local/bin/stalwart"]
+CMD ["--config", "/etc/stalwart/config.json"]
