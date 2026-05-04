@@ -31,7 +31,14 @@ async fn sql_directory() {
     .unwrap();*/
 
     // Obtain directory handle
-    for directory_id in ["sqlite", "postgresql", "mysql"] {
+    for directory_id in [
+        ("sqlite", true),
+        ("postgresql", cfg!(feature = "postgres")),
+        ("mysql", cfg!(feature = "mysql")),
+    ]
+    .into_iter()
+    .filter_map(|(id, enabled)| enabled.then_some(id))
+    {
         // Parse config
         let mut config = DirectoryTest::new(directory_id.into()).await;
 

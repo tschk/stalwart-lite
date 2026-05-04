@@ -392,6 +392,28 @@ impl DirectoryTest {
                     "store = \"foundationdb\"\ndisable = true",
                 );
         }
+        if !cfg!(feature = "postgres") {
+            config_file = config_file
+                .replace(
+                    "[directory.\"postgresql\"]\ntype = \"sql\"",
+                    "[directory.\"postgresql\"]\ntype = \"sql\"\ndisable = true",
+                )
+                .replace(
+                    "[store.\"postgresql\"]\ntype = \"postgresql\"",
+                    "[store.\"postgresql\"]\ntype = \"postgresql\"\ndisable = true",
+                );
+        }
+        if !cfg!(feature = "mysql") {
+            config_file = config_file
+                .replace(
+                    "[directory.\"mysql\"]\ntype = \"sql\"",
+                    "[directory.\"mysql\"]\ntype = \"sql\"\ndisable = true",
+                )
+                .replace(
+                    "[store.\"mysql\"]\ntype = \"mysql\"",
+                    "[store.\"mysql\"]\ntype = \"mysql\"\ndisable = true",
+                );
+        }
         if id_store.is_some() {
             // FoundationDB is disabled above for SQL tests.
         } else {
