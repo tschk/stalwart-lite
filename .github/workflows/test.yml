@@ -81,4 +81,4 @@ jobs:
           SEARCH_STORE: rocksdb
           BLOB_STORE: rocksdb
           LOOKUP_STORE: rocksdb
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" jmap -- --nocapture
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" jmap --no-run
