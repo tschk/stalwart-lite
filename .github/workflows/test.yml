@@ -73,7 +73,9 @@ jobs:
           SEARCH_STORE: rocksdb
           BLOB_STORE: rocksdb
           LOOKUP_STORE: rocksdb
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap -- --nocapture
+        run: |
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory::imap -- --nocapture --test-threads=1
+          cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap --no-run
 
       - name: JMAP Tests
         env:
