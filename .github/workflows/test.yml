@@ -18,6 +18,32 @@ jobs:
     name: Test
     needs: style
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: stalwart
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d stalwart"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: stalwart
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     steps:
       - name: Checkout
@@ -32,7 +58,7 @@ jobs:
           curl -Lo minio.deb https://dl.min.io/server/minio/release/linux-amd64/archive/minio_20230629051228.0.0_amd64.deb
           sudo dpkg -i minio.deb
           mkdir ~/minio
-          nohup minio server ~/minio --console-address :9090 &
+          nohup minio server ~/minio --console-address :9091 &
           curl -LO https://dl.min.io/client/mc/release/linux-amd64/mc
           chmod a+rx mc
           ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
