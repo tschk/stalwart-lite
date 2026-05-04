@@ -379,8 +379,9 @@ impl DirectoryTest {
     pub async fn new(id_store: Option<&str>) -> DirectoryTest {
         let temp_dir = TempDir::new("directory_tests", true);
         let mut config_file = CONFIG.replace("{TMP}", &temp_dir.path.to_string_lossy());
-        if id_store.is_some() {
-            // Disable foundationdb store for SQL tests (the fdb select api version can only be run once per process)
+        if id_store.is_some() || !cfg!(feature = "foundationdb") {
+            // The hosted CI runner does not provide libfdb_c, and FoundationDB
+            // also only allows selecting its API version once per process.
             config_file = config_file
                 .replace(
                     "type = \"foundationdb\"",
@@ -389,7 +390,10 @@ impl DirectoryTest {
                 .replace(
                     "store = \"foundationdb\"",
                     "store = \"foundationdb\"\ndisable = true",
-                )
+                );
+        }
+        if id_store.is_some() {
+            // FoundationDB is disabled above for SQL tests.
         } else {
             // Disable internal store
             config_file =

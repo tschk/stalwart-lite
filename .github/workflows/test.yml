@@ -51,7 +51,7 @@ jobs:
         run: cargo test -p store -- --nocapture
 
       - name: Directory Tests
-        run: cargo test -p tests directory -- --nocapture
+        run: cargo test -p tests directory -- --nocapture --test-threads=1
 
       - name: SMTP Tests
         run: cargo test -p tests smtp -- --nocapture
