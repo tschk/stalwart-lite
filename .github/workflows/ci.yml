@@ -50,12 +50,6 @@ jobs:
           username: ${{github.repository_owner}}
           password: ${{github.token}}
 
-      - name: Log In to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME}}
-          password: ${{secrets.DOCKERHUB_TOKEN}}
-
       - name: Download ${{matrix.variant}} meta bake definition
         uses: actions/download-artifact@v7
         with:
@@ -74,31 +68,19 @@ jobs:
         run: |
           docker buildx imagetools create $(jq -cr '.target."docker-metadata-action".tags | map(select(startswith("ghcr.io/${{github.repository}}")) | "-t " + .) | join(" ")' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json) \
             $(printf 'ghcr.io/${{github.repository}}@sha256:%s ' *)
-          docker buildx imagetools create $(jq -cr '.target."docker-metadata-action".tags | map(select(startswith("index.docker.io/${{github.repository}}")) | "-t " + .) | join(" ")' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json) \
-            $(printf 'index.docker.io/${{github.repository}}@sha256:%s ' *)
 
       - name: Inspect ${{matrix.variant}} image
         id: manifest-digest
         run: |
           docker buildx imagetools inspect --format '{{json .Manifest}}' ghcr.io/${{github.repository}}:$(jq -r '.target."docker-metadata-action".args.DOCKER_META_VERSION' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json) | jq -r '.digest' > GHCR_DIGEST_SHA
           echo "GHCR_DIGEST_SHA=$(cat GHCR_DIGEST_SHA)" | tee -a "${GITHUB_ENV}"
-          docker buildx imagetools inspect --format '{{json .Manifest}}' index.docker.io/${{github.repository}}:$(jq -r '.target."docker-metadata-action".args.DOCKER_META_VERSION' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json) | jq -r '.digest' > DOCKERHUB_DIGEST_SHA
-          echo "DOCKERHUB_DIGEST_SHA=$(cat DOCKERHUB_DIGEST_SHA)" | tee -a "${GITHUB_ENV}"
           cosign sign --yes $(jq --arg GHCR_DIGEST_SHA "$(cat GHCR_DIGEST_SHA)" -cr '.target."docker-metadata-action".tags | map(select(startswith("ghcr.io/${{github.repository}}")) | . + "@" + $GHCR_DIGEST_SHA) | join(" ")' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json)
-          cosign sign --yes $(jq --arg DOCKERHUB_DIGEST_SHA "$(cat DOCKERHUB_DIGEST_SHA)" -cr '.target."docker-metadata-action".tags | map(select(startswith("index.docker.io/${{github.repository}}")) | . + "@" + $DOCKERHUB_DIGEST_SHA) | join(" ")' ${{ runner.temp }}/${{matrix.variant}}/bake-meta.json)
 
       - name: Attest GHCR
         uses: actions/attest-build-provenance@v3
         with:
           subject-name: ghcr.io/${{github.repository}}
           subject-digest: ${{ env.GHCR_DIGEST_SHA }}
-          push-to-registry: true
-
-      - name: Attest Dockerhub
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: index.docker.io/${{github.repository}}
-          subject-digest: ${{ env.DOCKERHUB_DIGEST_SHA }}
           push-to-registry: true
 
   linux:
@@ -170,12 +152,6 @@ jobs:
           username: ${{github.repository_owner}}
           password: ${{github.token}}
 
-      - name: Log In to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{secrets.DOCKERHUB_USERNAME}}
-          password: ${{secrets.DOCKERHUB_TOKEN}}
-
       - name: Calculate shasum of external deps
         id: cal-dep-shasum
         run: |
@@ -216,7 +192,6 @@ jobs:
         id: meta
         with:
           images: |
-            index.docker.io/${{github.repository}}
             ghcr.io/${{github.repository}}
           flavor: |
             suffix=${{matrix.suffix}},onlatest=true
@@ -240,7 +215,7 @@ jobs:
           source: .
           set: |
             *.tags=
-            image.output=type=image,"name=ghcr.io/${{github.repository}},index.docker.io/${{github.repository}}",push-by-digest=true,name-canonical=true,push=true,compression=zstd,compression-level=9,force-compression=true,oci-mediatypes=true
+            image.output=type=image,"name=ghcr.io/${{github.repository}}",push-by-digest=true,name-canonical=true,push=true,compression=zstd,compression-level=9,force-compression=true,oci-mediatypes=true
           files: |
             docker-bake.hcl
             ${{ steps.meta.outputs.bake-file }}
