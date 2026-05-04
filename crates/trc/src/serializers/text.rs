@@ -438,13 +438,13 @@ mod tests {
         }
 
         //for (pos, (name, _, _)) in names.iter().enumerate() {
-            //println!("{:?},", name);
-            //println!("{} => Some({}),", pos, event_to_class(name));
-            //println!("{} => {},", event_to_class(name), pos);
-            /*println!(
-                "#[serde(rename = \"{name}\")]\n{},",
-                event_to_webadmin_class(name)
-            );*/
+        //println!("{:?},", name);
+        //println!("{} => Some({}),", pos, event_to_class(name));
+        //println!("{} => {},", event_to_class(name), pos);
+        /*println!(
+            "#[serde(rename = \"{name}\")]\n{},",
+            event_to_webadmin_class(name)
+        );*/
         //}
     }
 }

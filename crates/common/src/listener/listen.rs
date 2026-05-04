@@ -12,6 +12,7 @@ use std::{
 
 use proxy_header::io::ProxiedStream;
 use rustls::crypto::ring::cipher_suite::TLS13_AES_128_GCM_SHA256;
+use socket2::SockRef;
 use tokio::{net::TcpStream, sync::watch};
 use tokio_rustls::server::TlsStream;
 use trc::{EventType, HttpEvent, ImapEvent, ManageSieveEvent, Pop3Event, SmtpEvent};
@@ -289,7 +290,7 @@ impl SocketOpts {
             );
         }
         if self.linger.is_some()
-            && let Err(err) = stream.set_linger(self.linger)
+            && let Err(err) = SockRef::from(&stream).set_linger(self.linger)
         {
             trc::event!(
                 Network(trc::NetworkEvent::SetOptError),

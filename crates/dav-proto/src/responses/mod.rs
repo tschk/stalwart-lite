@@ -16,9 +16,9 @@ pub mod schedule;
 use types::dead_property::{DeadProperty, DeadPropertyTag};
 
 use crate::schema::{
+    Namespaces,
     property::{Comp, ResourceType, SupportedCollation},
     response::{Href, List, Location, ResponseDescription, Status, SyncToken},
-    Namespaces,
 };
 use std::fmt::{Display, Write};
 
@@ -211,9 +211,11 @@ mod tests {
     use types::dead_property::{DeadElementTag, DeadProperty, DeadPropertyTag};
 
     use crate::{
-        parser::{tokenizer::Tokenizer, Token},
+        Depth,
+        parser::{Token, tokenizer::Tokenizer},
         responses::XmlCdataEscape,
         schema::{
+            Namespace,
             property::{
                 ActiveLock, CalDavProperty, CardDavProperty, DavValue, LockScope, Privilege,
                 ResourceType, Rfc1123DateTime, SupportedLock, WebDavProperty,
@@ -225,9 +227,7 @@ mod tests {
                 PrincipalSearchPropertySet, PropResponse, PropStat, RequiredPrincipal, Resource,
                 Response, ScheduleResponse, ScheduleResponseItem, SupportedPrivilege,
             },
-            Namespace,
         },
-        Depth,
     };
 
     impl<T: Display> List<T> {
@@ -325,29 +325,33 @@ mod tests {
             ])
             .to_string(),
             // 004.xml
-            MultiStatus::new(vec![Response::new_status(
-                ["http://www.example.com/container/resource3"],
-                StatusCode::LOCKED,
-            )
-            .with_error(BaseCondition::LockTokenSubmitted(List(vec![])))])
+            MultiStatus::new(vec![
+                Response::new_status(
+                    ["http://www.example.com/container/resource3"],
+                    StatusCode::LOCKED,
+                )
+                .with_error(BaseCondition::LockTokenSubmitted(List(vec![]))),
+            ])
             .to_string(),
             // 005.xml
             PropResponse::new(vec![DavPropertyValue::new(
                 WebDavProperty::LockDiscovery,
-                vec![ActiveLock::new(
-                    "http://example.com/workspace/webdav/proposal.doc",
-                    LockScope::Exclusive,
-                )
-                .with_owner(DeadProperty(vec![
-                    DeadPropertyTag::ElementStart(DeadElementTag {
-                        name: "D:href".to_string(),
-                        attrs: None,
-                    }),
-                    DeadPropertyTag::Text("http://example.org/~ejw/contact.html".to_string()),
-                    DeadPropertyTag::ElementEnd,
-                ]))
-                .with_timeout(604800)
-                .with_lock_token("urn:uuid:e71d4fae-5dec-22d6-fea5-00a0c91e6be4")],
+                vec![
+                    ActiveLock::new(
+                        "http://example.com/workspace/webdav/proposal.doc",
+                        LockScope::Exclusive,
+                    )
+                    .with_owner(DeadProperty(vec![
+                        DeadPropertyTag::ElementStart(DeadElementTag {
+                            name: "D:href".to_string(),
+                            attrs: None,
+                        }),
+                        DeadPropertyTag::Text("http://example.org/~ejw/contact.html".to_string()),
+                        DeadPropertyTag::ElementEnd,
+                    ]))
+                    .with_timeout(604800)
+                    .with_lock_token("urn:uuid:e71d4fae-5dec-22d6-fea5-00a0c91e6be4"),
+                ],
             )])
             .to_string(),
             // 006.xml
@@ -495,41 +499,43 @@ END:VCARD
                 "http://www.example.com/papers/",
                 vec![PropStat::new_list(vec![DavPropertyValue::new(
                     WebDavProperty::SupportedPrivilegeSet,
-                    vec![SupportedPrivilege::new(Privilege::All, "Any operation")
-                        .with_abstract()
-                        .with_supported_privilege(
-                            SupportedPrivilege::new(Privilege::Read, "Read any object")
-                                .with_supported_privilege(
-                                    SupportedPrivilege::new(Privilege::ReadAcl, "Read ACL")
-                                        .with_abstract(),
-                                )
-                                .with_supported_privilege(
-                                    SupportedPrivilege::new(
-                                        Privilege::ReadCurrentUserPrivilegeSet,
-                                        "Read current user privilege set property",
+                    vec![
+                        SupportedPrivilege::new(Privilege::All, "Any operation")
+                            .with_abstract()
+                            .with_supported_privilege(
+                                SupportedPrivilege::new(Privilege::Read, "Read any object")
+                                    .with_supported_privilege(
+                                        SupportedPrivilege::new(Privilege::ReadAcl, "Read ACL")
+                                            .with_abstract(),
                                     )
-                                    .with_abstract(),
-                                ),
-                        )
-                        .with_supported_privilege(
-                            SupportedPrivilege::new(Privilege::Write, "Write any object")
-                                .with_supported_privilege(
-                                    SupportedPrivilege::new(Privilege::WriteAcl, "Write ACL")
+                                    .with_supported_privilege(
+                                        SupportedPrivilege::new(
+                                            Privilege::ReadCurrentUserPrivilegeSet,
+                                            "Read current user privilege set property",
+                                        )
                                         .with_abstract(),
-                                )
-                                .with_supported_privilege(SupportedPrivilege::new(
-                                    Privilege::WriteProperties,
-                                    "Write properties",
-                                ))
-                                .with_supported_privilege(SupportedPrivilege::new(
-                                    Privilege::WriteContent,
-                                    "Write resource content",
-                                )),
-                        )
-                        .with_supported_privilege(SupportedPrivilege::new(
-                            Privilege::Unlock,
-                            "Unlock resource",
-                        ))],
+                                    ),
+                            )
+                            .with_supported_privilege(
+                                SupportedPrivilege::new(Privilege::Write, "Write any object")
+                                    .with_supported_privilege(
+                                        SupportedPrivilege::new(Privilege::WriteAcl, "Write ACL")
+                                            .with_abstract(),
+                                    )
+                                    .with_supported_privilege(SupportedPrivilege::new(
+                                        Privilege::WriteProperties,
+                                        "Write properties",
+                                    ))
+                                    .with_supported_privilege(SupportedPrivilege::new(
+                                        Privilege::WriteContent,
+                                        "Write resource content",
+                                    )),
+                            )
+                            .with_supported_privilege(SupportedPrivilege::new(
+                                Privilege::Unlock,
+                                "Unlock resource",
+                            )),
+                    ],
                 )])],
             )])
             .to_string(),
@@ -592,24 +598,26 @@ END:VCARD
                     ),
                     DavPropertyValue::new(
                         WebDavProperty::SupportedPrivilegeSet,
-                        vec![SupportedPrivilege::new(Privilege::All, "Any operation")
-                            .with_abstract()
-                            .with_supported_privilege(SupportedPrivilege::new(
-                                Privilege::Read,
-                                "Read any object",
-                            ))
-                            .with_supported_privilege(
-                                SupportedPrivilege::new(Privilege::Write, "Write any object")
-                                    .with_abstract(),
-                            )
-                            .with_supported_privilege(SupportedPrivilege::new(
-                                Privilege::ReadAcl,
-                                "Read the ACL",
-                            ))
-                            .with_supported_privilege(SupportedPrivilege::new(
-                                Privilege::WriteAcl,
-                                "Write the ACL",
-                            ))],
+                        vec![
+                            SupportedPrivilege::new(Privilege::All, "Any operation")
+                                .with_abstract()
+                                .with_supported_privilege(SupportedPrivilege::new(
+                                    Privilege::Read,
+                                    "Read any object",
+                                ))
+                                .with_supported_privilege(
+                                    SupportedPrivilege::new(Privilege::Write, "Write any object")
+                                        .with_abstract(),
+                                )
+                                .with_supported_privilege(SupportedPrivilege::new(
+                                    Privilege::ReadAcl,
+                                    "Read the ACL",
+                                ))
+                                .with_supported_privilege(SupportedPrivilege::new(
+                                    Privilege::WriteAcl,
+                                    "Write the ACL",
+                                )),
+                        ],
                     ),
                     DavPropertyValue::new(
                         WebDavProperty::CurrentUserPrivilegeSet,

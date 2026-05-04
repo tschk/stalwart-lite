@@ -29,15 +29,10 @@ use common::{
 };
 use directory::Permission;
 use http_proto::{
-    HttpContext, HttpRequest, HttpResponse, HttpResponseBody,
-    HttpSessionData, JsonProblemResponse, ToHttpResponse, request::fetch_body,
+    HttpContext, HttpRequest, HttpResponse, HttpResponseBody, HttpSessionData, JsonProblemResponse,
+    ToHttpResponse, request::fetch_body,
 };
-use hyper::{
-    Method, StatusCode, body,
-    header,
-    server::conn::http1,
-    service::service_fn,
-};
+use hyper::{Method, StatusCode, body, header, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use std::{net::IpAddr, sync::Arc};
 use store::dispatch::lookup::KeyValue;

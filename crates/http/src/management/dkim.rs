@@ -17,6 +17,7 @@ use mail_builder::encoders::base64::base64_encode;
 use mail_parser::DateTime;
 use pkcs8::Document;
 use rsa::pkcs1::DecodeRsaPublicKey;
+use rustls_pki_types::{PrivateKeyDer, PrivatePkcs1KeyDer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use store::write::now;
@@ -253,7 +254,10 @@ impl DkimManagement for Server {
 pub fn obtain_dkim_public_key(algo: Algorithm, pk: &str) -> trc::Result<String> {
     match simple_pem_parse(pk) {
         Some(der) => match algo {
-            Algorithm::Rsa => match RsaKey::<Sha256>::from_der(&der).and_then(|key| {
+            Algorithm::Rsa => match RsaKey::<Sha256>::from_key_der(PrivateKeyDer::Pkcs1(
+                PrivatePkcs1KeyDer::from(der),
+            ))
+            .and_then(|key| {
                 Document::from_pkcs1_der(&key.public_key())
                     .map_err(|err| mail_auth::Error::CryptoError(err.to_string()))
             }) {

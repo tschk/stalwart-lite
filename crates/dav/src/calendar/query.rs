@@ -562,15 +562,11 @@ impl CalendarQueryHandler {
                 } else if entries.peek().is_some() {
                     let _ = write!(&mut out, "BEGIN:{component_name}\r\n");
 
-                    if data.limit_freebusy.is_none()
-                        || component.component_type != ICalendarComponentType::VFreebusy
+                    if let Some(range) = data
+                        .limit_freebusy
+                        .filter(|_| component.component_type == ICalendarComponentType::VFreebusy)
                     {
-                        for (entry, with_value) in entries {
-                            let _ = entry.write_to(&mut out, with_value);
-                        }
-                    } else {
                         // Filter freebusy
-                        let range = data.limit_freebusy.unwrap();
                         for (entry, with_value) in entries {
                             if matches!(entry.name, ArchivedICalendarProperty::Freebusy) {
                                 let mut fb_in_range =
@@ -590,6 +586,10 @@ impl CalendarQueryHandler {
                             } else {
                                 let _ = entry.write_to(&mut out, with_value);
                             }
+                        }
+                    } else {
+                        for (entry, with_value) in entries {
+                            let _ = entry.write_to(&mut out, with_value);
                         }
                     }
 

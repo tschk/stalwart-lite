@@ -18,7 +18,9 @@ mod tests {
 
     #[test]
     fn calendar_templates_include_minutes() {
-        for lang in ["en", "es", "fr", "de", "it", "pt", "nl", "da", "ca", "el", "sv", "pl"] {
+        for lang in [
+            "en", "es", "fr", "de", "it", "pt", "nl", "da", "ca", "el", "sv", "pl",
+        ] {
             let locale = locale(lang).expect("locale must exist");
             assert!(
                 locale.calendar_date_template.contains("%M"),

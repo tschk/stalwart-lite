@@ -10,9 +10,9 @@ use common::{
     core::BuildServer,
     ipc::{BroadcastEvent, HousekeeperEvent, PurgeType},
 };
-use spam_filter::modules::classifier::SpamClassifier;
 use email::message::delete::EmailDeletion;
 use smtp::reporting::SmtpReporting;
+use spam_filter::modules::classifier::SpamClassifier;
 use std::{
     collections::BinaryHeap,
     future::Future,
@@ -99,7 +99,6 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                     );
                 }
             }
-
 
             // Spam classifier training
             if roles.spam_training.is_enabled_or_sharded()

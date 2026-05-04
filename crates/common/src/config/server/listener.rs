@@ -116,7 +116,7 @@ impl Listeners {
                         }
                         "tos" => {
                             if let Some(value) = config.try_parse_value(key, &value) {
-                                socket.set_tos(value)
+                                socket.set_tos_v4(value)
                             } else {
                                 continue;
                             }
