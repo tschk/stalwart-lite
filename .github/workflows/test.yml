@@ -18,32 +18,8 @@ jobs:
     name: Test
     needs: style
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: mysecretpassword
-          POSTGRES_DB: stalwart
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d stalwart"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: password
-          MYSQL_DATABASE: stalwart
-        ports:
-          - 3307:3306
-        options: >-
-          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -ppassword"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
+    env:
+      TEST_FEATURES: sqlite rocks s3 redis
 
     steps:
       - name: Checkout
@@ -77,13 +53,13 @@ jobs:
         run: cargo test -p store -- --nocapture
 
       - name: Directory Tests
-        run: cargo test -p tests directory -- --nocapture --test-threads=1
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory -- --nocapture --test-threads=1
 
       - name: SMTP Tests
-        run: cargo test -p tests smtp -- --nocapture
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp -- --nocapture
 
       - name: IMAP Tests
-        run: cargo test -p tests imap -- --nocapture
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap -- --nocapture
 
       - name: JMAP Tests
-        run: cargo test -p tests jmap -- --nocapture
+        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" jmap -- --nocapture
