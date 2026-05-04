@@ -106,6 +106,18 @@ FoundationDB build:
 sudo sh install.sh --fdb
 ```
 
+## Publishing Status
+
+GitHub releases are the supported distribution path for this fork. Release
+publishing is driven by pushed tags that match `v*.*.*`, and generated assets
+are consumed by [install.sh](./install.sh).
+
+This repository is not currently ready for crates.io publication. The server
+package depends on local workspace crates through path-only dependencies, and
+those internal crates would need registry-safe package names and published
+versions before `cargo publish` can work. See [PUBLISHING.md](./PUBLISHING.md)
+for the exact crates.io migration checklist.
+
 ## Test Infrastructure
 
 Upstream Docker Compose examples for external services are kept under
