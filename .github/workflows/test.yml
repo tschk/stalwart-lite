@@ -68,7 +68,17 @@ jobs:
           cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::tls -- --nocapture --test-threads=1
 
       - name: IMAP Tests
+        env:
+          STORE: rocksdb
+          SEARCH_STORE: rocksdb
+          BLOB_STORE: rocksdb
+          LOOKUP_STORE: rocksdb
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap -- --nocapture
 
       - name: JMAP Tests
+        env:
+          STORE: rocksdb
+          SEARCH_STORE: rocksdb
+          BLOB_STORE: rocksdb
+          LOOKUP_STORE: rocksdb
         run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" jmap -- --nocapture
