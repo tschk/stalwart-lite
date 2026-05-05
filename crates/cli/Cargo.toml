@@ -13,7 +13,7 @@ readme = "README.md"
 jmap-client = { version = "0.3", features = ["async"] } 
 mail-parser = { version = "0.11", features = ["full_encoding", "serde"] } 
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "http2"]}
-tokio = { version = "1.47", features = ["full"] }
+tokio = { version = "1.50", features = ["full"] }
 num_cpus = "1.13.1"
 clap = { version = "4.1.6", features = ["derive"] }
 prettytable-rs = "0.10.0"
