@@ -6,7 +6,7 @@
 
 use redis::AsyncCommands;
 
-use crate::Deserialize;
+use crate::store::Deserialize;
 
 use super::{RedisPool, RedisStore, into_error};
 

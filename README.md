@@ -54,14 +54,14 @@ cargo check --workspace
 Release binary:
 
 ```bash
-cargo build --release -p stalwart --no-default-features \
+cargo build --release -p stalwart-lite --no-default-features \
   --features "sqlite postgres mysql rocks s3 redis azure nats enterprise"
 ```
 
 CLI:
 
 ```bash
-cargo build --release -p stalwart-cli
+cargo build --release -p stalwart-lite-cli
 ```
 
 ## Docker

@@ -231,7 +231,7 @@ impl Stores {
                         self.in_memory_stores
                             .insert(store_id.clone(), InMemoryStore::Redis(db.clone()));
                         self.pubsub_stores
-                            .insert(store_id, crate::PubSubStore::Redis(db));
+                            .insert(store_id, crate::store::PubSubStore::Redis(db));
                     }
                 }
                 #[cfg(feature = "nats")]
@@ -241,7 +241,7 @@ impl Stores {
                         .map(std::sync::Arc::new)
                     {
                         self.pubsub_stores
-                            .insert(store_id, crate::PubSubStore::Nats(db));
+                            .insert(store_id, crate::store::PubSubStore::Nats(db));
                     }
                 }
                 #[cfg(feature = "zenoh")]
@@ -252,7 +252,7 @@ impl Stores {
                             .map(std::sync::Arc::new)
                     {
                         self.pubsub_stores
-                            .insert(store_id, crate::PubSubStore::Zenoh(db));
+                            .insert(store_id, crate::store::PubSubStore::Zenoh(db));
                     }
                 }
                 #[cfg(feature = "kafka")]
@@ -263,7 +263,7 @@ impl Stores {
                             .map(std::sync::Arc::new)
                     {
                         self.pubsub_stores
-                            .insert(store_id, crate::PubSubStore::Kafka(db));
+                            .insert(store_id, crate::store::PubSubStore::Kafka(db));
                     }
                 }
                 // SPDX-SnippetBegin

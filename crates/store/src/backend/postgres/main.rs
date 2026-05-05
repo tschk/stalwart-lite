@@ -22,7 +22,7 @@ use tokio_postgres::NoTls;
 
 impl PostgresStore {
     pub async fn open(
-        config: &mut utils::config::Config,
+        config: &mut crate::utils::config::Config,
         prefix: impl AsKey,
         create_store_tables: bool,
         create_search_tables: bool,

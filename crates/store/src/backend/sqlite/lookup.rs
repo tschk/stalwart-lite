@@ -75,12 +75,12 @@ impl FromSql for Value<'static> {
 }
 
 impl IntoRows for Rows<'_> {
-    fn into_rows(mut self) -> crate::Rows {
+    fn into_rows(mut self) -> crate::store::Rows {
         let column_count = self.as_ref().map(|s| s.column_count()).unwrap_or_default();
-        let mut rows = crate::Rows { rows: Vec::new() };
+        let mut rows = crate::store::Rows { rows: Vec::new() };
 
         while let Ok(Some(row)) = self.next() {
-            rows.rows.push(crate::Row {
+            rows.rows.push(crate::store::Row {
                 values: (0..column_count)
                     .map(|idx| row.get::<_, Value>(idx).unwrap_or(Value::Null))
                     .collect(),
@@ -90,7 +90,7 @@ impl IntoRows for Rows<'_> {
         rows
     }
 
-    fn into_named_rows(mut self) -> crate::NamedRows {
+    fn into_named_rows(mut self) -> crate::store::NamedRows {
         let (column_count, names) = self
             .as_ref()
             .map(|s| {
@@ -104,13 +104,13 @@ impl IntoRows for Rows<'_> {
             })
             .unwrap_or((0, Vec::new()));
 
-        let mut rows = crate::NamedRows {
+        let mut rows = crate::store::NamedRows {
             names,
             rows: Vec::new(),
         };
 
         while let Ok(Some(row)) = self.next() {
-            rows.rows.push(crate::Row {
+            rows.rows.push(crate::store::Row {
                 values: (0..column_count)
                     .map(|idx| row.get::<_, Value>(idx).unwrap_or(Value::Null))
                     .collect(),
@@ -120,25 +120,25 @@ impl IntoRows for Rows<'_> {
         rows
     }
 
-    fn into_row(self) -> Option<crate::Row> {
+    fn into_row(self) -> Option<crate::store::Row> {
         unreachable!()
     }
 }
 
 impl IntoRows for Option<&Row<'_>> {
-    fn into_row(self) -> Option<crate::Row> {
-        self.map(|row| crate::Row {
+    fn into_row(self) -> Option<crate::store::Row> {
+        self.map(|row| crate::store::Row {
             values: (0..row.as_ref().column_count())
                 .map(|idx| row.get::<_, Value>(idx).unwrap_or(Value::Null))
                 .collect(),
         })
     }
 
-    fn into_rows(self) -> crate::Rows {
+    fn into_rows(self) -> crate::store::Rows {
         unreachable!()
     }
 
-    fn into_named_rows(self) -> crate::NamedRows {
+    fn into_named_rows(self) -> crate::store::NamedRows {
         unreachable!()
     }
 }

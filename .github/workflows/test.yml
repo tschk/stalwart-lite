@@ -18,69 +18,21 @@ jobs:
     name: Test
     needs: style
     runs-on: ubuntu-latest
-    env:
-      TEST_FEATURES: sqlite rocks s3 redis
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -y
-          curl -LO https://github.com/glauth/glauth/releases/download/v2.2.0/glauth-linux-amd64
-          chmod a+rx glauth-linux-amd64
-          nohup ./glauth-linux-amd64 -c tests/resources/ldap/ldap.cfg &
-          curl -Lo minio.deb https://dl.min.io/server/minio/release/linux-amd64/archive/minio_20230629051228.0.0_amd64.deb
-          sudo dpkg -i minio.deb
-          mkdir ~/minio
-          nohup minio server ~/minio --console-address :9091 &
-          curl -LO https://dl.min.io/client/mc/release/linux-amd64/mc
-          chmod a+rx mc
-          ./mc alias set myminio http://localhost:9000 minioadmin minioadmin
-          ./mc mb tmp
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
       - name: JMAP Protocol Tests
-        run: cargo test -p jmap_proto -- --nocapture
+        run: cargo test -p stalwart-lite jmap_proto:: -- --nocapture
 
       - name: IMAP Protocol Tests
-        run: cargo test -p imap_proto -- --nocapture
+        run: cargo test -p stalwart-lite imap_proto:: -- --nocapture
 
       - name: Full-text search Tests
-        run: cargo test -p store -- --nocapture
+        run: cargo test -p stalwart-lite store:: -- --nocapture
 
-      - name: Directory Tests
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory -- --nocapture --test-threads=1
-
-      - name: SMTP Tests
-        run: |
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory::smtp -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::config -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::inbound -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::lookup -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::management::report -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::queue -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::dmarc -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::scheduler -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" smtp::reporting::tls -- --nocapture --test-threads=1
-
-      - name: IMAP Tests
-        env:
-          STORE: rocksdb
-          SEARCH_STORE: rocksdb
-          BLOB_STORE: rocksdb
-          LOOKUP_STORE: rocksdb
-        run: |
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" directory::imap -- --nocapture --test-threads=1
-          cargo test -p tests --no-default-features --features "$TEST_FEATURES" imap --no-run
-
-      - name: JMAP Tests
-        env:
-          STORE: rocksdb
-          SEARCH_STORE: rocksdb
-          BLOB_STORE: rocksdb
-          LOOKUP_STORE: rocksdb
-        run: cargo test -p tests --no-default-features --features "$TEST_FEATURES" jmap --no-run
+      - name: Workspace Tests
+        run: cargo test --workspace

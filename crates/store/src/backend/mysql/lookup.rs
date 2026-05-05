@@ -41,20 +41,20 @@ impl MysqlStore {
     }
 }
 
-impl From<crate::Value<'_>> for mysql_async::Value {
-    fn from(value: crate::Value) -> Self {
+impl From<Value<'_>> for mysql_async::Value {
+    fn from(value: Value) -> Self {
         match value {
-            crate::Value::Integer(i) => mysql_async::Value::Int(i),
-            crate::Value::Bool(b) => mysql_async::Value::Int(b as i64),
-            crate::Value::Float(f) => mysql_async::Value::Double(f),
-            crate::Value::Text(t) => mysql_async::Value::Bytes(t.into_owned().into_bytes()),
-            crate::Value::Blob(b) => mysql_async::Value::Bytes(b.into_owned()),
-            crate::Value::Null => mysql_async::Value::NULL,
+            Value::Integer(i) => mysql_async::Value::Int(i),
+            Value::Bool(b) => mysql_async::Value::Int(b as i64),
+            Value::Float(f) => mysql_async::Value::Double(f),
+            Value::Text(t) => mysql_async::Value::Bytes(t.into_owned().into_bytes()),
+            Value::Blob(b) => mysql_async::Value::Bytes(b.into_owned()),
+            Value::Null => mysql_async::Value::NULL,
         }
     }
 }
 
-impl From<mysql_async::Value> for crate::Value<'static> {
+impl From<mysql_async::Value> for Value<'static> {
     fn from(value: mysql_async::Value) -> Self {
         match value {
             mysql_async::Value::Int(i) => Self::Integer(i),
@@ -73,11 +73,11 @@ impl From<mysql_async::Value> for crate::Value<'static> {
 }
 
 impl IntoRows for Vec<mysql_async::Row> {
-    fn into_rows(self) -> crate::Rows {
-        crate::Rows {
+    fn into_rows(self) -> crate::store::Rows {
+        crate::store::Rows {
             rows: self
                 .into_iter()
-                .map(|r| crate::Row {
+                .map(|r| crate::store::Row {
                     values: r
                         .unwrap_raw()
                         .into_iter()
@@ -89,15 +89,15 @@ impl IntoRows for Vec<mysql_async::Row> {
         }
     }
 
-    fn into_named_rows(self) -> crate::NamedRows {
-        crate::NamedRows {
+    fn into_named_rows(self) -> crate::store::NamedRows {
+        crate::store::NamedRows {
             names: self
                 .first()
                 .map(|r| r.columns().iter().map(|c| c.name_str().into()).collect())
                 .unwrap_or_default(),
             rows: self
                 .into_iter()
-                .map(|r| crate::Row {
+                .map(|r| crate::store::Row {
                     values: r
                         .unwrap_raw()
                         .into_iter()
@@ -109,14 +109,14 @@ impl IntoRows for Vec<mysql_async::Row> {
         }
     }
 
-    fn into_row(self) -> Option<crate::Row> {
+    fn into_row(self) -> Option<crate::store::Row> {
         unreachable!()
     }
 }
 
 impl IntoRows for Option<mysql_async::Row> {
-    fn into_row(self) -> Option<crate::Row> {
-        self.map(|row| crate::Row {
+    fn into_row(self) -> Option<crate::store::Row> {
+        self.map(|row| crate::store::Row {
             values: row
                 .unwrap_raw()
                 .into_iter()
@@ -126,11 +126,11 @@ impl IntoRows for Option<mysql_async::Row> {
         })
     }
 
-    fn into_rows(self) -> crate::Rows {
+    fn into_rows(self) -> crate::store::Rows {
         unreachable!()
     }
 
-    fn into_named_rows(self) -> crate::NamedRows {
+    fn into_named_rows(self) -> crate::store::NamedRows {
         unreachable!()
     }
 }

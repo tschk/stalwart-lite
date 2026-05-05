@@ -11,7 +11,7 @@ sudo pkill stalwart
 rm -rf $BASE_DIR
 
 # Build the stalwart binary
-cargo build -p stalwart --no-default-features --features "$FEATURES" 
+cargo build -p stalwart-lite --no-default-features --features "$FEATURES"
 
 for NUM in $(seq 1 $NUM_NODES); do
     sudo ifconfig en0 alias 10.0.$NUM.1 netmask 255.255.255.0
