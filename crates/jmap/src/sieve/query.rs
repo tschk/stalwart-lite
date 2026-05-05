@@ -4,38 +4,38 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::StateManager};
-use common::Server;
-use email::sieve::ingest::SieveScriptIngest;
-use jmap_proto::{
+use crate::common::Server;
+use crate::email::sieve::ingest::SieveScriptIngest;
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::StateManager};
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::sieve::{Sieve, SieveComparator, SieveFilter},
 };
-use std::future::Future;
-use store::{
+use crate::store::{
     IndexKeyPrefix, IterateParams, U32_LEN,
     roaring::RoaringBitmap,
     search::{SearchFilter, SearchQuery},
     write::{SearchIndex, key::DeserializeBigEndian},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::SieveField,
 };
+use std::future::Future;
 
 pub trait SieveScriptQuery: Sync + Send {
     fn sieve_script_query(
         &self,
         request: QueryRequest<Sieve>,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl SieveScriptQuery for Server {
     async fn sieve_script_query(
         &self,
         mut request: QueryRequest<Sieve>,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut filters = Vec::with_capacity(request.filter.len());
         let active_script_id = if request
@@ -85,7 +85,7 @@ impl SieveScriptQuery for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for cond in std::mem::take(&mut request.filter) {
             match cond {
@@ -119,7 +119,9 @@ impl SieveScriptQuery for Server {
                         }
                     }
                     SieveFilter::_T(other) => {
-                        return Err(trc::JmapEvent::UnsupportedFilter.into_err().details(other));
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
+                            .into_err()
+                            .details(other));
                     }
                 },
                 Filter::And => {
@@ -155,7 +157,9 @@ impl SieveScriptQuery for Server {
                     sort_by_active = Some(comparator.is_ascending);
                 }
                 SieveComparator::_T(other) => {
-                    return Err(trc::JmapEvent::UnsupportedSort.into_err().details(other));
+                    return Err(crate::trc::JmapEvent::UnsupportedSort
+                        .into_err()
+                        .details(other));
                 }
             };
         }

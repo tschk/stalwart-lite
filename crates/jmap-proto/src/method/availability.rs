@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     request::{
         MaybeInvalid,
         deserialize::{DeserializeArguments, deserialize_request},
     },
     types::date::UTCDate,
 };
+use crate::types::{blob::BlobId, id::Id};
 use calcard::jscalendar::{JSCalendar, JSCalendarProperty};
 use serde::{Deserialize, Deserializer, Serialize};
-use types::{blob::BlobId, id::Id};
 
 #[derive(Debug, Clone, Default)]
 pub struct GetAvailabilityRequest {

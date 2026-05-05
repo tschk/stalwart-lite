@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     auth::{
         AuthRequest,
         sasl::{sasl_decode_challenge_oauth, sasl_decode_challenge_plain},
     },
     listener::{SessionStream, limiter::LimiterResult},
 };
-use directory::Permission;
+use crate::directory::Permission;
 use mail_parser::decoders::base64::base64_decode;
 use mail_send::Credentials;
 
-use crate::{
+use crate::pop3::{
     Session, State,
     protocol::{Command, Mechanism, request},
 };
@@ -25,7 +25,7 @@ impl<T: SessionStream> Session<T> {
         &mut self,
         mechanism: Mechanism,
         mut params: Vec<String>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         match mechanism {
             Mechanism::Plain | Mechanism::OAuthBearer | Mechanism::XOauth2 => {
                 if !params.is_empty() {
@@ -38,7 +38,7 @@ impl<T: SessionStream> Session<T> {
                             }
                         })
                         .ok_or_else(|| {
-                            trc::AuthEvent::Error
+                            crate::trc::AuthEvent::Error
                                 .into_err()
                                 .details("Invalid SASL challenge")
                         })?;
@@ -58,13 +58,16 @@ impl<T: SessionStream> Session<T> {
                     self.write_bytes("+\r\n").await
                 }
             }
-            _ => Err(trc::AuthEvent::Error
+            _ => Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Authentication mechanism not supported.")),
         }
     }
 
-    pub async fn handle_auth(&mut self, credentials: Credentials<String>) -> trc::Result<()> {
+    pub async fn handle_auth(
+        &mut self,
+        credentials: Credentials<String>,
+    ) -> crate::trc::Result<()> {
         // Authenticate
         let access_token = self
             .server
@@ -75,7 +78,7 @@ impl<T: SessionStream> Session<T> {
             ))
             .await
             .map_err(|err| {
-                if err.matches(trc::EventType::Auth(trc::AuthEvent::Failed)) {
+                if err.matches(crate::trc::EventType::Auth(crate::trc::AuthEvent::Failed)) {
                     match &self.state {
                         State::NotAuthenticated {
                             auth_failures,
@@ -87,7 +90,9 @@ impl<T: SessionStream> Session<T> {
                             };
                         }
                         _ => {
-                            return trc::AuthEvent::TooManyAttempts.into_err().caused_by(err);
+                            return crate::trc::AuthEvent::TooManyAttempts
+                                .into_err()
+                                .caused_by(err);
                         }
                     }
                 }
@@ -104,7 +109,7 @@ impl<T: SessionStream> Session<T> {
         let in_flight = match access_token.is_imap_request_allowed() {
             LimiterResult::Allowed(in_flight) => Some(in_flight),
             LimiterResult::Forbidden => {
-                return Err(trc::LimitEvent::ConcurrentRequest.into_err());
+                return Err(crate::trc::LimitEvent::ConcurrentRequest.into_err());
             }
             LimiterResult::Disabled => None,
         };

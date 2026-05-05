@@ -5,25 +5,25 @@
  */
 
 use super::propfind::PrincipalPropFind;
-use common::{Server, auth::AccessToken};
-use dav_proto::schema::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav_proto::schema::{
     property::{DavProperty, WebDavProperty},
     request::{PrincipalPropertySearch, PropFind},
     response::MultiStatus,
 };
-use directory::{Type, backend::internal::manage::ManageDirectory};
-use http_proto::HttpResponse;
+use crate::directory::{Type, backend::internal::manage::ManageDirectory};
+use crate::http_proto::HttpResponse;
+use crate::store::roaring::RoaringBitmap;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 use hyper::StatusCode;
-use store::roaring::RoaringBitmap;
-use trc::AddContext;
-use types::collection::Collection;
 
 pub(crate) trait PrincipalPropSearch: Sync + Send {
     fn handle_principal_property_search(
         &self,
         access_token: &AccessToken,
         request: PrincipalPropertySearch,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl PrincipalPropSearch for Server {
@@ -31,7 +31,7 @@ impl PrincipalPropSearch for Server {
         &self,
         access_token: &AccessToken,
         mut request: PrincipalPropertySearch,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         let mut search_for = None;
 
         for prop_search in request.property_search {
@@ -58,7 +58,7 @@ impl PrincipalPropSearch for Server {
                     0,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             let ids = RoaringBitmap::from_iter(principals.items.into_iter().map(|p| p.id()));
 

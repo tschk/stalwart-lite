@@ -4,11 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::config::smtp::{
+use crate::common::config::smtp::{
     queue::QueueName,
     report::AggregateFrequency,
     resolver::{Policy, Tlsa},
 };
+use crate::store::{BlobStore, InMemoryStore, Store};
+use crate::types::type_state::{DataType, StateChange};
+use crate::utils::map::bitmap::Bitmap;
 use ahash::RandomState;
 use mail_auth::{
     dmarc::Dmarc,
@@ -22,10 +25,7 @@ use std::{
     },
     time::Instant,
 };
-use store::{BlobStore, InMemoryStore, Store};
 use tokio::sync::{Semaphore, SemaphorePermit, mpsc};
-use types::type_state::{DataType, StateChange};
-use utils::map::bitmap::Bitmap;
 
 pub enum HousekeeperEvent {
     AcmeReschedule {

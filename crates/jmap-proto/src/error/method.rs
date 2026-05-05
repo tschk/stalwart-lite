@@ -31,10 +31,10 @@ pub enum MethodError {
 }
 
 #[derive(Debug)]
-pub struct MethodErrorWrapper(trc::Error);
+pub struct MethodErrorWrapper(crate::trc::Error);
 
-impl From<trc::Error> for MethodErrorWrapper {
-    fn from(value: trc::Error) -> Self {
+impl From<crate::trc::Error> for MethodErrorWrapper {
+    fn from(value: crate::trc::Error) -> Self {
         MethodErrorWrapper(value)
     }
 }
@@ -75,67 +75,72 @@ impl Serialize for MethodErrorWrapper {
     {
         let mut map = serializer.serialize_map(2.into())?;
 
-        let description = self.0.value(trc::Key::Details).and_then(|v| v.as_str());
+        let description = self
+            .0
+            .value(crate::trc::Key::Details)
+            .and_then(|v| v.as_str());
 
         let (error_type, description) = match self.0.as_ref() {
-            trc::EventType::Jmap(cause) => match cause {
-                trc::JmapEvent::InvalidArguments => {
+            crate::trc::EventType::Jmap(cause) => match cause {
+                crate::trc::JmapEvent::InvalidArguments => {
                     ("invalidArguments", description.unwrap_or_default())
                 }
-                trc::JmapEvent::RequestTooLarge => (
+                crate::trc::JmapEvent::RequestTooLarge => (
                     "requestTooLarge",
                     concat!(
                         "The number of ids requested by the client exceeds the maximum number ",
                         "the server is willing to process in a single method call."
                     ),
                 ),
-                trc::JmapEvent::StateMismatch => (
+                crate::trc::JmapEvent::StateMismatch => (
                     "stateMismatch",
                     concat!(
                         "An \"ifInState\" argument was supplied, but ",
                         "it does not match the current state."
                     ),
                 ),
-                trc::JmapEvent::AnchorNotFound => (
+                crate::trc::JmapEvent::AnchorNotFound => (
                     "anchorNotFound",
                     concat!(
                         "An anchor argument was supplied, but it ",
                         "cannot be found in the results of the query."
                     ),
                 ),
-                trc::JmapEvent::UnsupportedFilter => {
+                crate::trc::JmapEvent::UnsupportedFilter => {
                     ("unsupportedFilter", description.unwrap_or_default())
                 }
-                trc::JmapEvent::UnsupportedSort => {
+                crate::trc::JmapEvent::UnsupportedSort => {
                     ("unsupportedSort", description.unwrap_or_default())
                 }
-                trc::JmapEvent::NotFound => ("serverPartialFail", {
+                crate::trc::JmapEvent::NotFound => ("serverPartialFail", {
                     concat!(
                         "One or more items are no longer available on the ",
                         "server, please try again."
                     )
                 }),
-                trc::JmapEvent::UnknownMethod => ("unknownMethod", description.unwrap_or_default()),
-                trc::JmapEvent::InvalidResultReference => {
+                crate::trc::JmapEvent::UnknownMethod => {
+                    ("unknownMethod", description.unwrap_or_default())
+                }
+                crate::trc::JmapEvent::InvalidResultReference => {
                     ("invalidResultReference", description.unwrap_or_default())
                 }
-                trc::JmapEvent::Forbidden => ("forbidden", description.unwrap_or_default()),
-                trc::JmapEvent::AccountNotFound => (
+                crate::trc::JmapEvent::Forbidden => ("forbidden", description.unwrap_or_default()),
+                crate::trc::JmapEvent::AccountNotFound => (
                     "accountNotFound",
                     "The accountId does not correspond to a valid account",
                 ),
-                trc::JmapEvent::AccountNotSupportedByMethod => (
+                crate::trc::JmapEvent::AccountNotSupportedByMethod => (
                     "accountNotSupportedByMethod",
                     concat!(
                         "The accountId given corresponds to a valid account, ",
                         "but the account does not support this method or data type."
                     ),
                 ),
-                trc::JmapEvent::AccountReadOnly => (
+                crate::trc::JmapEvent::AccountReadOnly => (
                     "accountReadOnly",
                     "This method modifies state, but the account is read-only.",
                 ),
-                trc::JmapEvent::UnknownDataType => (
+                crate::trc::JmapEvent::UnknownDataType => (
                     "unknownDataType",
                     concat!(
                         "The server does not recognise this data type, ",
@@ -143,16 +148,16 @@ impl Serialize for MethodErrorWrapper {
                         "in the current Request Object."
                     ),
                 ),
-                trc::JmapEvent::CannotCalculateChanges => (
+                crate::trc::JmapEvent::CannotCalculateChanges => (
                     "cannotCalculateChanges",
                     concat!(
                         "The server cannot calculate the changes ",
                         "between the old and new states."
                     ),
                 ),
-                trc::JmapEvent::UnknownCapability
-                | trc::JmapEvent::NotJson
-                | trc::JmapEvent::NotRequest => (
+                crate::trc::JmapEvent::UnknownCapability
+                | crate::trc::JmapEvent::NotJson
+                | crate::trc::JmapEvent::NotRequest => (
                     "serverUnavailable",
                     concat!(
                         "This server is temporarily unavailable. ",

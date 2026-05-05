@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use jmap_tools::{Element, Property, Value};
-use std::{borrow::Borrow, str::FromStr, time::SystemTime};
-use utils::codec::{
+use crate::utils::codec::{
     base32_custom::{Base32Reader, Base32Writer},
     leb128::{Leb128Iterator, Leb128Writer},
 };
+use jmap_tools::{Element, Property, Value};
+use std::{borrow::Borrow, str::FromStr, time::SystemTime};
 
-use crate::blob_hash::BlobHash;
+use crate::types::blob_hash::BlobHash;
 
 const B_LINKED: u8 = 0x10;
 const B_RESERVED: u8 = 0x20;

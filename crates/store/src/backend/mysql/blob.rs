@@ -15,7 +15,7 @@ impl MysqlStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let s = conn
             .prep("SELECT v FROM t WHERE k = ?")
@@ -38,7 +38,7 @@ impl MysqlStore {
             .map_err(into_error)
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let s = conn
             .prep("INSERT INTO t (k, v) VALUES (?, ?) ON DUPLICATE KEY UPDATE v = VALUES(v)")
@@ -50,7 +50,7 @@ impl MysqlStore {
             .map(|_| ())
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let s = conn
             .prep("DELETE FROM t WHERE k = ?")

@@ -8,23 +8,23 @@
  *
  */
 
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use common::{Server, enterprise::undelete::DeletedItemType};
-use directory::backend::internal::manage::ManageDirectory;
-use email::{
+use crate::common::{Server, enterprise::undelete::DeletedItemType};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::email::{
     mailbox::INBOX_ID,
     message::ingest::{EmailIngest, IngestEmail, IngestSource},
 };
-use http_proto::{request::decode_path_element, *};
+use crate::http_proto::{request::decode_path_element, *};
+use crate::store::write::{BatchBuilder, BlobLink, BlobOp};
+use crate::trc::AddContext;
+use crate::types::{blob_hash::BlobHash, collection::Collection};
+use crate::utils::url_params::UrlParams;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use hyper::Method;
 use mail_parser::{DateTime, MessageParser};
 use serde_json::json;
 use std::future::Future;
 use std::str::FromStr;
-use store::write::{BatchBuilder, BlobLink, BlobOp};
-use trc::AddContext;
-use types::{blob_hash::BlobHash, collection::Collection};
-use utils::url_params::UrlParams;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug)]
 pub struct UndeleteRequest<H, C, T> {
@@ -88,7 +88,7 @@ pub trait UndeleteApi: Sync + Send {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl UndeleteApi for Server {
@@ -98,7 +98,7 @@ impl UndeleteApi for Server {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         session: &HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (path.get(2).copied(), req.method()) {
             (Some(account_name), &Method::GET) => {
                 let account_name = decode_path_element(account_name);
@@ -108,7 +108,7 @@ impl UndeleteApi for Server {
                     .data
                     .get_principal_id(account_name.as_ref())
                     .await?
-                    .ok_or_else(|| trc::ResourceEvent::NotFound.into_err())?;
+                    .ok_or_else(|| crate::trc::ResourceEvent::NotFound.into_err())?;
                 let mut deleted = self.core.list_deleted(account_id).await?;
 
                 let params = UrlParams::new(req.uri().query());
@@ -186,7 +186,7 @@ impl UndeleteApi for Server {
                     .data
                     .get_principal_id(account_name.as_ref())
                     .await?
-                    .ok_or_else(|| trc::ResourceEvent::NotFound.into_err())?;
+                    .ok_or_else(|| crate::trc::ResourceEvent::NotFound.into_err())?;
 
                 let requests: Vec<UndeleteRequest<BlobHash, Collection, u64>> =
                     match serde_json::from_slice::<
@@ -223,7 +223,7 @@ impl UndeleteApi for Server {
                                 .into()
                             })
                             .collect::<Option<Vec<_>>>()
-                            .ok_or_else(|| trc::ResourceEvent::BadParameters.into_err())?,
+                            .ok_or_else(|| crate::trc::ResourceEvent::BadParameters.into_err())?,
                         Ok(None) => {
                             let deleted = self.core.list_deleted(account_id).await?;
                             let mut results = Vec::with_capacity(deleted.len());
@@ -250,14 +250,14 @@ impl UndeleteApi for Server {
                             results
                         }
                         Err(_) => {
-                            return Err(trc::ResourceEvent::BadParameters.into_err());
+                            return Err(crate::trc::ResourceEvent::BadParameters.into_err());
                         }
                     };
 
                 let access_token = self
                     .get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let mut results = Vec::with_capacity(requests.len());
                 let mut batch = BatchBuilder::new();
                 batch.with_account_id(account_id);
@@ -301,20 +301,22 @@ impl UndeleteApi for Server {
                                             }
                                         }
                                         Err(mut err)
-                                            if err.matches(trc::EventType::MessageIngest(
-                                                trc::MessageIngestEvent::Error,
-                                            )) =>
+                                            if err.matches(
+                                                crate::trc::EventType::MessageIngest(
+                                                    crate::trc::MessageIngestEvent::Error,
+                                                ),
+                                            ) =>
                                         {
                                             results.push(UndeleteResponse::Error {
                                                 reason: err
-                                                    .take_value(trc::Key::Reason)
+                                                    .take_value(crate::trc::Key::Reason)
                                                     .and_then(|v| v.into_string())
                                                     .unwrap()
                                                     .to_string(),
                                             });
                                         }
                                         Err(err) => {
-                                            return Err(err.caused_by(trc::location!()));
+                                            return Err(err.caused_by(crate::trc::location!()));
                                         }
                                     }
                                 }
@@ -338,7 +340,7 @@ impl UndeleteApi for Server {
                         .data
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
 
                 Ok(JsonResponse::new(json!({
@@ -346,7 +348,7 @@ impl UndeleteApi for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }

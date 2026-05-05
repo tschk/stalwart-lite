@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{
         AnyId, JmapObject, JmapObjectId, MaybeReference,
         email::{EmailProperty, EmailValue},
@@ -13,10 +13,10 @@ use crate::{
     request::{MaybeInvalid, deserialize::DeserializeArguments, reference::MaybeIdReference},
     types::date::UTCDate,
 };
+use crate::types::{blob::BlobId, id::Id};
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::{Element, JsonPointer, JsonPointerItem, Key, Property, Value};
 use std::{borrow::Cow, str::FromStr};
-use types::{blob::BlobId, id::Id};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct EmailSubmission;

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::KV_SIEVE_ID;
+use crate::common::KV_SIEVE_ID;
+use crate::store::{blake3, write::ArchiveVersion};
+use crate::types::blob_hash::BlobHash;
 use sieve::Sieve;
 use std::sync::Arc;
-use store::{blake3, write::ArchiveVersion};
-use types::blob_hash::BlobHash;
 
 pub mod delete;
 pub mod index;

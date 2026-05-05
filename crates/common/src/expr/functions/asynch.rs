@@ -6,13 +6,13 @@
 
 use std::{cmp::Ordering, net::IpAddr, vec::IntoIter};
 
+use crate::directory::backend::RcptType;
+use crate::store::{Deserialize, Rows, Value, dispatch::lookup::KeyValue};
+use crate::trc::AddContext;
 use compact_str::{CompactString, ToCompactString};
-use directory::backend::RcptType;
 use mail_auth::IpLookupStrategy;
-use store::{Deserialize, Rows, Value, dispatch::lookup::KeyValue};
-use trc::AddContext;
 
-use crate::{Server, expr::StringCow};
+use crate::common::{Server, expr::StringCow};
 
 use super::*;
 
@@ -22,7 +22,7 @@ impl Server {
         fnc_id: u32,
         params: Vec<Variable<'x>>,
         session_id: u64,
-    ) -> trc::Result<Variable<'x>> {
+    ) -> crate::trc::Result<Variable<'x>> {
         let mut params = FncParams::new(params);
 
         match fnc_id {
@@ -33,7 +33,7 @@ impl Server {
                 self.get_directory_or_default(directory.as_ref(), session_id)
                     .is_local_domain(domain.as_ref())
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(|v| v.into())
             }
             F_IS_LOCAL_ADDRESS => {
@@ -43,7 +43,7 @@ impl Server {
                 self.get_directory_or_default(directory.as_ref(), session_id)
                     .rcpt(address.as_ref())
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(|v| (v != RcptType::Invalid).into())
             }
             F_KEY_GET => {
@@ -54,7 +54,7 @@ impl Server {
                     .key_get::<VariableWrapper>(key.as_str())
                     .await
                     .map(|value| value.map(|v| v.into_inner()).unwrap_or_default())
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             }
             F_KEY_EXISTS => {
                 let store = params.next_as_string();
@@ -63,7 +63,7 @@ impl Server {
                 self.get_in_memory_store_or_default(store.as_str(), session_id)
                     .key_exists(key.as_str())
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(|v| v.into())
             }
             F_KEY_SET => {
@@ -78,7 +78,7 @@ impl Server {
                     ))
                     .await
                     .map(|_| true)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(|v| v.into())
             }
             F_COUNTER_INCR => {
@@ -90,7 +90,7 @@ impl Server {
                     .counter_incr(KeyValue::new(key.into_owned(), value), true)
                     .await
                     .map(Variable::Integer)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             }
             F_COUNTER_GET => {
                 let store = params.next_as_string();
@@ -100,7 +100,7 @@ impl Server {
                     .counter_get(key.as_bytes().to_vec())
                     .await
                     .map(Variable::Integer)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             }
             F_DNS_QUERY => self.dns_query(params).await,
             F_SQL_QUERY => self.sql_query(params, session_id).await,
@@ -112,12 +112,12 @@ impl Server {
         &self,
         mut arguments: FncParams<'x>,
         session_id: u64,
-    ) -> trc::Result<Variable<'x>> {
+    ) -> crate::trc::Result<Variable<'x>> {
         let store = self.get_data_store(arguments.next_as_string().as_ref(), session_id);
         let query = arguments.next_as_string();
 
         if query.is_empty() {
-            return Err(trc::EventType::Eval(trc::EvalEvent::Error)
+            return Err(crate::trc::EventType::Eval(crate::trc::EvalEvent::Error)
                 .into_err()
                 .details("Empty query string"));
         }
@@ -137,7 +137,7 @@ impl Server {
             let mut rows = store
                 .sql_query::<Rows>(query.as_str(), arguments)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             Ok(match rows.rows.len().cmp(&1) {
                 Ordering::Equal => {
                     let mut row = rows.rows.pop().unwrap().values;
@@ -165,12 +165,15 @@ impl Server {
             store
                 .sql_query::<usize>(query.as_str(), arguments)
                 .await
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
                 .map(|v| v.into())
         }
     }
 
-    async fn dns_query<'x>(&self, mut arguments: FncParams<'x>) -> trc::Result<Variable<'x>> {
+    async fn dns_query<'x>(
+        &self,
+        mut arguments: FncParams<'x>,
+    ) -> crate::trc::Result<Variable<'x>> {
         let entry = arguments.next_as_string();
         let record_type = arguments.next_as_string();
 
@@ -187,7 +190,7 @@ impl Server {
                     Some(&self.inner.cache.dns_ipv6),
                 )
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| {
                     result
                         .iter()
@@ -202,7 +205,7 @@ impl Server {
                 .dns
                 .mx_lookup(entry.as_str(), Some(&self.inner.cache.dns_mx))
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| {
                     result
                         .iter()
@@ -225,7 +228,7 @@ impl Server {
                 .dns
                 .txt_raw_lookup(entry.as_str())
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| Variable::from(CompactString::from_utf8(result).unwrap_or_default()))
         } else if record_type.as_str().eq_ignore_ascii_case("ptr") {
             self.core
@@ -234,7 +237,7 @@ impl Server {
                 .dns
                 .ptr_lookup(
                     entry.as_str().parse::<IpAddr>().map_err(|err| {
-                        trc::EventType::Eval(trc::EvalEvent::Error)
+                        crate::trc::EventType::Eval(crate::trc::EvalEvent::Error)
                             .into_err()
                             .details("Failed to parse IP address")
                             .reason(err)
@@ -242,7 +245,7 @@ impl Server {
                     Some(&self.inner.cache.dns_ptr),
                 )
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| {
                     result
                         .iter()
@@ -257,7 +260,7 @@ impl Server {
                 .dns
                 .ipv4_lookup(entry.as_str(), Some(&self.inner.cache.dns_ipv4))
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| {
                     result
                         .iter()
@@ -272,7 +275,7 @@ impl Server {
                 .dns
                 .ipv6_lookup(entry.as_str(), Some(&self.inner.cache.dns_ipv6))
                 .await
-                .map_err(|err| trc::Error::from(err).caused_by(trc::location!()))
+                .map_err(|err| crate::trc::Error::from(err).caused_by(crate::trc::location!()))
                 .map(|result| {
                     result
                         .iter()
@@ -320,15 +323,15 @@ impl From<i64> for VariableWrapper {
 }
 
 impl Deserialize for VariableWrapper {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(VariableWrapper(Variable::String(StringCow::Owned(
             CompactString::from_utf8_lossy(bytes),
         ))))
     }
 }
 
-impl From<store::Value<'static>> for VariableWrapper {
-    fn from(value: store::Value<'static>) -> Self {
+impl From<crate::store::Value<'static>> for VariableWrapper {
+    fn from(value: crate::store::Value<'static>) -> Self {
         VariableWrapper(match value {
             Value::Integer(v) => Variable::Integer(v),
             Value::Bool(v) => Variable::Integer(v as i64),

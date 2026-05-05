@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::acl::JmapRights, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{cache::GroupwareCache, contact::AddressBook};
-use jmap_proto::{
+use crate::jmap::{api::acl::JmapRights, changes::state::JmapCacheState};
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{cache::GroupwareCache, contact::AddressBook};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::addressbook::{self, AddressBookProperty, AddressBookValue},
 };
 use jmap_tools::{Map, Value};
-use store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, ValueClass}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, ValueClass}};
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     collection::{Collection, SyncCollection},
     field::PrincipalField,
@@ -25,7 +25,7 @@ pub trait AddressBookGet: Sync + Send {
         &self,
         request: GetRequest<addressbook::AddressBook>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<addressbook::AddressBook>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<addressbook::AddressBook>>> + Send;
 }
 
 impl AddressBookGet for Server {
@@ -33,7 +33,7 @@ impl AddressBookGet for Server {
         &self,
         mut request: GetRequest<addressbook::AddressBook>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<addressbook::AddressBook>> {
+    ) -> crate::trc::Result<GetResponse<addressbook::AddressBook>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             AddressBookProperty::Id,
@@ -62,7 +62,7 @@ impl AddressBookGet for Server {
                 class: ValueClass::Property(PrincipalField::DefaultAddressBookId.into()),
             })
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .or_else(|| {
                 if address_book_ids.len() == 1 {
                     address_book_ids.iter().next()
@@ -110,7 +110,7 @@ impl AddressBookGet for Server {
             };
             let address_book = _address_book
                 .unarchive::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = Map::with_capacity(properties.len());
             for property in &properties {
                 match property {

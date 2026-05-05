@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::message::{
+use crate::common::storage::index::ObjectIndexBuilder;
+use crate::email::message::{
     index::{IndexMessage, MAX_MESSAGE_PARTS, PREVIEW_LENGTH},
     metadata::{
         ArchivedMessageMetadata, ArchivedMessageMetadataPart, ArchivedMetadataHeaderName,
@@ -12,19 +13,18 @@ use crate::message::{
         MessageMetadataPart, build_metadata_contents,
     },
 };
-use common::storage::index::ObjectIndexBuilder;
+use crate::store::{
+    Serialize,
+    write::{Archiver, BatchBuilder, BlobLink, BlobOp, IndexPropertyClass, ValueClass},
+};
+use crate::trc::AddContext;
+use crate::types::{blob_hash::BlobHash, field::EmailField};
+use crate::utils::cheeky_hash::CheekyHash;
 use mail_parser::{
     PartType,
     decoders::html::html_to_text,
     parsers::{fields::thread::thread_name, preview::preview_text},
 };
-use store::{
-    Serialize,
-    write::{Archiver, BatchBuilder, BlobLink, BlobOp, IndexPropertyClass, ValueClass},
-};
-use trc::AddContext;
-use types::{blob_hash::BlobHash, field::EmailField};
-use utils::cheeky_hash::CheekyHash;
 
 impl MessageMetadata {
     #[inline(always)]
@@ -32,7 +32,7 @@ impl MessageMetadata {
         &self.contents[0].parts[0]
     }
 
-    pub fn index(self, batch: &mut BatchBuilder, set: bool) -> trc::Result<()> {
+    pub fn index(self, batch: &mut BatchBuilder, set: bool) -> crate::trc::Result<()> {
         if set {
             batch
                 .set(
@@ -107,7 +107,7 @@ impl IndexMessage for BatchBuilder {
         blob_hash: BlobHash,
         data: MessageData,
         received_at: u64,
-    ) -> trc::Result<&mut Self> {
+    ) -> crate::trc::Result<&mut Self> {
         let mut has_attachments = false;
         let mut preview = None;
         let preview_part_id = message
@@ -238,12 +238,12 @@ impl IndexMessage for BatchBuilder {
                 .with_tenant_id(tenant_id)
                 .with_changes(data),
         )
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .set(
             EmailField::Metadata,
             Archiver::new(metadata)
                 .serialize()
-                .caused_by(trc::location!())?,
+                .caused_by(crate::trc::location!())?,
         );
 
         Ok(self)

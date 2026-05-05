@@ -10,9 +10,9 @@
 
 use std::ops::Range;
 
-use utils::config::{Config, utils::AsKey};
+use crate::utils::config::{Config, utils::AsKey};
 
-use crate::{BlobBackend, Store, Stores};
+use crate::store::{BlobBackend, Store, Stores};
 
 pub struct ShardedBlob {
     pub stores: Vec<BlobBackend>,
@@ -57,7 +57,7 @@ impl ShardedBlob {
         &self,
         key: &[u8],
         read_range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         Box::pin(async move {
             match self.get_store(key) {
                 BlobBackend::Store(store) => match store {
@@ -80,7 +80,7 @@ impl ShardedBlob {
                     ))]
                     Store::SQLReadReplica(store) => store.get_blob(key, read_range).await,
                     // SPDX-SnippetEnd
-                    Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                    Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
                 },
                 BlobBackend::Fs(store) => store.get_blob(key, read_range).await,
                 #[cfg(feature = "s3")]
@@ -93,7 +93,7 @@ impl ShardedBlob {
         .await
     }
 
-    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         Box::pin(async move {
             match self.get_store(key) {
                 BlobBackend::Store(store) => match store {
@@ -116,7 +116,7 @@ impl ShardedBlob {
                     ))]
                     // SPDX-SnippetEnd
                     Store::SQLReadReplica(store) => store.put_blob(key, data).await,
-                    Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                    Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
                 },
                 BlobBackend::Fs(store) => store.put_blob(key, data).await,
                 #[cfg(feature = "s3")]
@@ -129,7 +129,7 @@ impl ShardedBlob {
         .await
     }
 
-    pub async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         Box::pin(async move {
             match self.get_store(key) {
                 BlobBackend::Store(store) => match store {
@@ -152,7 +152,7 @@ impl ShardedBlob {
                     ))]
                     Store::SQLReadReplica(store) => store.delete_blob(key).await,
                     // SPDX-SnippetEnd
-                    Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                    Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
                 },
                 BlobBackend::Fs(store) => store.delete_blob(key).await,
                 #[cfg(feature = "s3")]

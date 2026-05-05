@@ -8,13 +8,13 @@
  *
  */
 
-use crate::Core;
-use store::{
+use crate::common::Core;
+use crate::store::{
     Deserialize, IterateParams, U32_LEN, U64_LEN, ValueKey,
     write::{AlignedBytes, Archive, BlobOp, ValueClass, key::DeserializeBigEndian, now},
 };
-use trc::AddContext;
-use types::blob_hash::{BLOB_HASH_LEN, BlobHash};
+use crate::trc::AddContext;
+use crate::types::blob_hash::{BLOB_HASH_LEN, BlobHash};
 
 pub struct DeletedBlob {
     pub hash: BlobHash,
@@ -52,7 +52,7 @@ pub enum DeletedItemType {
 }
 
 impl Core {
-    pub async fn list_deleted(&self, account_id: u32) -> trc::Result<Vec<DeletedBlob>> {
+    pub async fn list_deleted(&self, account_id: u32) -> crate::trc::Result<Vec<DeletedBlob>> {
         let from_key = ValueKey {
             account_id,
             collection: 0,
@@ -84,16 +84,16 @@ impl Core {
                     if expires_at > now {
                         let item = <Archive<AlignedBytes> as Deserialize>::deserialize(value)
                             .and_then(|bytes| bytes.deserialize::<DeletedItem>())
-                            .add_context(|ctx| ctx.ctx(trc::Key::Key, key))?;
+                            .add_context(|ctx| ctx.ctx(crate::trc::Key::Key, key))?;
 
                         results.push(DeletedBlob {
                             hash: BlobHash::try_from_hash_slice(
                                 key.get(U32_LEN + 1..U32_LEN + 1 + BLOB_HASH_LEN)
                                     .ok_or_else(|| {
-                                        trc::Error::corrupted_key(
+                                        crate::trc::Error::corrupted_key(
                                             key,
                                             value.into(),
-                                            trc::location!(),
+                                            crate::trc::location!(),
                                         )
                                     })?,
                             )
@@ -106,7 +106,7 @@ impl Core {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(results)
     }

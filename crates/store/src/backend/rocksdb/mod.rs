@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use rocksdb::{BoundColumnFamily, MultiThreaded, OptimisticTransactionDB};
 
-use crate::{SUBSPACE_BLOBS, SUBSPACE_INDEXES, SUBSPACE_LOGS};
+use crate::store::{SUBSPACE_BLOBS, SUBSPACE_INDEXES, SUBSPACE_LOGS};
 
 pub mod blob;
 pub mod main;
@@ -38,6 +38,6 @@ pub struct RocksDbStore {
 }
 
 #[inline(always)]
-fn into_error(err: rocksdb::Error) -> trc::Error {
-    trc::StoreEvent::RocksdbError.reason(err)
+fn into_error(err: rocksdb::Error) -> crate::trc::Error {
+    crate::trc::StoreEvent::RocksdbError.reason(err)
 }

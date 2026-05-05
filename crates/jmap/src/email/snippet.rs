@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use email::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     message::metadata::{
         ArchivedMetadataPartType, DecodedPartContent, MessageMetadata, MetadataHeaderName,
     },
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     method::{
         query::Filter,
         search_snippet::{GetSearchSnippetRequest, GetSearchSnippetResponse, SearchSnippet},
@@ -19,24 +19,24 @@ use jmap_proto::{
     object::email::EmailFilter,
     request::IntoValid,
 };
-use mail_parser::decoders::html::html_to_text;
-use nlp::language::{Language, search_snippet::generate_snippet, stemmer::Stemmer};
-use std::future::Future;
-use store::{
+use crate::nlp::language::{Language, search_snippet::generate_snippet, stemmer::Stemmer};
+use crate::store::{
     ValueKey,
     backend::MAX_TOKEN_LENGTH,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{acl::Acl, collection::Collection, field::EmailField};
-use utils::chained_bytes::ChainedBytes;
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::Collection, field::EmailField};
+use crate::utils::chained_bytes::ChainedBytes;
+use mail_parser::decoders::html::html_to_text;
+use std::future::Future;
 
 pub trait EmailSearchSnippet: Sync + Send {
     fn email_search_snippet(
         &self,
         request: GetSearchSnippetRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetSearchSnippetResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetSearchSnippetResponse>> + Send;
 }
 
 impl EmailSearchSnippet for Server {
@@ -44,7 +44,7 @@ impl EmailSearchSnippet for Server {
         &self,
         request: GetSearchSnippetRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<GetSearchSnippetResponse> {
+    ) -> crate::trc::Result<GetSearchSnippetResponse> {
         let mut filter_stack = vec![];
         let mut include_term = true;
         let mut terms = vec![];
@@ -97,7 +97,7 @@ impl EmailSearchSnippet for Server {
         let cached_messages = self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let document_ids = if access_token.is_member(account_id) {
             cached_messages.email_document_ids()
         } else {
@@ -112,7 +112,7 @@ impl EmailSearchSnippet for Server {
         };
 
         if email_ids.len() > self.core.jmap.snippet_max_results {
-            return Err(trc::JmapEvent::RequestTooLarge.into_err());
+            return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
         }
 
         for email_id in email_ids.into_valid() {
@@ -147,7 +147,7 @@ impl EmailSearchSnippet for Server {
             };
             let metadata = metadata_
                 .unarchive::<MessageMetadata>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Add subject snippet
             let contents = &metadata.contents[0];
@@ -168,14 +168,14 @@ impl EmailSearchSnippet for Server {
             {
                 raw_body
             } else {
-                trc::event!(
-                    Store(trc::StoreEvent::NotFound),
+                crate::trc::event!(
+                    Store(crate::trc::StoreEvent::NotFound),
                     AccountId = account_id,
                     DocumentId = email_id.document_id(),
                     Collection = Collection::Email,
                     BlobId = metadata.blob_hash.0.as_slice(),
                     Details = "Blob not found.",
-                    CausedBy = trc::location!(),
+                    CausedBy = crate::trc::location!(),
                 );
 
                 response.not_found.push(email_id);

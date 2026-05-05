@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::search::*;
+use crate::store::search::*;
 use reqwest::Client;
 use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};

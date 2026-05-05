@@ -62,7 +62,7 @@ impl Vanished {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::ImapResponse;
+    use crate::imap_proto::protocol::ImapResponse;
 
     #[test]
     fn serialize_expunge() {

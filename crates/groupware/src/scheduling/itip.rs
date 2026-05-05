@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::scheduling::{ArchivedItipSummary, ItipMessage, ItipMessages};
+use crate::common::PROD_ID;
+use crate::groupware::scheduling::{ArchivedItipSummary, ItipMessage, ItipMessages};
+use crate::store::{
+    Serialize,
+    write::{Archiver, BatchBuilder, TaskEpoch, TaskQueueClass, ValueClass},
+};
+use crate::trc::AddContext;
 use calcard::{
     common::{IanaString, PartialDateTime},
     icalendar::{
@@ -13,12 +19,6 @@ use calcard::{
         ICalendarParticipationStatus, ICalendarProperty, ICalendarValue,
     },
 };
-use common::PROD_ID;
-use store::{
-    Serialize,
-    write::{Archiver, BatchBuilder, TaskEpoch, TaskQueueClass, ValueClass},
-};
-use trc::AddContext;
 
 pub(crate) fn itip_build_envelope(method: ICalendarMethod) -> ICalendarComponent {
     ICalendarComponent {
@@ -277,7 +277,7 @@ impl ItipMessages {
         }
     }
 
-    pub fn queue(self, batch: &mut BatchBuilder) -> trc::Result<()> {
+    pub fn queue(self, batch: &mut BatchBuilder) -> crate::trc::Result<()> {
         let due = TaskEpoch::now().with_random_sequence_id();
         batch.set(
             ValueClass::TaskQueue(TaskQueueClass::SendImip {
@@ -293,7 +293,7 @@ impl ItipMessages {
             }),
             Archiver::new(self)
                 .serialize()
-                .caused_by(trc::location!())?,
+                .caused_by(crate::trc::location!())?,
         );
 
         Ok(())

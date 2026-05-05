@@ -4,32 +4,32 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::participant_identity::get::ParticipantIdentityGet;
-use common::{Server, auth::AccessToken};
-use directory::QueryParams;
-use groupware::calendar::{ParticipantIdentities, ParticipantIdentity};
-use jmap_proto::{
+use crate::jmap::participant_identity::get::ParticipantIdentityGet;
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::QueryParams;
+use crate::groupware::calendar::{ParticipantIdentities, ParticipantIdentity};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::participant_identity::{self, ParticipantIdentityProperty, ParticipantIdentityValue},
     request::{IntoValid, reference::MaybeIdReference},
 };
 use jmap_tools::{Key, Value};
-use store::{
+use crate::store::{
     Serialize,
     ahash::AHashSet,
     write::{Archiver, BatchBuilder},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::PrincipalField};
-use utils::sanitize_email;
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::PrincipalField};
+use crate::utils::sanitize_email;
 
 pub trait ParticipantIdentitySet: Sync + Send {
     fn participant_identity_set(
         &self,
         request: SetRequest<'_, participant_identity::ParticipantIdentity>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<SetResponse<participant_identity::ParticipantIdentity>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<participant_identity::ParticipantIdentity>>> + Send;
 }
 
 impl ParticipantIdentitySet for Server {
@@ -37,7 +37,7 @@ impl ParticipantIdentitySet for Server {
         &self,
         mut request: SetRequest<'_, participant_identity::ParticipantIdentity>,
         access_token: &AccessToken,
-    ) -> trc::Result<SetResponse<participant_identity::ParticipantIdentity>> {
+    ) -> crate::trc::Result<SetResponse<participant_identity::ParticipantIdentity>> {
         let account_id = request.account_id.document_id();
         let mut response = SetResponse::from_request(&request, self.core.jmap.set_max_objects)?;
         let will_destroy = request.unwrap_destroy().into_valid().collect::<Vec<_>>();
@@ -46,7 +46,7 @@ impl ParticipantIdentitySet for Server {
                 Some(archive) => {
                     let identities = archive
                         .deserialize::<ParticipantIdentities>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     (Some(archive), identities)
                 }
@@ -184,10 +184,10 @@ impl ParticipantIdentitySet for Server {
                 PrincipalField::ParticipantIdentities,
                 Archiver::new(identities)
                     .serialize()
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             );
 
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch).await.caused_by(crate::trc::location!())?;
         }
 
         Ok(response)

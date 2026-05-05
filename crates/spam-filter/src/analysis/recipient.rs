@@ -6,12 +6,12 @@
 
 use std::future::Future;
 
-use common::{Server, scripts::functions::text::levenshtein_distance};
+use crate::common::{Server, scripts::functions::text::levenshtein_distance};
+use crate::store::ahash::HashSet;
 use mail_parser::HeaderName;
 use smtp_proto::{MAIL_BODY_8BITMIME, MAIL_BODY_BINARYMIME, MAIL_SMTPUTF8};
-use store::ahash::HashSet;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeRecipient: Sync + Send {
     fn spam_filter_analyze_recipient(

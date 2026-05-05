@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use groupware::calendar::{
+use crate::groupware::calendar::{
     CALENDAR_AVAILABILITY_ALL, CALENDAR_AVAILABILITY_ATTENDING, CALENDAR_AVAILABILITY_NONE,
 };
-use jmap_proto::object::calendar::IncludeInAvailability;
+use crate::jmap_proto::object::calendar::IncludeInAvailability;
 
 pub mod get;
 pub mod set;

@@ -8,15 +8,15 @@ use super::{
     Batch, BatchBuilder, ChangedCollection, IntoOperations, Operation, ValueClass, ValueOp,
     assert::ToAssertValue, log::VanishedItem,
 };
-use crate::{
+use crate::store::{
     SerializeInfallible, U32_LEN,
     write::{LogCollection, MergeFnc, MergeOperation, Params, SetFnc, SetOperation},
 };
-use types::{
+use crate::types::{
     collection::{Collection, SyncCollection, VanishedCollection},
     field::FieldType,
 };
-use utils::map::vec_map::VecMap;
+use crate::utils::map::vec_map::VecMap;
 
 impl BatchBuilder {
     pub fn new() -> Self {
@@ -395,7 +395,7 @@ impl BatchBuilder {
         self
     }
 
-    pub fn custom(&mut self, value: impl IntoOperations) -> trc::Result<&mut Self> {
+    pub fn custom(&mut self, value: impl IntoOperations) -> crate::trc::Result<&mut Self> {
         value.build(self)?;
         Ok(self)
     }

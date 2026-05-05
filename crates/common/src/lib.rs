@@ -4,8 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-#![warn(clippy::large_futures)]
+#![allow(clippy::large_futures)]
 
+use crate::store::rand::{Rng, distr::Alphanumeric};
+use crate::types::{acl::AclGrant, special_use::SpecialUse};
+use crate::utils::{
+    cache::{Cache, CacheItemWeight, CacheWithTtl},
+    snowflake::SnowflakeIdGenerator,
+};
 use ahash::{AHashMap, AHashSet};
 use arc_swap::ArcSwap;
 use auth::{AccessToken, oauth::config::OAuthConfig, roles::RolePermissions};
@@ -36,15 +42,9 @@ use std::{
     sync::{Arc, atomic::AtomicBool},
     time::{Duration, Instant},
 };
-use store::rand::{Rng, distr::Alphanumeric};
 use tinyvec::TinyVec;
 use tokio::sync::{Notify, Semaphore, mpsc};
 use tokio_rustls::TlsConnector;
-use types::{acl::AclGrant, special_use::SpecialUse};
-use utils::{
-    cache::{Cache, CacheItemWeight, CacheWithTtl},
-    snowflake::SnowflakeIdGenerator,
-};
 
 pub mod addresses;
 pub mod auth;
@@ -72,7 +72,7 @@ pub mod enterprise;
 
 pub use psl;
 
-use crate::{config::spamfilter::SpamClassifier, ipc::TrainTaskController};
+use crate::common::{config::spamfilter::SpamClassifier, ipc::TrainTaskController};
 
 pub static VERSION_PRIVATE: &str = env!("CARGO_PKG_VERSION");
 pub static VERSION_PUBLIC: &str = "1.0.0";
@@ -881,7 +881,7 @@ impl DavName {
 
     pub fn new_with_rand_name(parent_id: u32) -> Self {
         Self {
-            name: store::rand::rng()
+            name: crate::store::rand::rng()
                 .sample_iter(Alphanumeric)
                 .take(10)
                 .map(char::from)

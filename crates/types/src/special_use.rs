@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::config::utils::ParseValue;
 use jmap_tools::{Element, Property, Value};
-use utils::config::utils::ParseValue;
 
 #[derive(
     rkyv::Archive,

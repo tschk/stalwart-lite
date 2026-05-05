@@ -5,12 +5,12 @@
  */
 
 use super::{MysqlStore, into_error};
-use crate::{Deserialize, IterateParams, Key, ValueKey, write::ValueClass};
+use crate::store::{Deserialize, IterateParams, Key, ValueKey, write::ValueClass};
 use futures::TryStreamExt;
 use mysql_async::{Row, prelude::Queryable};
 
 impl MysqlStore {
-    pub(crate) async fn get_value<U>(&self, key: impl Key) -> trc::Result<Option<U>>
+    pub(crate) async fn get_value<U>(&self, key: impl Key) -> crate::trc::Result<Option<U>>
     where
         U: Deserialize + 'static,
     {
@@ -38,8 +38,8 @@ impl MysqlStore {
     pub(crate) async fn iterate<T: Key>(
         &self,
         params: IterateParams<T>,
-        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> trc::Result<bool> + Sync + Send,
-    ) -> trc::Result<()> {
+        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> crate::trc::Result<bool> + Sync + Send,
+    ) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let table = char::from(params.begin.subspace());
         let begin = params.begin.serialize(0);
@@ -106,7 +106,7 @@ impl MysqlStore {
     pub(crate) async fn get_counter(
         &self,
         key: impl Into<ValueKey<ValueClass>> + Sync + Send,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         let key = key.into();
         let table = char::from(key.subspace());
         let key = key.serialize(0);

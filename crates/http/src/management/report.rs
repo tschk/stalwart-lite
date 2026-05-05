@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::{Permission, Type, backend::internal::manage::ManageDirectory};
-use http_proto::{request::decode_path_element, *};
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{Permission, Type, backend::internal::manage::ManageDirectory};
+use crate::http_proto::{request::decode_path_element, *};
+use crate::smtp::reporting::analysis::IncomingReport;
+use crate::store::{
+    Deserialize, IterateParams, Key, U64_LEN, ValueKey,
+    write::{
+        AlignedBytes, Archive, BatchBuilder, ReportClass, ValueClass, key::DeserializeBigEndian,
+    },
+};
+use crate::trc::AddContext;
+use crate::utils::url_params::UrlParams;
 use hyper::Method;
 use mail_auth::report::{
     Feedback,
     tlsrpt::{FailureDetails, Policy, TlsReport},
 };
 use serde_json::json;
-use smtp::reporting::analysis::IncomingReport;
 use std::future::Future;
-use store::{
-    Deserialize, IterateParams, Key, U64_LEN, ValueKey,
-    write::{
-        AlignedBytes, Archive, BatchBuilder, ReportClass, ValueClass, key::DeserializeBigEndian,
-    },
-};
-use trc::AddContext;
-use utils::url_params::UrlParams;
 
 enum ReportType {
     Dmarc,
@@ -36,7 +36,7 @@ pub trait ManageReports: Sync + Send {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl ManageReports for Server {
@@ -45,7 +45,7 @@ impl ManageReports for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let mut tenant_domains: Option<Vec<String>> = None;
         // SPDX-SnippetBegin
         // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
@@ -69,7 +69,7 @@ impl ManageReports for Server {
                         .map(|p| p.name)
                         .collect::<Vec<_>>()
                 })
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .into();
         }
 
@@ -121,7 +121,7 @@ impl ManageReports for Server {
                                 }))
                                 .into_http_response())
                             }
-                            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+                            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
                         },
                         ReportClass::Dmarc { .. } => {
                             match fetch_report::<IncomingReport<mail_auth::report::Report>>(
@@ -140,7 +140,7 @@ impl ManageReports for Server {
                                     }))
                                     .into_http_response())
                                 }
-                                _ => Err(trc::ResourceEvent::NotFound.into_err()),
+                                _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
                             }
                         }
                         ReportClass::Arf { .. } => match fetch_report::<IncomingReport<Feedback>>(
@@ -159,11 +159,11 @@ impl ManageReports for Server {
                                 }))
                                 .into_http_response())
                             }
-                            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+                            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
                         },
                     }
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
             (class @ ("dmarc" | "tls" | "arf"), None, &Method::DELETE) => {
@@ -200,7 +200,7 @@ impl ManageReports for Server {
                                 if let Err(err) =
                                     server.core.storage.data.write(batch.build_all()).await
                                 {
-                                    trc::error!(err.caused_by(trc::location!()));
+                                    crate::trc::error!(err.caused_by(crate::trc::location!()));
                                 }
                                 batch = BatchBuilder::new();
                             }
@@ -210,7 +210,7 @@ impl ManageReports for Server {
                             && let Err(err) =
                                 server.core.storage.data.write(batch.build_all()).await
                         {
-                            trc::error!(err.caused_by(trc::location!()));
+                            crate::trc::error!(err.caused_by(crate::trc::location!()));
                         }
                     });
                 }
@@ -251,7 +251,7 @@ impl ManageReports for Server {
                         };
 
                         if !is_tenant_report {
-                            return Err(trc::ResourceEvent::NotFound.into_err());
+                            return Err(crate::trc::ResourceEvent::NotFound.into_err());
                         }
                     }
 
@@ -264,15 +264,15 @@ impl ManageReports for Server {
                     }))
                     .into_http_response())
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }
 
-async fn fetch_report<T>(server: &Server, key: impl Key) -> trc::Result<Option<T>>
+async fn fetch_report<T>(server: &Server, key: impl Key) -> crate::trc::Result<Option<T>>
 where
     T: rkyv::Archive
         + for<'a> rkyv::Serialize<
@@ -306,7 +306,7 @@ async fn fetch_incoming_reports(
     class: &str,
     params: &UrlParams<'_>,
     tenant_domains: &Option<Vec<String>>,
-) -> trc::Result<IncomingReports> {
+) -> crate::trc::Result<IncomingReports> {
     let filter = params.get("text");
     let page: usize = params.parse::<usize>("page").unwrap_or_default();
     let limit: usize = params.parse::<usize>("limit").unwrap_or_default();
@@ -383,7 +383,7 @@ async fn fetch_incoming_reports(
                         ReportType::Dmarc => {
                             let report = archive
                                 .deserialize::<IncomingReport<mail_auth::report::Report>>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
 
                             filter.is_none_or(|f| report.contains(f))
                                 && tenant_domains
@@ -393,7 +393,7 @@ async fn fetch_incoming_reports(
                         ReportType::Tls => {
                             let report = archive
                                 .deserialize::<IncomingReport<TlsReport>>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
 
                             filter.is_none_or(|f| report.contains(f))
                                 && tenant_domains
@@ -403,7 +403,7 @@ async fn fetch_incoming_reports(
                         ReportType::Arf => {
                             let report = archive
                                 .deserialize::<IncomingReport<Feedback>>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
 
                             filter.is_none_or(|f| report.contains(f))
                                 && tenant_domains
@@ -431,7 +431,7 @@ async fn fetch_incoming_reports(
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| results)
 }
 

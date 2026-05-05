@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::utf7::utf7_encode;
+use crate::imap_proto::utf7::utf7_encode;
 
 use super::{
     ImapResponse, quoted_string,
@@ -288,7 +288,7 @@ impl ImapResponse for Response {
 #[cfg(test)]
 mod tests {
 
-    use crate::protocol::{
+    use crate::imap_proto::protocol::{
         ImapResponse,
         status::{Status, StatusItem, StatusItemType},
     };

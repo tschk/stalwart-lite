@@ -5,16 +5,16 @@
  */
 
 use super::ingest::{EmailIngest, IngestEmail, IngestSource};
-use crate::{mailbox::INBOX_ID, sieve::ingest::SieveScriptIngest};
-use common::{
+use crate::common::{
     Server,
     ipc::{EmailPush, PushNotification},
 };
-use directory::Permission;
+use crate::directory::Permission;
+use crate::email::{mailbox::INBOX_ID, sieve::ingest::SieveScriptIngest};
+use crate::store::ahash::AHashMap;
+use crate::types::blob_hash::BlobHash;
 use mail_parser::MessageParser;
 use std::{borrow::Cow, future::Future};
-use store::ahash::AHashMap;
-use types::blob_hash::BlobHash;
 
 #[derive(Debug)]
 pub struct IngestMessage {
@@ -74,11 +74,11 @@ impl MailDelivery for Server {
         {
             Ok(Some(raw_message)) => raw_message,
             Ok(None) => {
-                trc::event!(
-                    MessageIngest(trc::MessageIngestEvent::Error),
+                crate::trc::event!(
+                    MessageIngest(crate::trc::MessageIngestEvent::Error),
                     Reason = "Blob not found.",
                     SpanId = message.session_id,
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
 
                 return LocalDeliveryResult {
@@ -91,10 +91,10 @@ impl MailDelivery for Server {
                 };
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.details("Failed to fetch message blob.")
                         .span_id(message.session_id)
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 );
 
                 return LocalDeliveryResult {
@@ -135,11 +135,11 @@ impl MailDelivery for Server {
                     continue;
                 }
                 Err(err) => {
-                    trc::error!(
+                    crate::trc::error!(
                         err.details("Failed to lookup recipient.")
-                            .ctx(trc::Key::To, rcpt.address.to_string())
+                            .ctx(crate::trc::Key::To, rcpt.address.to_string())
                             .span_id(message.session_id)
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                     );
                     result.status.push(LocalDeliveryStatus::TemporaryFailure {
                         reason: "Address lookup failed.".into(),
@@ -220,45 +220,43 @@ impl MailDelivery for Server {
                 }
                 Err(err) => {
                     let status = match err.as_ref() {
-                        trc::EventType::Limit(trc::LimitEvent::Quota) => {
+                        crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota) => {
                             LocalDeliveryStatus::TemporaryFailure {
                                 reason: "Mailbox over quota.".into(),
                             }
                         }
-                        trc::EventType::Limit(trc::LimitEvent::TenantQuota) => {
+                        crate::trc::EventType::Limit(crate::trc::LimitEvent::TenantQuota) => {
                             LocalDeliveryStatus::TemporaryFailure {
                                 reason: "Organization over quota.".into(),
                             }
                         }
-                        trc::EventType::Security(trc::SecurityEvent::Unauthorized) => {
-                            LocalDeliveryStatus::PermanentFailure {
-                                code: [5, 5, 0],
-                                reason: "This account is not authorized to receive email.".into(),
-                            }
-                        }
-                        trc::EventType::MessageIngest(trc::MessageIngestEvent::Error) => {
-                            LocalDeliveryStatus::PermanentFailure {
-                                code: err
-                                    .value(trc::Key::Code)
-                                    .and_then(|v| v.to_uint())
-                                    .map(|n| {
-                                        [(n / 100) as u8, ((n % 100) / 10) as u8, (n % 10) as u8]
-                                    })
-                                    .unwrap_or([5, 5, 0]),
-                                reason: err
-                                    .value_as_str(trc::Key::Reason)
-                                    .unwrap_or_default()
-                                    .to_string()
-                                    .into(),
-                            }
-                        }
+                        crate::trc::EventType::Security(
+                            crate::trc::SecurityEvent::Unauthorized,
+                        ) => LocalDeliveryStatus::PermanentFailure {
+                            code: [5, 5, 0],
+                            reason: "This account is not authorized to receive email.".into(),
+                        },
+                        crate::trc::EventType::MessageIngest(
+                            crate::trc::MessageIngestEvent::Error,
+                        ) => LocalDeliveryStatus::PermanentFailure {
+                            code: err
+                                .value(crate::trc::Key::Code)
+                                .and_then(|v| v.to_uint())
+                                .map(|n| [(n / 100) as u8, ((n % 100) / 10) as u8, (n % 10) as u8])
+                                .unwrap_or([5, 5, 0]),
+                            reason: err
+                                .value_as_str(crate::trc::Key::Reason)
+                                .unwrap_or_default()
+                                .to_string()
+                                .into(),
+                        },
                         _ => LocalDeliveryStatus::TemporaryFailure {
                             reason: "Transient server failure.".into(),
                         },
                     };
 
-                    trc::error!(
-                        err.ctx(trc::Key::To, rcpt.address.to_string())
+                    crate::trc::error!(
+                        err.ctx(crate::trc::Key::To, rcpt.address.to_string())
                             .span_id(message.session_id)
                     );
 

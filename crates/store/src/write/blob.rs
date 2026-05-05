@@ -7,12 +7,12 @@
 use std::time::Instant;
 
 use super::{BlobOp, Operation, ValueClass, ValueOp, key::DeserializeBigEndian, now};
-use crate::{
+use crate::store::{
     BlobStore, IterateParams, Store, U32_LEN, U64_LEN, ValueKey,
     write::{BatchBuilder, BlobLink},
 };
-use trc::{AddContext, PurgeEvent};
-use types::{
+use crate::trc::{AddContext, PurgeEvent};
+use crate::types::{
     blob::BlobClass,
     blob_hash::{BLOB_HASH_LEN, BlobHash},
 };
@@ -24,7 +24,10 @@ pub struct BlobQuota {
 }
 
 impl Store {
-    pub async fn blob_exists(&self, hash: impl AsRef<BlobHash> + Sync + Send) -> trc::Result<bool> {
+    pub async fn blob_exists(
+        &self,
+        hash: impl AsRef<BlobHash> + Sync + Send,
+    ) -> crate::trc::Result<bool> {
         self.get_value::<()>(ValueKey {
             account_id: 0,
             collection: 0,
@@ -35,10 +38,10 @@ impl Store {
         })
         .await
         .map(|v| v.is_some())
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn blob_quota(&self, account_id: u32) -> trc::Result<BlobQuota> {
+    pub async fn blob_quota(&self, account_id: u32) -> crate::trc::Result<BlobQuota> {
         let from_key = ValueKey {
             account_id,
             collection: 0,
@@ -76,7 +79,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(quota)
     }
@@ -85,7 +88,7 @@ impl Store {
         &self,
         hash: impl AsRef<BlobHash> + Sync + Send,
         class: impl AsRef<BlobClass> + Sync + Send,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         let key = match class.as_ref() {
             BlobClass::Reserved {
                 account_id,
@@ -118,7 +121,7 @@ impl Store {
         self.get_value::<()>(key).await.map(|v| v.is_some())
     }
 
-    pub async fn purge_blobs(&self, blob_store: BlobStore) -> trc::Result<()> {
+    pub async fn purge_blobs(&self, blob_store: BlobStore) -> crate::trc::Result<()> {
         let mut total_active = 0;
         let mut total_deleted = 0;
         let started = Instant::now();
@@ -149,11 +152,16 @@ impl Store {
             self.iterate(
                 IterateParams::new(from_key, to_key).ascending(),
                 |key, value| {
-                    let hash =
-                        BlobHash::try_from_hash_slice(key.get(0..BLOB_HASH_LEN).ok_or_else(
-                            || trc::Error::corrupted_key(key, value.into(), trc::location!()),
-                        )?)
-                        .unwrap();
+                    let hash = BlobHash::try_from_hash_slice(
+                        key.get(0..BLOB_HASH_LEN).ok_or_else(|| {
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
+                        })?,
+                    )
+                    .unwrap();
 
                     state.update_hash(hash);
                     state.process_key(key, value)?;
@@ -162,7 +170,7 @@ impl Store {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
             state.finalize(BlobHash::default());
 
@@ -172,7 +180,7 @@ impl Store {
                     blob_store
                         .delete_blob(hash.as_ref())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
             }
 
@@ -182,7 +190,7 @@ impl Store {
                 if batch.is_large_batch() {
                     self.write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     batch = BatchBuilder::new();
                 }
 
@@ -198,14 +206,14 @@ impl Store {
             if !batch.is_empty() {
                 self.write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
 
             total_active += state.total_active - 1; // Exclude default hash
             total_deleted += state.total_deleted;
         }
 
-        trc::event!(
+        crate::trc::event!(
             Purge(PurgeEvent::BlobCleanup),
             Expires = total_deleted,
             Total = total_active,
@@ -297,7 +305,7 @@ impl BlobPurgeState {
         }
     }
 
-    pub fn process_key(&mut self, key: &[u8], value: &[u8]) -> trc::Result<()> {
+    pub fn process_key(&mut self, key: &[u8], value: &[u8]) -> crate::trc::Result<()> {
         const TEMP_LINK: usize = BLOB_HASH_LEN + U32_LEN + U64_LEN;
         const DOC_LINK: usize = BLOB_HASH_LEN + U64_LEN + 1;
         const ID_LINK: usize = BLOB_HASH_LEN + U64_LEN;
@@ -365,10 +373,10 @@ impl BlobPurgeState {
                 self.last_hash_is_linked = true;
                 Ok(())
             }
-            _ => Err(trc::Error::corrupted_key(
+            _ => Err(crate::trc::Error::corrupted_key(
                 key,
                 value.into(),
-                trc::location!(),
+                crate::trc::location!(),
             )),
         }
     }

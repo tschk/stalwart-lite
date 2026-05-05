@@ -6,8 +6,8 @@
 
 use std::time::Duration;
 
+use crate::utils::config::{Config, utils::AsKey};
 use foundationdb::{Database, api, options::DatabaseOption};
-use utils::config::{Config, utils::AsKey};
 
 use super::FdbStore;
 

@@ -8,7 +8,7 @@ use super::{
     FdbStore, MAX_VALUE_SIZE, ReadVersion, into_error,
     read::{ChunkedValue, read_chunked_value},
 };
-use crate::{
+use crate::store::{
     backend::deserialize_i64_le,
     write::{
         AssignedIds, Batch, DirectoryClass, MAX_COMMIT_ATTEMPTS, MAX_COMMIT_TIME, MergeResult,
@@ -16,6 +16,7 @@ use crate::{
     },
     *,
 };
+use crate::trc::AddContext;
 use foundationdb::{
     FdbError, KeySelector, RangeOption, Transaction,
     options::{self, MutationType},
@@ -26,10 +27,9 @@ use std::{
     cmp::Ordering,
     time::{Duration, Instant},
 };
-use trc::AddContext;
 
 impl FdbStore {
-    pub(crate) async fn write(&self, batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub(crate) async fn write(&self, batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         let start = Instant::now();
         let mut retry_count = 0;
         let has_changes = !batch.changes.is_empty();
@@ -86,23 +86,23 @@ impl FdbStore {
                             ValueOp::Set(value) => {
                                 if !chunk_value(&trx, &mut key, value) {
                                     trx.cancel();
-                                    return Err(trc::StoreEvent::FoundationdbError
-                                        .ctx(trc::Key::Reason, "Value is too large"));
+                                    return Err(crate::trc::StoreEvent::FoundationdbError
+                                        .ctx(crate::trc::Key::Reason, "Value is too large"));
                                 }
                             }
                             ValueOp::SetFnc(set_op) => {
                                 let value = (set_op.fnc)(&set_op.params, &result)?;
                                 if !chunk_value(&trx, &mut key, &value) {
                                     trx.cancel();
-                                    return Err(trc::StoreEvent::FoundationdbError
-                                        .ctx(trc::Key::Reason, "Value is too large"));
+                                    return Err(crate::trc::StoreEvent::FoundationdbError
+                                        .ctx(crate::trc::Key::Reason, "Value is too large"));
                                 }
                             }
                             ValueOp::MergeFnc(merge_op) => {
                                 let (merge_result, is_chunked) =
                                     match read_chunked_value(&key, &trx, false)
                                         .await
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                     {
                                         ChunkedValue::Single(slice) => (
                                             (merge_op.fnc)(
@@ -130,8 +130,11 @@ impl FdbStore {
                                     MergeResult::Update(value) => {
                                         if !chunk_value(&trx, &mut key, &value) {
                                             trx.cancel();
-                                            return Err(trc::StoreEvent::FoundationdbError
-                                                .ctx(trc::Key::Reason, "Value is too large"));
+                                            return Err(crate::trc::StoreEvent::FoundationdbError
+                                                .ctx(
+                                                    crate::trc::Key::Reason,
+                                                    "Value is too large",
+                                                ));
                                         }
                                     }
                                     MergeResult::Delete => {
@@ -249,7 +252,7 @@ impl FdbStore {
 
                         if !matches {
                             trx.cancel();
-                            return Err(trc::StoreEvent::AssertValueFailed.into());
+                            return Err(crate::trc::StoreEvent::AssertValueFailed.into());
                         }
                     }
                 }
@@ -271,7 +274,11 @@ impl FdbStore {
         }
     }
 
-    pub(crate) async fn commit(&self, trx: Transaction, will_retry: bool) -> trc::Result<bool> {
+    pub(crate) async fn commit(
+        &self,
+        trx: Transaction,
+        will_retry: bool,
+    ) -> crate::trc::Result<bool> {
         match trx.commit().await {
             Ok(result) => {
                 let commit_version = result.committed_version().map_err(into_error)?;
@@ -292,7 +299,7 @@ impl FdbStore {
         }
     }
 
-    pub(crate) async fn purge_store(&self) -> trc::Result<()> {
+    pub(crate) async fn purge_store(&self) -> crate::trc::Result<()> {
         // Obtain all zero counters
         let mut delete_keys = Vec::new();
         for subspace in [SUBSPACE_COUNTER, SUBSPACE_QUOTA, SUBSPACE_IN_MEMORY_COUNTER] {
@@ -343,7 +350,11 @@ impl FdbStore {
         Ok(())
     }
 
-    pub(crate) async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub(crate) async fn delete_range(
+        &self,
+        from: impl Key,
+        to: impl Key,
+    ) -> crate::trc::Result<()> {
         let from = from.serialize(WITH_SUBSPACE);
         let to = to.serialize(WITH_SUBSPACE);
 

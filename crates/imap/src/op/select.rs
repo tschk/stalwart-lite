@@ -5,10 +5,10 @@
  */
 
 use super::{ImapContext, ToModSeq};
-use crate::core::{SavedSearch, SelectedMailbox, Session, State};
-use common::listener::SessionStream;
-use directory::Permission;
-use imap_proto::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::imap::core::{SavedSearch, SelectedMailbox, Session, State};
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::{
         ImapResponse, Sequence, fetch,
@@ -17,11 +17,11 @@ use imap_proto::{
     },
     receiver::Request,
 };
+use crate::types::id::Id;
 use std::{sync::Arc, time::Instant};
-use types::id::Id;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_select(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_select(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(if request.command == Command::Select {
             Permission::ImapSelect
@@ -38,14 +38,14 @@ impl<T: SessionStream> Session<T> {
         // Refresh mailboxes
         data.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
             // Try obtaining the mailbox from the cache
             let state = data
                 .fetch_messages(&mailbox, None)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
                 .unwrap();
 
             // Synchronize messages
@@ -73,7 +73,7 @@ impl<T: SessionStream> Session<T> {
             // Validate QRESYNC arguments
             if let Some(qresync) = arguments.qresync {
                 if !self.is_qresync {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("QRESYNC is not enabled.")
                         .id(arguments.tag));
@@ -101,12 +101,12 @@ impl<T: SessionStream> Session<T> {
                         Instant::now(),
                     )
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
                 }
             }
 
-            trc::event!(
-                Imap(trc::ImapEvent::Select),
+            crate::trc::event!(
+                Imap(crate::trc::ImapEvent::Select),
                 SpanId = self.session_id,
                 MailboxName = arguments.mailbox_name.clone(),
                 AccountId = mailbox.id.account_id,
@@ -148,7 +148,7 @@ impl<T: SessionStream> Session<T> {
             )
             .await
         } else {
-            Err(trc::ImapEvent::Error
+            Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("Mailbox does not exist.")
                 .code(ResponseCode::NonExistent)
@@ -156,7 +156,7 @@ impl<T: SessionStream> Session<T> {
         }
     }
 
-    pub async fn handle_unselect(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_unselect(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         self.state.close_mailbox();
         self.state = State::Authenticated {
             data: self.state.session_data(),

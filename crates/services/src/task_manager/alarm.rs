@@ -4,12 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use calcard::{
-    common::timezone::Tz,
-    icalendar::{ArchivedICalendarParameterName, ArchivedICalendarProperty, ICalendarProperty},
-};
-use chrono::{DateTime, Locale};
-use common::{
+use crate::common::{
     DEFAULT_LOGO_BASE64, Server,
     auth::AccessToken,
     config::groupware::CalendarTemplateVariable,
@@ -17,27 +12,32 @@ use common::{
     ipc::{CalendarAlert, PushNotification},
     listener::{ServerInstance, stream::NullIo},
 };
-use directory::Permission;
-use groupware::calendar::{
+use crate::directory::Permission;
+use crate::groupware::calendar::{
     ArchivedCalendarEvent, CalendarEvent,
     alarm::{CalendarAlarm, CalendarAlarmType},
 };
+use crate::smtp::core::{Session, SessionData};
+use crate::store::{
+    ValueKey,
+    write::{AlignedBytes, Archive, BatchBuilder, now},
+};
+use crate::trc::{AddContext, TaskQueueEvent};
+use crate::types::collection::Collection;
+use crate::utils::{sanitize_email, template::Variables};
+use calcard::{
+    common::timezone::Tz,
+    icalendar::{ArchivedICalendarParameterName, ArchivedICalendarProperty, ICalendarProperty},
+};
+use chrono::{DateTime, Locale};
 use mail_builder::{
     MessageBuilder,
     headers::{HeaderType, content_type::ContentType},
     mime::{BodyPart, MimePart},
 };
 use mail_parser::decoders::html::html_to_text;
-use smtp::core::{Session, SessionData};
 use smtp_proto::{MailFrom, RcptTo};
 use std::{str::FromStr, sync::Arc, time::Duration};
-use store::{
-    ValueKey,
-    write::{AlignedBytes, Archive, BatchBuilder, now},
-};
-use trc::{AddContext, TaskQueueEvent};
-use types::collection::Collection;
-use utils::{sanitize_email, template::Variables};
 
 pub trait SendAlarmTask: Sync + Send {
     fn send_alarm(
@@ -62,10 +62,10 @@ impl SendAlarmTask for Server {
                 match send_display_alarm(self, account_id, document_id, alarm).await {
                     Ok(result) => result,
                     Err(err) => {
-                        trc::error!(
+                        crate::trc::error!(
                             err.account_id(account_id)
                                 .document_id(document_id)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                                 .details("Failed to process e-mail alarm")
                         );
                         false
@@ -77,10 +77,10 @@ impl SendAlarmTask for Server {
                 {
                     Ok(result) => result,
                     Err(err) => {
-                        trc::error!(
+                        crate::trc::error!(
                             err.account_id(account_id)
                                 .document_id(document_id)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                                 .details("Failed to process e-mail alarm")
                         );
                         false
@@ -97,24 +97,24 @@ async fn send_email_alarm(
     document_id: u32,
     alarm: &CalendarAlarm,
     server_instance: Arc<ServerInstance>,
-) -> trc::Result<bool> {
+) -> crate::trc::Result<bool> {
     // Obtain access token
     let access_token = server
         .get_access_token(account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if !access_token.has_permission(Permission::CalendarAlarms) {
-        trc::event!(
-            Calendar(trc::CalendarEvent::AlarmSkipped),
+        crate::trc::event!(
+            Calendar(crate::trc::CalendarEvent::AlarmSkipped),
             Reason = "Account does not have permission to send calendar alarms",
             AccountId = account_id,
             DocumentId = document_id,
         );
         return Ok(true);
     } else if access_token.emails.is_empty() {
-        trc::event!(
-            Calendar(trc::CalendarEvent::AlarmFailed),
+        crate::trc::event!(
+            Calendar(crate::trc::CalendarEvent::AlarmFailed),
             Reason = "Account does not have any email addresses",
             AccountId = account_id,
             DocumentId = document_id,
@@ -131,9 +131,9 @@ async fn send_email_alarm(
             document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
     else {
-        trc::event!(
+        crate::trc::event!(
             TaskQueue(TaskQueueEvent::MetadataNotFound),
             Details = "Calendar Event metadata not found",
             AccountId = account_id,
@@ -146,7 +146,7 @@ async fn send_email_alarm(
     // Unarchive event
     let event = event_
         .unarchive::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Build message body
     let account_main_email = access_token.emails.first().unwrap();
@@ -171,8 +171,8 @@ async fn send_email_alarm(
     let logo = match server.logo_resource(account_main_domain).await {
         Ok(logo) => logo,
         Err(err) => {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to fetch logo image")
             );
             None
@@ -267,7 +267,7 @@ async fn send_email_alarm(
         // DATA
         session.data.message = message;
         let response = session.queue_message().await;
-        if let smtp::core::State::Accepted(queue_id) = session.state {
+        if let crate::smtp::core::State::Accepted(queue_id) = session.state {
             Ok(queue_id)
         } else {
             Err(format!(
@@ -280,28 +280,28 @@ async fn send_email_alarm(
 
     match result {
         Ok(Ok(queue_id)) => {
-            trc::event!(
-                Calendar(trc::CalendarEvent::AlarmSent),
+            crate::trc::event!(
+                Calendar(crate::trc::CalendarEvent::AlarmSent),
                 AccountId = account_id,
                 DocumentId = document_id,
                 QueueId = queue_id,
             );
         }
         Ok(Err(err)) => {
-            trc::event!(
-                Calendar(trc::CalendarEvent::AlarmFailed),
+            crate::trc::event!(
+                Calendar(crate::trc::CalendarEvent::AlarmFailed),
                 AccountId = account_id,
                 DocumentId = document_id,
                 Reason = err,
             );
         }
         Err(_) => {
-            trc::event!(
-                Server(trc::ServerEvent::ThreadError),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::ThreadError),
                 Details = "Join Error",
                 AccountId = account_id,
                 DocumentId = document_id,
-                CausedBy = trc::location!(),
+                CausedBy = crate::trc::location!(),
             );
             return Ok(false);
         }
@@ -315,7 +315,7 @@ async fn send_display_alarm(
     account_id: u32,
     document_id: u32,
     alarm: &CalendarAlarm,
-) -> trc::Result<bool> {
+) -> crate::trc::Result<bool> {
     // Fetch event
     let Some(event_) = server
         .store()
@@ -325,9 +325,9 @@ async fn send_display_alarm(
             document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
     else {
-        trc::event!(
+        crate::trc::event!(
             TaskQueue(TaskQueueEvent::MetadataNotFound),
             Details = "Calendar Event metadata not found",
             AccountId = account_id,
@@ -340,7 +340,7 @@ async fn send_display_alarm(
     // Unarchive event
     let event = event_
         .unarchive::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let recurrence_id = match &alarm.typ {
         CalendarAlarmType::Display { recurrence_id } => *recurrence_id,
@@ -385,7 +385,7 @@ async fn write_next_alarm(
     account_id: u32,
     document_id: u32,
     event: &ArchivedCalendarEvent,
-) -> trc::Result<bool> {
+) -> crate::trc::Result<bool> {
     // Find next alarm time and write to task queue
     let now = now() as i64;
     if let Some(next_alarm) =
@@ -396,8 +396,8 @@ async fn write_next_alarm(
                 // Verify minimum interval
                 let max_next_alarm = now + server.core.groupware.alarms_minimum_interval;
                 if next_alarm.alarm_time < max_next_alarm {
-                    trc::event!(
-                        Calendar(trc::CalendarEvent::AlarmSkipped),
+                    crate::trc::event!(
+                        Calendar(crate::trc::CalendarEvent::AlarmSkipped),
                         Reason = "Next alarm skipped due to minimum interval",
                         Details = next_alarm.alarm_time - now,
                         AccountId = account_id,
@@ -419,7 +419,7 @@ async fn write_next_alarm(
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         server.notify_task_queue();
     }
 
@@ -440,12 +440,12 @@ async fn build_template(
     alarm: &CalendarAlarm,
     event: &ArchivedCalendarEvent,
     logo_cid: &str,
-) -> trc::Result<Option<Details>> {
+) -> crate::trc::Result<Option<Details>> {
     let (Some(event_component), Some(alarm_component)) = (
         event.data.event.components.get(alarm.event_id as usize),
         event.data.event.components.get(alarm.alarm_id as usize),
     ) else {
-        trc::event!(
+        crate::trc::event!(
             TaskQueue(TaskQueueEvent::MetadataNotFound),
             Details = "Calendar Alarm component not found",
             AccountId = account_id,
@@ -458,10 +458,10 @@ async fn build_template(
     let webcal_uri = match event.webcal_uri(server, access_token).await {
         Ok(uri) => uri,
         Err(err) => {
-            trc::error!(
+            crate::trc::error!(
                 err.account_id(account_id)
                     .document_id(document_id)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .details("Failed to generate webcal URI")
             );
             String::from("#")
@@ -540,8 +540,8 @@ async fn build_template(
         {
             rcpt_to
         } else {
-            trc::event!(
-                Calendar(trc::CalendarEvent::AlarmRecipientOverride),
+            crate::trc::event!(
+                Calendar(crate::trc::CalendarEvent::AlarmRecipientOverride),
                 Reason = "External recipient not allowed for calendar alarms",
                 Details = rcpt_to,
                 AccountId = account_id,

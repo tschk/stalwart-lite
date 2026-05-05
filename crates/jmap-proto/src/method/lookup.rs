@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::request::{
+use crate::jmap_proto::request::{
     MaybeInvalid,
     deserialize::{DeserializeArguments, deserialize_request},
 };
+use crate::types::{blob::BlobId, id::Id, type_state::DataType};
+use crate::utils::map::vec_map::VecMap;
 use serde::{Deserialize, Deserializer};
-use types::{blob::BlobId, id::Id, type_state::DataType};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct BlobLookupRequest {

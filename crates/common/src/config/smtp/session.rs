@@ -13,14 +13,14 @@ use std::{
 use ahash::AHashSet;
 use base64::{Engine, engine::general_purpose::STANDARD};
 
+use crate::utils::config::{Config, utils::ParseValue};
 use hyper::{
     HeaderMap,
     header::{AUTHORIZATION, CONTENT_TYPE, HeaderName, HeaderValue},
 };
 use smtp_proto::*;
-use utils::config::{Config, utils::ParseValue};
 
-use crate::{
+use crate::common::{
     config::CONNECTION_VARS,
     expr::{if_block::IfBlock, tokenizer::TokenMap, *},
 };
@@ -882,7 +882,7 @@ impl From<Mechanism> for Constant {
 }
 
 impl ConstantValue for Mechanism {
-    fn add_constants(token_map: &mut crate::expr::tokenizer::TokenMap) {
+    fn add_constants(token_map: &mut crate::common::expr::tokenizer::TokenMap) {
         token_map
             .add_constant("login", Mechanism(AUTH_LOGIN))
             .add_constant("plain", Mechanism(AUTH_PLAIN))

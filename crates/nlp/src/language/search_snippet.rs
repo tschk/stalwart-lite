@@ -157,7 +157,7 @@ pub fn generate_snippet(
 
 #[cfg(test)]
 mod tests {
-    use crate::language::{Language, search_snippet::generate_snippet};
+    use crate::nlp::language::{Language, search_snippet::generate_snippet};
 
     #[test]
     fn search_snippets() {

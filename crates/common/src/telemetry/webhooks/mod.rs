@@ -12,17 +12,17 @@ use std::{
     time::Instant,
 };
 
-use crate::{LONG_1Y_SLUMBER, config::telemetry::WebhookTracer};
-use base64::{Engine, engine::general_purpose::STANDARD};
-use ring::hmac;
-use serde::Serialize;
-use store::write::now;
-use tokio::sync::mpsc;
-use trc::{
+use crate::common::{LONG_1Y_SLUMBER, config::telemetry::WebhookTracer};
+use crate::store::write::now;
+use crate::trc::{
     Event, EventDetails, ServerEvent, TelemetryEvent,
     ipc::subscriber::{EventBatch, SubscriberBuilder},
     serializers::json::JsonEventSerializer,
 };
+use base64::{Engine, engine::general_purpose::STANDARD};
+use ring::hmac;
+use serde::Serialize;
+use tokio::sync::mpsc;
 
 pub(crate) fn spawn_webhook_tracer(builder: SubscriberBuilder, settings: WebhookTracer) {
     let (tx, mut rx) = builder.register();
@@ -51,7 +51,7 @@ pub(crate) fn spawn_webhook_tracer(builder: SubscriberBuilder, settings: Webhook
                     }
 
                     if discard_count > 0 {
-                        trc::event!(
+                        crate::trc::event!(
                             Telemetry(TelemetryEvent::WebhookError),
                             Details = "Discarded stale events",
                             Total = discard_count
@@ -112,13 +112,13 @@ fn spawn_webhook_handler(
         };
 
         if let Err(err) = post_webhook_events(&settings, &wrapper).await {
-            trc::event!(Telemetry(TelemetryEvent::WebhookError), Details = err);
+            crate::trc::event!(Telemetry(TelemetryEvent::WebhookError), Details = err);
 
             if webhook_tx.send(wrapper.events.into_inner()).await.is_err() {
-                trc::event!(
+                crate::trc::event!(
                     Server(ServerEvent::ThreadError),
                     Details = "Failed to send failed webhook events back to main thread",
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
             }
         }

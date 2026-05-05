@@ -6,14 +6,14 @@
 
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::core::{Session, StatusResponse};
+use crate::managesieve::core::{Session, StatusResponse};
 
 impl<T: AsyncRead + AsyncWrite> Session<T> {
-    pub async fn handle_logout(&mut self) -> trc::Result<Vec<u8>> {
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::Logout),
+    pub async fn handle_logout(&mut self) -> crate::trc::Result<Vec<u8>> {
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::Logout),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         Ok(StatusResponse::ok("Stalwart ManageSieve bids you farewell.").into_bytes())

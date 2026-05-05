@@ -6,6 +6,10 @@
 
 use std::{sync::Arc, time::Duration};
 
+use crate::utils::config::{
+    Config,
+    utils::{AsKey, ParseValue},
+};
 use ahash::AHashMap;
 use mail_auth::{
     common::crypto::{Algorithm, Ed25519Key, HashAlgorithm, RsaKey, Sha256, SigningKey},
@@ -13,12 +17,8 @@ use mail_auth::{
 };
 use mail_parser::decoders::base64::base64_decode;
 use rustls_pki_types::{PrivateKeyDer, PrivatePkcs1KeyDer, PrivatePkcs8KeyDer};
-use utils::config::{
-    Config,
-    utils::{AsKey, ParseValue},
-};
 
-use crate::{
+use crate::common::{
     config::CONNECTION_VARS,
     expr::{self, Constant, ConstantValue, if_block::IfBlock, tokenizer::TokenMap},
 };

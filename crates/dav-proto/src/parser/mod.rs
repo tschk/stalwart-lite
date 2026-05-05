@@ -12,7 +12,7 @@ use std::{
 use quick_xml::events::BytesStart;
 use tokenizer::Tokenizer;
 
-use crate::schema::{Element, NamedElement, Namespace};
+use crate::dav_proto::schema::{Element, NamedElement, Namespace};
 
 pub mod header;
 pub mod property;

@@ -8,16 +8,15 @@ use super::{
     ArchivedCalendar, ArchivedCalendarEvent, Calendar, CalendarEvent, CalendarPreferences,
     alarm::CalendarAlarm,
 };
-use crate::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::groupware::{
     DavResourceName, DestroyArchive, RFC_3986,
     calendar::{
         ArchivedCalendarEventNotification, CalendarEventNotification, alarm::CalendarAlarmType,
     },
     scheduling::{ItipMessages, event_cancel::itip_cancel},
 };
-use calcard::common::timezone::Tz;
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use store::{
+use crate::store::{
     IterateParams, U16_LEN, U32_LEN, U64_LEN, ValueKey,
     roaring::RoaringBitmap,
     write::{
@@ -27,24 +26,28 @@ use store::{
         now,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, VanishedCollection},
     field::CalendarNotificationField,
 };
+use calcard::common::timezone::Tz;
 
 pub trait ItipAutoExpunge: Sync + Send {
-    fn itip_ids(&self, account_id: u32) -> impl Future<Output = trc::Result<RoaringBitmap>> + Send;
+    fn itip_ids(
+        &self,
+        account_id: u32,
+    ) -> impl Future<Output = crate::trc::Result<RoaringBitmap>> + Send;
 
     fn itip_auto_expunge(
         &self,
         account_id: u32,
         hold_period: u64,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 }
 
 impl ItipAutoExpunge for Server {
-    async fn itip_ids(&self, account_id: u32) -> trc::Result<RoaringBitmap> {
+    async fn itip_ids(&self, account_id: u32) -> crate::trc::Result<RoaringBitmap> {
         let mut document_ids = RoaringBitmap::new();
         self.store()
             .iterate(
@@ -77,11 +80,11 @@ impl ItipAutoExpunge for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|_| document_ids)
     }
 
-    async fn itip_auto_expunge(&self, account_id: u32, hold_period: u64) -> trc::Result<()> {
+    async fn itip_auto_expunge(&self, account_id: u32, hold_period: u64) -> crate::trc::Result<()> {
         let mut destroy_ids = RoaringBitmap::new();
         self.store()
             .iterate(
@@ -114,14 +117,14 @@ impl ItipAutoExpunge for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if destroy_ids.is_empty() {
             return Ok(());
         }
 
-        trc::event!(
-            Purge(trc::PurgeEvent::AutoExpunge),
+        crate::trc::event!(
+            Purge(crate::trc::PurgeEvent::AutoExpunge),
             AccountId = account_id,
             Collection = Collection::CalendarEventNotification.as_str(),
             Total = destroy_ids.len(),
@@ -132,7 +135,7 @@ impl ItipAutoExpunge for Server {
         let access_token = self
             .get_access_token(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for document_id in destroy_ids {
             // Fetch event
@@ -144,18 +147,20 @@ impl ItipAutoExpunge for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let event = event_
                     .to_unarchived::<CalendarEventNotification>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 DestroyArchive(event)
                     .delete(&access_token, account_id, document_id, &mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
 
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
 
         Ok(())
     }
@@ -169,7 +174,7 @@ impl CalendarEvent {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         let mut new_event = self;
 
         // Build event
@@ -196,7 +201,7 @@ impl CalendarEvent {
         document_id: u32,
         next_alarm: Option<CalendarAlarm>,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build event
         let mut event = self;
         let now = now() as i64;
@@ -230,7 +235,7 @@ impl Calendar {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build address calendar
         let mut calendar = self;
         let now = now() as i64;
@@ -265,7 +270,7 @@ impl Calendar {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build address calendar
         let mut new_calendar = self;
         new_calendar.modified = now() as i64;
@@ -292,7 +297,7 @@ impl CalendarEventNotification {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build event
         let mut event = self;
         let now = now() as i64;
@@ -325,7 +330,7 @@ impl DestroyArchive<Archive<&ArchivedCalendar>> {
         delete_path: Option<String>,
         send_itip: bool,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Process deletions
         let calendar_id = document_id;
         for document_id in children_ids {
@@ -341,7 +346,7 @@ impl DestroyArchive<Archive<&ArchivedCalendar>> {
                 DestroyArchive(
                     event_
                         .to_unarchived::<CalendarEvent>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 )
                 .delete(
                     access_token,
@@ -365,7 +370,7 @@ impl DestroyArchive<Archive<&ArchivedCalendar>> {
         document_id: u32,
         delete_path: Option<String>,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let calendar = self.0;
         // Delete calendar
         batch
@@ -377,7 +382,7 @@ impl DestroyArchive<Archive<&ArchivedCalendar>> {
                     .with_access_token(access_token)
                     .with_current(calendar),
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if let Some(delete_path) = delete_path {
             batch.log_vanished_item(VanishedCollection::Calendar, delete_path);
         }
@@ -398,7 +403,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
         delete_path: Option<String>,
         send_itip: bool,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         if let Some(delete_idx) = self
             .0
             .inner
@@ -411,7 +416,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
                 let event = self.0;
                 let mut new_event = event
                     .deserialize::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 new_event.names.swap_remove(delete_idx);
                 batch
                     .with_account_id(account_id)
@@ -423,7 +428,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
                             .with_current(event)
                             .with_changes(new_event),
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             } else {
                 self.delete_all(access_token, account_id, document_id, send_itip, batch)?;
             }
@@ -446,7 +451,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
         document_id: u32,
         send_itip: bool,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let event = self.0;
         // Delete event
         batch
@@ -467,14 +472,14 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
         {
             let event = event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if let Ok(messages) =
                 itip_cancel(&event.data.event, access_token.emails.as_slice(), true)
             {
                 ItipMessages::new(vec![messages])
                     .queue(batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
 
@@ -484,7 +489,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEvent>> {
                     .with_access_token(access_token)
                     .with_current(event),
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(())
     }
@@ -498,7 +503,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEventNotification>> {
         account_id: u32,
         document_id: u32,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Delete event
         batch
             .with_account_id(account_id)
@@ -509,7 +514,7 @@ impl DestroyArchive<Archive<&ArchivedCalendarEventNotification>> {
                     .with_access_token(access_token)
                     .with_current(self.0),
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .commit_point();
 
         Ok(())
@@ -571,7 +576,7 @@ impl ArchivedCalendarEvent {
         &self,
         server: &Server,
         access_token: &AccessToken,
-    ) -> trc::Result<String> {
+    ) -> crate::trc::Result<String> {
         for event_name in self.names.iter() {
             if let Some(calendar_) = server
                 .store()
@@ -581,11 +586,11 @@ impl ArchivedCalendarEvent {
                     event_name.parent_id.to_native(),
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let calendar = calendar_
                     .unarchive::<Calendar>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 return Ok(format!(
                     "webcal://{}{}/{}/{}/{}",
                     server.core.network.server_name,
@@ -597,7 +602,7 @@ impl ArchivedCalendarEvent {
             }
         }
 
-        Err(trc::StoreEvent::UnexpectedError
+        Err(crate::trc::StoreEvent::UnexpectedError
             .into_err()
             .details("Event is not linked to any calendar"))
     }

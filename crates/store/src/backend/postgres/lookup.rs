@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{QueryResult, QueryType, backend::postgres::into_pool_error};
+use crate::store::{QueryResult, QueryType, backend::postgres::into_pool_error};
 
 use bytes::BytesMut;
 use futures::{TryStreamExt, pin_mut};
@@ -19,7 +19,7 @@ impl PostgresStore {
         &self,
         query: &str,
         params_: &[crate::Value<'_>],
-    ) -> trc::Result<T> {
+    ) -> crate::trc::Result<T> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let s = conn.prepare_cached(query).await.map_err(into_error)?;
         let params = params_

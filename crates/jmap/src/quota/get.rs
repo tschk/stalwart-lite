@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::quota::{Quota, QuotaProperty, QuotaValue},
     types::state::State,
 };
+use crate::trc::AddContext;
+use crate::types::{id::Id, type_state::DataType};
 use jmap_tools::{Map, Value};
 use std::{future::Future, sync::Arc};
-use trc::AddContext;
-use types::{id::Id, type_state::DataType};
 
 pub trait QuotaGet: Sync + Send {
     fn quota_get(
         &self,
         request: GetRequest<Quota>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<Quota>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Quota>>> + Send;
 }
 
 impl QuotaGet for Server {
@@ -28,7 +28,7 @@ impl QuotaGet for Server {
         &self,
         mut request: GetRequest<Quota>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<Quota>> {
+    ) -> crate::trc::Result<GetResponse<Quota>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             QuotaProperty::Id,
@@ -66,7 +66,7 @@ impl QuotaGet for Server {
             AccessTokenRef::Owned(
                 self.get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             )
         };
 

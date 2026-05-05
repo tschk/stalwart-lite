@@ -5,9 +5,7 @@
  */
 
 use super::{AggregateTimestamp, SerializedSize};
-use crate::{queue::RecipientDomain, reporting::SmtpReporting};
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     Server, USER_AGENT,
     config::smtp::{
         report::AggregateFrequency,
@@ -15,6 +13,13 @@ use common::{
     },
     ipc::{TlsEvent, ToHash},
 };
+use crate::smtp::{queue::RecipientDomain, reporting::SmtpReporting};
+use crate::store::{
+    Deserialize, IterateParams, Serialize, ValueKey,
+    write::{AlignedBytes, Archive, Archiver, BatchBuilder, QueueClass, ReportEvent, ValueClass},
+};
+use crate::trc::{AddContext, OutgoingReportEvent};
+use ahash::AHashMap;
 use mail_auth::{
     flate2::{Compression, write::GzEncoder},
     mta_sts::{ReportUri, TlsRpt},
@@ -26,11 +31,6 @@ use mail_parser::DateTime;
 use reqwest::header::CONTENT_TYPE;
 use std::fmt::Write;
 use std::{collections::hash_map::Entry, future::Future, sync::Arc, time::Duration};
-use store::{
-    Deserialize, IterateParams, Serialize, ValueKey,
-    write::{AlignedBytes, Archive, Archiver, BatchBuilder, QueueClass, ReportEvent, ValueClass},
-};
-use trc::{AddContext, OutgoingReportEvent};
 
 #[derive(Debug, Clone)]
 pub struct TlsRptOptions {
@@ -59,7 +59,7 @@ pub trait TlsReporting: Sync + Send {
         rua: &mut Vec<ReportUri>,
         serialized_size: Option<&mut serde_json::Serializer<SerializedSize>>,
         span_id: u64,
-    ) -> impl Future<Output = trc::Result<Option<TlsReport>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<TlsReport>>> + Send;
     fn schedule_tls(&self, event: Box<TlsEvent>) -> impl Future<Output = ()> + Send;
     fn delete_tls_report(&self, events: Vec<ReportEvent>) -> impl Future<Output = ()> + Send;
 }
@@ -73,13 +73,13 @@ impl TlsReporting for Server {
 
         let span_id = self.inner.data.span_id_gen.generate();
 
-        trc::event!(
+        crate::trc::event!(
             OutgoingReport(OutgoingReportEvent::TlsAggregate),
             SpanId = span_id,
             ReportId = event_from,
             Domain = domain_name.to_string(),
-            RangeFrom = trc::Value::Timestamp(event_from),
-            RangeTo = trc::Value::Timestamp(event_to),
+            RangeFrom = crate::trc::Value::Timestamp(event_from),
+            RangeTo = crate::trc::Value::Timestamp(event_to),
         );
 
         // Generate report
@@ -100,18 +100,18 @@ impl TlsReporting for Server {
             Ok(Some(report)) => report,
             Ok(None) => {
                 // This should not happen
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::NotFound),
                     SpanId = span_id,
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
                 self.delete_tls_report(events).await;
                 return;
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(span_id)
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                         .details("Failed to read TLS report")
                 );
                 return;
@@ -125,7 +125,7 @@ impl TlsReporting for Server {
         {
             Ok(report) => report,
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::SubmissionError),
                     SpanId = span_id,
                     Reason = err.to_string(),
@@ -163,7 +163,7 @@ impl TlsReporting for Server {
                         {
                             Ok(response) => {
                                 if response.status().is_success() {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         OutgoingReport(OutgoingReportEvent::HttpSubmission),
                                         SpanId = span_id,
                                         Url = uri.to_string(),
@@ -173,7 +173,7 @@ impl TlsReporting for Server {
                                     self.delete_tls_report(events).await;
                                     return;
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         OutgoingReport(OutgoingReportEvent::SubmissionError),
                                         SpanId = span_id,
                                         Url = uri.to_string(),
@@ -183,7 +183,7 @@ impl TlsReporting for Server {
                                 }
                             }
                             Err(err) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     OutgoingReport(OutgoingReportEvent::SubmissionError),
                                     SpanId = span_id,
                                     Url = uri.to_string(),
@@ -241,7 +241,7 @@ impl TlsReporting for Server {
             )
             .await;
         } else {
-            trc::event!(
+            crate::trc::event!(
                 OutgoingReport(OutgoingReportEvent::NoRecipientsFound),
                 SpanId = span_id,
             );
@@ -255,7 +255,7 @@ impl TlsReporting for Server {
         rua: &mut Vec<ReportUri>,
         mut serialized_size: Option<&mut serde_json::Serializer<SerializedSize>>,
         span_id: u64,
-    ) -> trc::Result<Option<TlsReport>> {
+    ) -> crate::trc::Result<Option<TlsReport>> {
         let (domain_name, event_from, event_to, policy) = events
             .first()
             .map(|e| (e.domain.as_str(), e.seq_id, e.due, e.policy_hash))
@@ -363,7 +363,7 @@ impl TlsReporting for Server {
                     }
                 })
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Add policy
             report.policies.push(Policy {
@@ -428,7 +428,7 @@ impl TlsReporting for Server {
             };
 
             match event.policy {
-                common::ipc::PolicyType::Tlsa(tlsa) => {
+                crate::common::ipc::PolicyType::Tlsa(tlsa) => {
                     policy.policy_type = PolicyType::Tlsa;
                     if let Some(tlsa) = tlsa {
                         for entry in &tlsa.entries {
@@ -448,7 +448,7 @@ impl TlsReporting for Server {
                         }
                     }
                 }
-                common::ipc::PolicyType::Sts(sts) => {
+                crate::common::ipc::PolicyType::Sts(sts) => {
                     policy.policy_type = PolicyType::Sts;
                     if let Some(sts) = sts {
                         policy.policy_string.push("version: STSv1".to_string());
@@ -489,8 +489,8 @@ impl TlsReporting for Server {
                 match Archiver::new(entry).serialize() {
                     Ok(data) => data.to_vec(),
                     Err(err) => {
-                        trc::error!(
-                            err.caused_by(trc::location!())
+                        crate::trc::error!(
+                            err.caused_by(crate::trc::location!())
                                 .details("Failed to serialize TLS report")
                         );
                         return;
@@ -506,8 +506,8 @@ impl TlsReporting for Server {
             match Archiver::new(event.failure).serialize() {
                 Ok(data) => data.to_vec(),
                 Err(err) => {
-                    trc::error!(
-                        err.caused_by(trc::location!())
+                    crate::trc::error!(
+                        err.caused_by(crate::trc::location!())
                             .details("Failed to serialize TLS report")
                     );
                     return;
@@ -516,8 +516,8 @@ impl TlsReporting for Server {
         );
 
         if let Err(err) = self.core.storage.data.write(builder.build_all()).await {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to write TLS report")
             );
         }
@@ -551,8 +551,8 @@ impl TlsReporting for Server {
                 )
                 .await
             {
-                trc::error!(
-                    err.caused_by(trc::location!())
+                crate::trc::error!(
+                    err.caused_by(crate::trc::location!())
                         .details("Failed to delete TLS reports")
                 );
 
@@ -564,8 +564,8 @@ impl TlsReporting for Server {
         }
 
         if let Err(err) = self.core.storage.data.write(batch.build_all()).await {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to delete TLS reports")
             );
         }

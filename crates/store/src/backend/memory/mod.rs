@@ -6,10 +6,10 @@
 
 use std::collections::hash_map::Entry;
 
+use crate::utils::{config::Config, glob::GlobMap};
 use ahash::AHashMap;
-use utils::{config::Config, glob::GlobMap};
 
-use crate::{InMemoryStore, Stores, Value};
+use crate::store::{InMemoryStore, Stores, Value};
 
 pub type StaticMemoryStore = GlobMap<Value<'static>>;
 

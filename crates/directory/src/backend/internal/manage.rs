@@ -8,15 +8,13 @@ use super::{
     PrincipalAction, PrincipalField, PrincipalInfo, PrincipalSet, PrincipalUpdate, PrincipalValue,
     SpecialSecrets, lookup::DirectoryStore,
 };
-use crate::{
+use crate::directory::{
     ArchivedPrincipalData, FALLBACK_ADMIN_ID, MemberOf, Permission, PermissionGrant, Permissions,
     Principal, PrincipalData, QueryBy, QueryParams, ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_USER, Type,
     backend::RcptType, core::principal::build_search_index,
 };
-use ahash::{AHashMap, AHashSet};
-use compact_str::CompactString;
-use nlp::tokenizers::word::WordTokenizer;
-use store::{
+use crate::nlp::tokenizers::word::WordTokenizer;
+use crate::store::{
     Deserialize, IterateParams, Serialize, SerializeInfallible, Store, U32_LEN, ValueKey,
     backend::MAX_TOKEN_LENGTH,
     roaring::RoaringBitmap,
@@ -25,12 +23,14 @@ use store::{
         key::DeserializeBigEndian,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::Collection,
     field::{self},
 };
-use utils::{DomainPart, sanitize_email};
+use crate::utils::{DomainPart, sanitize_email};
+use ahash::{AHashMap, AHashSet};
+use compact_str::CompactString;
 
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PrincipalList<T> {
@@ -65,22 +65,24 @@ pub struct CreatedPrincipal {
 
 #[allow(async_fn_in_trait)]
 pub trait ManageDirectory: Sized {
-    async fn get_principal_id(&self, name: &str) -> trc::Result<Option<u32>>;
-    async fn get_principal_info(&self, name: &str) -> trc::Result<Option<PrincipalInfo>>;
-    async fn get_or_create_principal_id(&self, name: &str, typ: Type) -> trc::Result<u32>;
-    async fn get_principal(&self, principal_id: u32) -> trc::Result<Option<Principal>>;
-    async fn get_principal_name(&self, principal_id: u32) -> trc::Result<Option<String>>;
-    async fn get_member_of(&self, principal_id: u32) -> trc::Result<Vec<MemberOf>>;
-    async fn get_members(&self, principal_id: u32) -> trc::Result<Vec<u32>>;
+    async fn get_principal_id(&self, name: &str) -> crate::trc::Result<Option<u32>>;
+    async fn get_principal_info(&self, name: &str) -> crate::trc::Result<Option<PrincipalInfo>>;
+    async fn get_or_create_principal_id(&self, name: &str, typ: Type) -> crate::trc::Result<u32>;
+    async fn get_principal(&self, principal_id: u32) -> crate::trc::Result<Option<Principal>>;
+    async fn get_principal_name(&self, principal_id: u32) -> crate::trc::Result<Option<String>>;
+    async fn get_member_of(&self, principal_id: u32) -> crate::trc::Result<Vec<MemberOf>>;
+    async fn get_members(&self, principal_id: u32) -> crate::trc::Result<Vec<u32>>;
     async fn create_principal(
         &self,
         principal: PrincipalSet,
         tenant_id: Option<u32>,
         allowed_permissions: Option<&Permissions>,
-    ) -> trc::Result<CreatedPrincipal>;
-    async fn update_principal(&self, params: UpdatePrincipal<'_>)
-    -> trc::Result<ChangedPrincipals>;
-    async fn delete_principal(&self, by: QueryBy<'_>) -> trc::Result<ChangedPrincipals>;
+    ) -> crate::trc::Result<CreatedPrincipal>;
+    async fn update_principal(
+        &self,
+        params: UpdatePrincipal<'_>,
+    ) -> crate::trc::Result<ChangedPrincipals>;
+    async fn delete_principal(&self, by: QueryBy<'_>) -> crate::trc::Result<ChangedPrincipals>;
     async fn list_principals(
         &self,
         filter: Option<&str>,
@@ -89,23 +91,23 @@ pub trait ManageDirectory: Sized {
         fetch: bool,
         page: usize,
         limit: usize,
-    ) -> trc::Result<PrincipalList<Principal>>;
+    ) -> crate::trc::Result<PrincipalList<Principal>>;
     async fn count_principals(
         &self,
         filter: Option<&str>,
         typ: Option<Type>,
         tenant_id: Option<u32>,
-    ) -> trc::Result<u64>;
+    ) -> crate::trc::Result<u64>;
     async fn principal_ids(
         &self,
         typ: Option<Type>,
         tenant_id: Option<u32>,
-    ) -> trc::Result<RoaringBitmap>;
+    ) -> crate::trc::Result<RoaringBitmap>;
     async fn map_principal(
         &self,
         principal: Principal,
         fields: &[PrincipalField],
-    ) -> trc::Result<PrincipalSet>;
+    ) -> crate::trc::Result<PrincipalSet>;
 }
 
 #[allow(async_fn_in_trait)]
@@ -115,22 +117,22 @@ trait ValidateDirectory: Sized {
         email: &str,
         tenant_id: Option<u32>,
         create_if_missing: bool,
-    ) -> trc::Result<()>;
+    ) -> crate::trc::Result<()>;
 }
 
 impl ManageDirectory for Store {
-    async fn get_principal(&self, principal_id: u32) -> trc::Result<Option<Principal>> {
+    async fn get_principal(&self, principal_id: u32) -> crate::trc::Result<Option<Principal>> {
         let archive = self
             .get_value::<Archive<AlignedBytes>>(ValueKey::from(ValueClass::Directory(
                 DirectoryClass::Principal(principal_id),
             )))
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if let Some(archive) = archive {
             let mut principal = archive
                 .deserialize::<Principal>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             principal.id = principal_id;
             Ok(Some(principal))
         } else {
@@ -138,38 +140,38 @@ impl ManageDirectory for Store {
         }
     }
 
-    async fn get_principal_name(&self, principal_id: u32) -> trc::Result<Option<String>> {
+    async fn get_principal_name(&self, principal_id: u32) -> crate::trc::Result<Option<String>> {
         let archive = self
             .get_value::<Archive<AlignedBytes>>(ValueKey::from(ValueClass::Directory(
                 DirectoryClass::Principal(principal_id),
             )))
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if let Some(archive) = archive {
             let principal = archive
                 .unarchive::<Principal>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             Ok(Some(principal.name.as_str().into()))
         } else {
             Ok(None)
         }
     }
 
-    async fn get_principal_id(&self, name: &str) -> trc::Result<Option<u32>> {
+    async fn get_principal_id(&self, name: &str) -> crate::trc::Result<Option<u32>> {
         self.get_principal_info(name).await.map(|v| v.map(|v| v.id))
     }
 
-    async fn get_principal_info(&self, name: &str) -> trc::Result<Option<PrincipalInfo>> {
+    async fn get_principal_info(&self, name: &str) -> crate::trc::Result<Option<PrincipalInfo>> {
         self.get_value::<PrincipalInfo>(ValueKey::from(ValueClass::Directory(
             DirectoryClass::NameToId(name.as_bytes().to_vec()),
         )))
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     // Used by all directories except internal
-    async fn get_or_create_principal_id(&self, name: &str, typ: Type) -> trc::Result<u32> {
+    async fn get_or_create_principal_id(&self, name: &str, typ: Type) -> crate::trc::Result<u32> {
         let mut try_count = 0;
         let name = name.to_lowercase();
         let mut principal_id = None;
@@ -179,7 +181,7 @@ impl ManageDirectory for Store {
             if let Some(principal_id) = self
                 .get_principal_id(&name)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 return Ok(principal_id);
             }
@@ -190,12 +192,12 @@ impl ManageDirectory for Store {
                 let principal_id_ = self
                     .assign_document_ids(u32::MAX, Collection::Principal, 1)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 if principal_id_ == FALLBACK_ADMIN_ID {
-                    return Err(trc::StoreEvent::UnexpectedError
+                    return Err(crate::trc::StoreEvent::UnexpectedError
                         .into_err()
                         .details("ID assignment failed")
-                        .caused_by(trc::location!()));
+                        .caused_by(crate::trc::location!()));
                 }
                 principal_id = Some(principal_id_);
                 principal_id_
@@ -225,7 +227,7 @@ impl ManageDirectory for Store {
                     ValueClass::Directory(DirectoryClass::Principal(principal_id)),
                     Archiver::new(principal)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
 
             // Add default user role
@@ -256,7 +258,7 @@ impl ManageDirectory for Store {
                         try_count += 1;
                         continue;
                     } else {
-                        return Err(err.caused_by(trc::location!()));
+                        return Err(err.caused_by(crate::trc::location!()));
                     }
                 }
             }
@@ -268,7 +270,7 @@ impl ManageDirectory for Store {
         mut principal_set: PrincipalSet,
         mut tenant_id: Option<u32>,
         allowed_permissions: Option<&Permissions>,
-    ) -> trc::Result<CreatedPrincipal> {
+    ) -> crate::trc::Result<CreatedPrincipal> {
         // Make sure the principal has a name
         let name = principal_set.name().to_lowercase();
         if name.is_empty() {
@@ -284,14 +286,14 @@ impl ManageDirectory for Store {
         #[cfg(feature = "enterprise")]
         if let Some(tenant_id) = tenant_id {
             let tenant = self
-                .query(crate::QueryParams::id(tenant_id).with_return_member_of(false))
+                .query(crate::directory::QueryParams::id(tenant_id).with_return_member_of(false))
                 .await?
                 .ok_or_else(|| {
-                    trc::ManageEvent::NotFound
+                    crate::trc::ManageEvent::NotFound
                         .into_err()
                         .id(tenant_id)
                         .details("Tenant not found")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?;
 
             // Enforce tenant quotas
@@ -303,16 +305,16 @@ impl ManageDirectory for Store {
                 let total = self
                     .count_principals(None, principal_set.typ().into(), tenant_id.into())
                     .await
-                    .caused_by(trc::location!())? as u32;
+                    .caused_by(crate::trc::location!())? as u32;
 
                 if total >= limit {
-                    trc::bail!(
-                        trc::LimitEvent::TenantQuota
+                    crate::trc::bail!(
+                        crate::trc::LimitEvent::TenantQuota
                             .into_err()
                             .details("Tenant principal quota exceeded")
-                            .ctx(trc::Key::Details, principal_set.typ().description())
-                            .ctx(trc::Key::Limit, limit)
-                            .ctx(trc::Key::Total, total)
+                            .ctx(crate::trc::Key::Details, principal_set.typ().description())
+                            .ctx(crate::trc::Key::Limit, limit)
+                            .ctx(crate::trc::Key::Total, total)
                     );
                 }
             }
@@ -324,7 +326,7 @@ impl ManageDirectory for Store {
         if self
             .get_principal_id(&name)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .is_some()
         {
             return Err(err_exists(PrincipalField::Name, name));
@@ -344,7 +346,7 @@ impl ManageDirectory for Store {
             tenant_id = self
                 .get_principal_info(&tenant_name)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .filter(|v| v.typ == Type::Tenant)
                 .ok_or_else(|| not_found(tenant_name.clone()))?
                 .id
@@ -368,7 +370,7 @@ impl ManageDirectory for Store {
                     && self
                         .get_principal_info(domain)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .filter(|v| v.typ == Type::Domain && v.has_tenant_access(tenant_id.into()))
                         .is_some()
                 {
@@ -466,7 +468,7 @@ impl ManageDirectory for Store {
                     let item = match (
                         self.get_principal_info(&name)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .filter(|v| {
                                 expected_type.is_none_or(|t| v.typ == t)
                                     && v.has_tenant_access(tenant_id)
@@ -546,7 +548,8 @@ impl ManageDirectory for Store {
                 .enumerate()
             {
                 let email = email.to_lowercase();
-                if self.rcpt(&email).await.caused_by(trc::location!())? != RcptType::Invalid {
+                if self.rcpt(&email).await.caused_by(crate::trc::location!())? != RcptType::Invalid
+                {
                     return Err(err_exists(PrincipalField::Emails, email.to_string()));
                 }
                 if let Some(domain) = email.try_domain_part()
@@ -554,7 +557,7 @@ impl ManageDirectory for Store {
                 {
                     self.get_principal_info(domain)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .filter(|v| v.typ == Type::Domain && v.has_tenant_access(tenant_id))
                         .ok_or_else(|| not_found(domain.to_string()))?;
                 }
@@ -572,12 +575,12 @@ impl ManageDirectory for Store {
         let principal_id = self
             .assign_document_ids(u32::MAX, Collection::Principal, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if principal_id == FALLBACK_ADMIN_ID {
-            return Err(trc::StoreEvent::UnexpectedError
+            return Err(crate::trc::StoreEvent::UnexpectedError
                 .into_err()
                 .details("ID assignment failed")
-                .caused_by(trc::location!()));
+                .caused_by(crate::trc::location!()));
         }
         create_principal.id = principal_id;
         let mut batch = BatchBuilder::new();
@@ -595,7 +598,7 @@ impl ManageDirectory for Store {
         // Serialize
         create_principal.sort();
         let archiver = Archiver::new(create_principal);
-        let principal_bytes = archiver.serialize().caused_by(trc::location!())?;
+        let principal_bytes = archiver.serialize().caused_by(crate::trc::location!())?;
         let create_principal = archiver.into_inner();
 
         batch
@@ -671,13 +674,13 @@ impl ManageDirectory for Store {
             })
     }
 
-    async fn delete_principal(&self, by: QueryBy<'_>) -> trc::Result<ChangedPrincipals> {
+    async fn delete_principal(&self, by: QueryBy<'_>) -> crate::trc::Result<ChangedPrincipals> {
         // Obtain principal
         let principal_id = match by {
             QueryBy::Name(name) => self
                 .get_principal_id(name)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or_else(|| not_found(name.to_string()))?,
             QueryBy::Id(principal_id) => principal_id,
             QueryBy::Credentials(_) => unreachable!(),
@@ -688,11 +691,11 @@ impl ManageDirectory for Store {
                 DirectoryClass::Principal(principal_id),
             )))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or_else(|| not_found(principal_id.to_string()))?;
         let principal = principal_
             .unarchive::<Principal>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let typ = Type::from(&principal.typ);
 
         let mut batch = BatchBuilder::new();
@@ -721,7 +724,7 @@ impl ManageDirectory for Store {
                     let quota = self
                         .get_counter(DirectoryClass::UsedQuota(principal_id))
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     if quota > 0 {
                         batch.add(DirectoryClass::UsedQuota(tenant_id), -quota);
                     }
@@ -748,7 +751,7 @@ impl ManageDirectory for Store {
                         0,
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if tenant_members.total > 0 {
                     let mut message =
@@ -791,7 +794,7 @@ impl ManageDirectory for Store {
                             0,
                         )
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     let domain_members = tenant_members
                         .items
                         .iter()
@@ -835,7 +838,7 @@ impl ManageDirectory for Store {
         for member_id in self
             .acl_revoke_all(principal_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             changed_principals.add_change(
                 member_id,
@@ -864,7 +867,7 @@ impl ManageDirectory for Store {
         for member in self
             .get_member_of(principal_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             // Update changed principals
             changed_principals.add_member_change(
@@ -888,13 +891,13 @@ impl ManageDirectory for Store {
         for member_id in self
             .get_members(principal_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             // Update changed principals
             if let Some(member_info) = self
                 .get_principal(member_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 changed_principals.add_member_change(member_id, member_info.typ, principal_id, typ);
             }
@@ -917,7 +920,7 @@ impl ManageDirectory for Store {
 
         self.write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         changed_principals.add_deletion(principal_id, typ);
 
@@ -927,12 +930,12 @@ impl ManageDirectory for Store {
     async fn update_principal(
         &self,
         params: UpdatePrincipal<'_>,
-    ) -> trc::Result<ChangedPrincipals> {
+    ) -> crate::trc::Result<ChangedPrincipals> {
         let principal_id = match params.query {
             QueryBy::Name(name) => self
                 .get_principal_id(name)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or_else(|| not_found(name.to_string()))?,
             QueryBy::Id(principal_id) => principal_id,
             QueryBy::Credentials(_) => unreachable!(),
@@ -946,14 +949,14 @@ impl ManageDirectory for Store {
                 DirectoryClass::Principal(principal_id),
             )))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or_else(|| not_found(principal_id))?;
         let prev_principal = principal_
             .to_unarchived::<Principal>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut principal = prev_principal
             .deserialize::<Principal>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         principal.id = principal_id;
         let principal_type = principal.typ;
         let validate_emails = principal_type != Type::OauthClient;
@@ -965,11 +968,11 @@ impl ManageDirectory for Store {
         let mut member_of = self
             .get_member_of(principal_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut members = self
             .get_members(principal_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Prepare changes
         let mut batch = BatchBuilder::new();
@@ -1003,7 +1006,7 @@ impl ManageDirectory for Store {
             let quota = self
                 .get_counter(DirectoryClass::UsedQuota(principal_id))
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if quota > 0 {
                 used_quota = Some(quota);
             }
@@ -1047,7 +1050,7 @@ impl ManageDirectory for Store {
                                 && self
                                     .get_principal_info(domain)
                                     .await
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .filter(|v| {
                                         v.typ == Type::Domain && v.has_tenant_access(tenant_id)
                                     })
@@ -1067,7 +1070,7 @@ impl ManageDirectory for Store {
                         if self
                             .get_principal_id(&new_name)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .is_some()
                         {
                             return Err(err_exists(PrincipalField::Name, new_name));
@@ -1103,7 +1106,7 @@ impl ManageDirectory for Store {
                         let tenant_info = self
                             .get_principal_info(&tenant_name)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .ok_or_else(|| not_found(tenant_name.clone()))?;
 
                         if tenant_info.typ != Type::Tenant {
@@ -1462,7 +1465,7 @@ impl ManageDirectory for Store {
                         let member_info = match (
                             self.get_principal_info(&member)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .filter(|p| p.has_tenant_access(tenant_id)),
                             change.field.map_internal_roles(&member),
                         ) {
@@ -1540,7 +1543,7 @@ impl ManageDirectory for Store {
                     let member_info = match (
                         self.get_principal_info(&member)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .filter(|p| p.has_tenant_access(tenant_id)),
                         change.field.map_internal_roles(&member),
                     ) {
@@ -1592,7 +1595,7 @@ impl ManageDirectory for Store {
                     if let Some(member_info) =
                         self.get_principal_info(&member)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .or_else(|| {
                                 change.field.map_internal_role_name(&member).map(|id| {
                                     PrincipalInfo {
@@ -1641,7 +1644,7 @@ impl ManageDirectory for Store {
                         let member_info = self
                             .get_principal_info(&member)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .filter(|p| p.has_tenant_access(tenant_id))
                             .ok_or_else(|| not_found(member.clone()))?;
 
@@ -1695,7 +1698,7 @@ impl ManageDirectory for Store {
                                 && let Some(member_info) = self
                                     .get_principal(*member_id)
                                     .await
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                             {
                                 changed_principals.add_member_change(
                                     *member_id,
@@ -1726,7 +1729,7 @@ impl ManageDirectory for Store {
                     let member_info = self
                         .get_principal_info(&member)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .filter(|p| p.has_tenant_access(tenant_id))
                         .ok_or_else(|| not_found(member.clone()))?;
 
@@ -1779,7 +1782,7 @@ impl ManageDirectory for Store {
                     if let Some(member_info) = self
                         .get_principal_info(&member)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         for (pos, member_id) in members.iter().enumerate() {
                             if *member_id == member_info.id {
@@ -1932,7 +1935,7 @@ impl ManageDirectory for Store {
                                             )
                                         })
                                 })
-                                .collect::<trc::Result<Vec<_>>>()?,
+                                .collect::<crate::trc::Result<Vec<_>>>()?,
                         );
                     }
                 }
@@ -2050,13 +2053,13 @@ impl ManageDirectory for Store {
                     ValueClass::Directory(DirectoryClass::Principal(principal_id)),
                     Archiver::new(principal)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
         }
 
         self.write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(changed_principals)
     }
@@ -2069,7 +2072,7 @@ impl ManageDirectory for Store {
         fetch: bool,
         page: usize,
         limit: usize,
-    ) -> trc::Result<PrincipalList<Principal>> {
+    ) -> crate::trc::Result<PrincipalList<Principal>> {
         let filter = if let Some(filter) = filter.filter(|f| !f.trim().is_empty()) {
             let mut matches = RoaringBitmap::new();
 
@@ -2098,7 +2101,7 @@ impl ManageDirectory for Store {
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 if matches.is_empty() {
                     matches = word_matches;
@@ -2137,7 +2140,7 @@ impl ManageDirectory for Store {
         self.iterate(
             IterateParams::new(from_key, to_key).ascending(),
             |key, value| {
-                let pt = PrincipalInfo::deserialize(value).caused_by(trc::location!())?;
+                let pt = PrincipalInfo::deserialize(value).caused_by(crate::trc::location!())?;
 
                 if (types.is_empty() || types.contains(&pt.typ))
                     && pt.has_tenant_access(tenant_id)
@@ -2161,7 +2164,7 @@ impl ManageDirectory for Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         if fetch && !result.items.is_empty() {
             let mut items = Vec::with_capacity(result.items.len());
@@ -2170,7 +2173,7 @@ impl ManageDirectory for Store {
                 items.push(
                     self.query(QueryParams::id(principal.id).with_return_member_of(fetch))
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .ok_or_else(|| not_found(principal.name().to_string()))?,
                 );
             }
@@ -2187,7 +2190,7 @@ impl ManageDirectory for Store {
         filter: Option<&str>,
         typ: Option<Type>,
         tenant_id: Option<u32>,
-    ) -> trc::Result<u64> {
+    ) -> crate::trc::Result<u64> {
         let from_key = ValueKey::from(ValueClass::Directory(DirectoryClass::NameToId(vec![])));
         let to_key = ValueKey::from(ValueClass::Directory(DirectoryClass::NameToId(vec![
             u8::MAX;
@@ -2198,7 +2201,7 @@ impl ManageDirectory for Store {
         self.iterate(
             IterateParams::new(from_key, to_key).ascending(),
             |key, value| {
-                let pt = PrincipalInfo::deserialize(value).caused_by(trc::location!())?;
+                let pt = PrincipalInfo::deserialize(value).caused_by(crate::trc::location!())?;
                 let name =
                     std::str::from_utf8(key.get(1..).unwrap_or_default()).unwrap_or_default();
 
@@ -2213,7 +2216,7 @@ impl ManageDirectory for Store {
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| count)
     }
 
@@ -2221,7 +2224,7 @@ impl ManageDirectory for Store {
         &self,
         typ: Option<Type>,
         tenant_id: Option<u32>,
-    ) -> trc::Result<RoaringBitmap> {
+    ) -> crate::trc::Result<RoaringBitmap> {
         let mut results = RoaringBitmap::new();
         self.iterate(
             IterateParams::new(
@@ -2232,7 +2235,7 @@ impl ManageDirectory for Store {
                 ]))),
             ),
             |_, value| {
-                let pt = PrincipalInfo::deserialize(value).caused_by(trc::location!())?;
+                let pt = PrincipalInfo::deserialize(value).caused_by(crate::trc::location!())?;
                 if typ.is_none_or(|t| pt.typ == t) && pt.has_tenant_access(tenant_id) {
                     results.insert(pt.id);
                 }
@@ -2241,11 +2244,11 @@ impl ManageDirectory for Store {
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| results)
     }
 
-    async fn get_member_of(&self, principal_id: u32) -> trc::Result<Vec<MemberOf>> {
+    async fn get_member_of(&self, principal_id: u32) -> crate::trc::Result<Vec<MemberOf>> {
         let from_key = ValueKey::from(ValueClass::Directory(DirectoryClass::MemberOf {
             principal_id,
             member_of: 0,
@@ -2266,11 +2269,11 @@ impl ManageDirectory for Store {
             Ok(true)
         })
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
         Ok(results)
     }
 
-    async fn get_members(&self, principal_id: u32) -> trc::Result<Vec<u32>> {
+    async fn get_members(&self, principal_id: u32) -> crate::trc::Result<Vec<u32>> {
         let from_key = ValueKey::from(ValueClass::Directory(DirectoryClass::Members {
             principal_id,
             has_member: 0,
@@ -2288,7 +2291,7 @@ impl ManageDirectory for Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
         Ok(results)
     }
 
@@ -2296,7 +2299,7 @@ impl ManageDirectory for Store {
         &self,
         principal: Principal,
         fields: &[PrincipalField],
-    ) -> trc::Result<PrincipalSet> {
+    ) -> crate::trc::Result<PrincipalSet> {
         let mut result = PrincipalSet::new(principal.id, principal.typ);
 
         let has_enabled = fields.is_empty() || fields.contains(&PrincipalField::EnabledPermissions);
@@ -2314,7 +2317,7 @@ impl ManageDirectory for Store {
                     if let Some(name) = self
                         .get_principal_name(principal_id)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         result.append_str(PrincipalField::MemberOf, name);
                     }
@@ -2336,7 +2339,7 @@ impl ManageDirectory for Store {
                             if let Some(name) = self
                                 .get_principal_name(principal_id)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                             {
                                 result.append_str(PrincipalField::Roles, name);
                             }
@@ -2349,7 +2352,7 @@ impl ManageDirectory for Store {
                     if let Some(name) = self
                         .get_principal_name(principal_id)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         result.append_str(PrincipalField::Lists, name);
                     }
@@ -2461,7 +2464,7 @@ impl ManageDirectory for Store {
                         },
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                     result.set(PrincipalField::Members, total);
                 }
                 Type::Tenant => {
@@ -2474,7 +2477,7 @@ impl ManageDirectory for Store {
 
                     self.iterate(IterateParams::new(from_key, to_key), |_, value| {
                         let pinfo =
-                            PrincipalInfo::deserialize(value).caused_by(trc::location!())?;
+                            PrincipalInfo::deserialize(value).caused_by(crate::trc::location!())?;
 
                         if pinfo.typ == Type::Individual
                             && pinfo.has_tenant_access(Some(principal.id))
@@ -2484,7 +2487,7 @@ impl ManageDirectory for Store {
                         Ok(true)
                     })
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                     result.set(PrincipalField::Members, total);
                 }
@@ -2503,7 +2506,7 @@ impl ManageDirectory for Store {
             && let Some(name) = self
                 .get_principal_name(tenant_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             result.set(PrincipalField::Tenant, name);
         }
@@ -2537,7 +2540,7 @@ impl ManageDirectory for Store {
             let quota = self
                 .get_counter(DirectoryClass::UsedQuota(principal.id))
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if quota > 0 {
                 result.set(PrincipalField::UsedQuota, quota as u64);
             }
@@ -2553,14 +2556,14 @@ impl ValidateDirectory for Store {
         email: &str,
         tenant_id: Option<u32>,
         create_if_missing: bool,
-    ) -> trc::Result<()> {
-        if self.rcpt(email).await.caused_by(trc::location!())? != RcptType::Invalid {
+    ) -> crate::trc::Result<()> {
+        if self.rcpt(email).await.caused_by(crate::trc::location!())? != RcptType::Invalid {
             Err(err_exists(PrincipalField::Emails, email.to_string()))
         } else if let Some(domain) = email.try_domain_part() {
             match self
                 .get_principal_info(domain)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 Some(v) if v.typ == Type::Domain && v.has_tenant_access(tenant_id) => Ok(()),
                 None if create_if_missing => self
@@ -2572,7 +2575,7 @@ impl ValidateDirectory for Store {
                         None,
                     )
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(|_| ()),
                 _ => Err(not_found(domain.to_string())),
             }
@@ -2645,7 +2648,7 @@ fn validate_member_of(
     typ: Type,
     member_type: Type,
     member_name: &str,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     let expected_types = match (field, typ) {
         (PrincipalField::MemberOf, Type::Individual) => &[Type::Group, Type::Individual][..],
         (PrincipalField::MemberOf, Type::Group) => &[Type::Group][..],
@@ -2816,36 +2819,42 @@ impl ChangedPrincipal {
     }
 }
 
-pub fn err_missing(field: impl Into<trc::Value>) -> trc::Error {
-    trc::ManageEvent::MissingParameter.ctx(trc::Key::Key, field)
+pub fn err_missing(field: impl Into<crate::trc::Value>) -> crate::trc::Error {
+    crate::trc::ManageEvent::MissingParameter.ctx(crate::trc::Key::Key, field)
 }
 
-pub fn err_exists(field: impl Into<trc::Value>, value: impl Into<trc::Value>) -> trc::Error {
-    trc::ManageEvent::AlreadyExists
-        .ctx(trc::Key::Key, field)
-        .ctx(trc::Key::Value, value)
+pub fn err_exists(
+    field: impl Into<crate::trc::Value>,
+    value: impl Into<crate::trc::Value>,
+) -> crate::trc::Error {
+    crate::trc::ManageEvent::AlreadyExists
+        .ctx(crate::trc::Key::Key, field)
+        .ctx(crate::trc::Key::Value, value)
 }
 
-pub fn not_found(value: impl Into<trc::Value>) -> trc::Error {
-    trc::ManageEvent::NotFound.ctx(trc::Key::Key, value)
+pub fn not_found(value: impl Into<crate::trc::Value>) -> crate::trc::Error {
+    crate::trc::ManageEvent::NotFound.ctx(crate::trc::Key::Key, value)
 }
 
-pub fn unsupported(details: impl Into<trc::Value>) -> trc::Error {
-    trc::ManageEvent::NotSupported.ctx(trc::Key::Details, details)
+pub fn unsupported(details: impl Into<crate::trc::Value>) -> crate::trc::Error {
+    crate::trc::ManageEvent::NotSupported.ctx(crate::trc::Key::Details, details)
 }
 
-pub fn enterprise() -> trc::Error {
-    trc::ManageEvent::NotSupported.ctx(trc::Key::Details, "Enterprise feature")
+pub fn enterprise() -> crate::trc::Error {
+    crate::trc::ManageEvent::NotSupported.ctx(crate::trc::Key::Details, "Enterprise feature")
 }
 
-pub fn error(details: impl Into<trc::Value>, reason: Option<impl Into<trc::Value>>) -> trc::Error {
-    trc::ManageEvent::Error
-        .ctx(trc::Key::Details, details)
-        .ctx_opt(trc::Key::Reason, reason)
+pub fn error(
+    details: impl Into<crate::trc::Value>,
+    reason: Option<impl Into<crate::trc::Value>>,
+) -> crate::trc::Error {
+    crate::trc::ManageEvent::Error
+        .ctx(crate::trc::Key::Details, details)
+        .ctx_opt(crate::trc::Key::Reason, reason)
 }
 
-impl From<PrincipalField> for trc::Value {
+impl From<PrincipalField> for crate::trc::Value {
     fn from(value: PrincipalField) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }

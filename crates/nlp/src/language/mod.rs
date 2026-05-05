@@ -10,12 +10,12 @@ pub mod stemmer;
 pub mod stopwords;
 
 use self::detect::LanguageDetector;
-use crate::tokenizers::{
+use crate::nlp::tokenizers::{
     Token, chinese::ChineseTokenizer, japanese::JapaneseTokenizer, space::SpaceTokenizer,
     word::WordTokenizer,
 };
+use crate::utils::config::utils::ParseValue;
 use std::borrow::Cow;
-use utils::config::utils::ParseValue;
 
 pub type LanguageTokenizer<'x> = Box<dyn Iterator<Item = Token<Cow<'x, str>>> + 'x + Sync + Send>;
 
@@ -209,7 +209,7 @@ impl Language {
 }
 
 impl ParseValue for Language {
-    fn parse_value(value: &str) -> utils::config::Result<Self> {
+    fn parse_value(value: &str) -> crate::utils::config::Result<Self> {
         Language::from_iso_639(value).ok_or_else(|| format!("Invalid language code: {}", value))
     }
 }

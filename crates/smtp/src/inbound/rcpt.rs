@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    KV_GREYLIST, config::smtp::session::Stage, listener::SessionStream, scripts::ScriptModification,
+};
+use crate::directory::backend::RcptType;
+use crate::smtp::{
     core::{Session, SessionAddress},
     scripts::ScriptResult,
 };
-use common::{
-    KV_GREYLIST, config::smtp::session::Stage, listener::SessionStream, scripts::ScriptModification,
-};
-use directory::backend::RcptType;
+use crate::store::dispatch::lookup::KeyValue;
+use crate::trc::{SecurityEvent, SmtpEvent};
+use crate::utils::DomainPart;
 use smtp_proto::{
     RCPT_NOTIFY_DELAY, RCPT_NOTIFY_FAILURE, RCPT_NOTIFY_NEVER, RCPT_NOTIFY_SUCCESS, RcptTo,
 };
 use std::borrow::Cow;
-use store::dispatch::lookup::KeyValue;
-use trc::{SecurityEvent, SmtpEvent};
-use utils::DomainPart;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_rcpt_to(&mut self, to: RcptTo<Cow<'_, str>>) -> Result<(), ()> {
@@ -39,13 +39,13 @@ impl<T: SessionStream> Session<T> {
         }
 
         if self.data.mail_from.is_none() {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MailFromMissing),
                 SpanId = self.data.session_id,
             );
             return self.write(b"503 5.5.1 MAIL is required first.\r\n").await;
         } else if self.data.rcpt_to.len() >= self.params.rcpt_max {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::TooManyRecipients),
                 SpanId = self.data.session_id,
                 Limit = self.params.rcpt_max,
@@ -60,7 +60,7 @@ impl<T: SessionStream> Session<T> {
             || to.orcpt.is_some())
             && !self.params.rcpt_dsn
         {
-            trc::event!(Smtp(SmtpEvent::DsnDisabled), SpanId = self.data.session_id,);
+            crate::trc::event!(Smtp(SmtpEvent::DsnDisabled), SpanId = self.data.session_id,);
             return self
                 .write(b"501 5.5.4 DSN extension has been disabled.\r\n")
                 .await;
@@ -77,7 +77,7 @@ impl<T: SessionStream> Session<T> {
         };
 
         if self.data.rcpt_to.contains(&rcpt) {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RcptToDuplicate),
                 SpanId = self.data.session_id,
                 To = rcpt.address_lcase,
@@ -160,7 +160,7 @@ impl<T: SessionStream> Session<T> {
             {
                 let rcpt = self.data.rcpt_to.last_mut().unwrap();
 
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::RcptToRewritten),
                     SpanId = self.data.session_id,
                     Details = rcpt.address_lcase.clone(),
@@ -177,7 +177,7 @@ impl<T: SessionStream> Session<T> {
             // Check for duplicates
             let rcpt = self.data.rcpt_to.last().unwrap();
             if self.data.rcpt_to.iter().filter(|r| r == &rcpt).count() > 1 {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::RcptToDuplicate),
                     SpanId = self.data.session_id,
                     To = rcpt.address_lcase.clone(),
@@ -209,7 +209,7 @@ impl<T: SessionStream> Session<T> {
                             rcpt_members = Some(members);
                         }
                         Ok(RcptType::Invalid) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 Smtp(SmtpEvent::MailboxDoesNotExist),
                                 SpanId = self.data.session_id,
                                 To = rcpt.address_lcase.clone(),
@@ -221,9 +221,9 @@ impl<T: SessionStream> Session<T> {
                                 .await;
                         }
                         Err(err) => {
-                            trc::error!(
+                            crate::trc::error!(
                                 err.span_id(self.data.session_id)
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                                     .details("Failed to verify address.")
                             );
 
@@ -241,7 +241,7 @@ impl<T: SessionStream> Session<T> {
                         .await
                         .unwrap_or(false)
                     {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::RelayNotAllowed),
                             SpanId = self.data.session_id,
                             To = rcpt.address_lcase.clone(),
@@ -254,9 +254,9 @@ impl<T: SessionStream> Session<T> {
                     }
                 }
                 Err(err) => {
-                    trc::error!(
+                    crate::trc::error!(
                         err.span_id(self.data.session_id)
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                             .details("Failed to verify address.")
                     );
 
@@ -272,7 +272,7 @@ impl<T: SessionStream> Session<T> {
             .await
             .unwrap_or(false)
         {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RelayNotAllowed),
                 SpanId = self.data.session_id,
                 To = rcpt.address_lcase.clone(),
@@ -318,7 +318,7 @@ impl<T: SessionStream> Session<T> {
                             Ok(_) => {
                                 let rcpt = self.data.rcpt_to.pop().unwrap();
 
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::RcptToGreylisted),
                                     SpanId = self.data.session_id,
                                     To = rcpt.address_lcase,
@@ -335,31 +335,31 @@ impl<T: SessionStream> Session<T> {
                                     .await;
                             }
                             Err(err) => {
-                                trc::error!(
+                                crate::trc::error!(
                                     err.span_id(self.data.session_id)
-                                        .caused_by(trc::location!())
+                                        .caused_by(crate::trc::location!())
                                         .details("Failed to set greylist.")
                                 );
                             }
                         }
                     }
                     Err(err) => {
-                        trc::error!(
+                        crate::trc::error!(
                             err.span_id(self.data.session_id)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                                 .details("Failed to check greylist.")
                         );
                     }
                 }
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RcptTo),
                 SpanId = self.data.session_id,
                 To = self.data.rcpt_to.last().unwrap().address_lcase.clone(),
             );
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RateLimitExceeded),
                 SpanId = self.data.session_id,
                 To = self.data.rcpt_to.last().unwrap().address_lcase.clone(),
@@ -402,7 +402,7 @@ impl<T: SessionStream> Session<T> {
             .await
         {
             Ok(true) => {
-                trc::event!(
+                crate::trc::event!(
                     Security(SecurityEvent::AbuseBan),
                     SpanId = self.data.session_id,
                     RemoteIp = self.data.remote_ip,
@@ -411,7 +411,7 @@ impl<T: SessionStream> Session<T> {
             }
             Ok(false) => {
                 if has_too_many_errors {
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::TooManyInvalidRcpt),
                         SpanId = self.data.session_id,
                         Limit = self.params.rcpt_errors_max,
@@ -420,9 +420,9 @@ impl<T: SessionStream> Session<T> {
                 }
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(self.data.session_id)
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                         .details("Failed to check if IP should be banned.")
                 );
             }

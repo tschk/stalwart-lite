@@ -10,18 +10,18 @@ use std::{
     sync::Arc,
 };
 
-use ahash::AHashMap;
-use arc_swap::ArcSwap;
-use store::{
+use crate::store::{
     Deserialize, IterateParams, Store, ValueKey,
     write::{BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::semver::Semver;
-use utils::{
+use crate::trc::AddContext;
+use crate::types::semver::Semver;
+use crate::utils::{
     config::{Config, ConfigKey},
     glob::GlobPattern,
 };
+use ahash::AHashMap;
+use arc_swap::ArcSwap;
 
 #[derive(Default)]
 pub struct ConfigManager {
@@ -57,7 +57,7 @@ pub(crate) struct ExternalSpamRules {
 }
 
 impl ConfigManager {
-    pub async fn build_config(&self, prefix: &str) -> trc::Result<Config> {
+    pub async fn build_config(&self, prefix: &str) -> crate::trc::Result<Config> {
         let mut config = Config {
             keys: self.cfg_local.load().as_ref().clone(),
             ..Default::default()
@@ -68,7 +68,11 @@ impl ConfigManager {
             .map(|_| config)
     }
 
-    pub(crate) async fn extend_config(&self, config: &mut Config, prefix: &str) -> trc::Result<()> {
+    pub(crate) async fn extend_config(
+        &self,
+        config: &mut Config,
+        prefix: &str,
+    ) -> crate::trc::Result<()> {
         for (key, value) in self.db_list(prefix, false).await? {
             config.keys.entry(key).or_insert(value);
         }
@@ -76,7 +80,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub async fn get(&self, key: impl AsRef<str>) -> trc::Result<Option<String>> {
+    pub async fn get(&self, key: impl AsRef<str>) -> crate::trc::Result<Option<String>> {
         let key = key.as_ref();
         match self.cfg_local.load().get(key) {
             Some(value) => Ok(Some(value.to_string())),
@@ -94,7 +98,7 @@ impl ConfigManager {
         &self,
         prefix: &str,
         strip_prefix: bool,
-    ) -> trc::Result<BTreeMap<String, String>> {
+    ) -> crate::trc::Result<BTreeMap<String, String>> {
         let mut results = self.db_list(prefix, strip_prefix).await?;
         for (key, value) in self.cfg_local.load().iter() {
             if prefix.is_empty() || (!strip_prefix && key.starts_with(prefix)) {
@@ -111,7 +115,7 @@ impl ConfigManager {
         &self,
         prefix: &str,
         suffix: &str,
-    ) -> trc::Result<AHashMap<String, AHashMap<String, String>>> {
+    ) -> crate::trc::Result<AHashMap<String, AHashMap<String, String>>> {
         let mut grouped = AHashMap::new();
 
         let mut list = self.list(prefix, true).await?;
@@ -137,7 +141,7 @@ impl ConfigManager {
         &self,
         prefix: &str,
         strip_prefix: bool,
-    ) -> trc::Result<BTreeMap<String, String>> {
+    ) -> crate::trc::Result<BTreeMap<String, String>> {
         let key = prefix.as_bytes();
         let from_key = ValueKey::from(ValueClass::Config(key.to_vec()));
         let to_key = ValueKey::from(ValueClass::Config(
@@ -153,7 +157,7 @@ impl ConfigManager {
                 IterateParams::new(from_key, to_key).ascending(),
                 |key, value| {
                     let mut key = std::str::from_utf8(key).map_err(|_| {
-                        trc::Error::corrupted_key(key, value.into(), trc::location!())
+                        crate::trc::Error::corrupted_key(key, value.into(), crate::trc::location!())
                     })?;
 
                     if !patterns.is_local_key(key) {
@@ -168,12 +172,12 @@ impl ConfigManager {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(results)
     }
 
-    pub async fn set<I, T>(&self, keys: I, overwrite: bool) -> trc::Result<()>
+    pub async fn set<I, T>(&self, keys: I, overwrite: bool) -> crate::trc::Result<()>
     where
         I: IntoIterator<Item = T>,
         T: Into<ConfigKey>,
@@ -223,7 +227,7 @@ impl ConfigManager {
         Ok(())
     }
 
-    pub async fn clear(&self, key: impl AsRef<str>) -> trc::Result<()> {
+    pub async fn clear(&self, key: impl AsRef<str>) -> crate::trc::Result<()> {
         let key = key.as_ref();
 
         if self.cfg_local_patterns.is_local_key(key) {
@@ -240,7 +244,7 @@ impl ConfigManager {
         }
     }
 
-    pub async fn clear_prefix(&self, key: impl AsRef<str>) -> trc::Result<()> {
+    pub async fn clear_prefix(&self, key: impl AsRef<str>) -> crate::trc::Result<()> {
         let key = key.as_ref();
 
         // Delete local keys
@@ -266,7 +270,7 @@ impl ConfigManager {
             .await
     }
 
-    async fn update_local(&self, map: BTreeMap<String, String>) -> trc::Result<()> {
+    async fn update_local(&self, map: BTreeMap<String, String>) -> crate::trc::Result<()> {
         let mut cfg_text = String::with_capacity(1024);
         for (key, value) in &map {
             cfg_text.push_str(key);
@@ -322,10 +326,13 @@ impl ConfigManager {
         tokio::fs::write(&self.cfg_local_path, cfg_text)
             .await
             .map_err(|err| {
-                trc::EventType::Config(trc::ConfigEvent::WriteError)
+                crate::trc::EventType::Config(crate::trc::ConfigEvent::WriteError)
                     .reason(err)
                     .details("Failed to write local configuration")
-                    .ctx(trc::Key::Path, self.cfg_local_path.display().to_string())
+                    .ctx(
+                        crate::trc::Key::Path,
+                        self.cfg_local_path.display().to_string(),
+                    )
             })
     }
 
@@ -333,7 +340,7 @@ impl ConfigManager {
         &self,
         force_update: bool,
         overwrite: bool,
-    ) -> trc::Result<Option<Semver>> {
+    ) -> crate::trc::Result<Option<Semver>> {
         let current_version = self
             .get("version.spam-filter")
             .await?
@@ -341,10 +348,10 @@ impl ConfigManager {
         let is_update = current_version.is_some();
 
         let mut external = self.fetch_spam_rules().await.map_err(|reason| {
-            trc::EventType::Config(trc::ConfigEvent::FetchError)
-                .caused_by(trc::location!())
+            crate::trc::EventType::Config(crate::trc::ConfigEvent::FetchError)
+                .caused_by(crate::trc::location!())
                 .details("Failed to update spam filter rules")
-                .ctx(trc::Key::Reason, reason)
+                .ctx(crate::trc::Key::Reason, reason)
         })?;
 
         if current_version.is_none_or(|v| external.version > v || force_update) {
@@ -384,16 +391,16 @@ impl ConfigManager {
 
             self.set(external.keys, overwrite).await?;
 
-            trc::event!(
-                Config(trc::ConfigEvent::ImportExternal),
+            crate::trc::event!(
+                Config(crate::trc::ConfigEvent::ImportExternal),
                 Version = external.version.to_string(),
                 Id = "spam-filter",
             );
 
             Ok(Some(external.version))
         } else {
-            trc::event!(
-                Config(trc::ConfigEvent::AlreadyUpToDate),
+            crate::trc::event!(
+                Config(crate::trc::ConfigEvent::AlreadyUpToDate),
                 Version = external.version.to_string(),
                 Id = "spam-filter",
             );
@@ -443,7 +450,7 @@ impl ConfigManager {
         }
     }
 
-    pub async fn get_services(&self) -> trc::Result<Vec<(String, u16, bool)>> {
+    pub async fn get_services(&self) -> crate::trc::Result<Vec<(String, u16, bool)>> {
         let mut result = Vec::new();
 
         for listener in self

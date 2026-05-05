@@ -5,12 +5,12 @@
  */
 
 use super::type_state::DataType;
+use crate::utils::map::bitmap::BitmapItem;
 use compact_str::CompactString;
 use std::{
     fmt::{self, Display, Formatter},
     str::FromStr,
 };
-use utils::map::bitmap::BitmapItem;
 
 #[derive(
     rkyv::Archive,
@@ -402,9 +402,9 @@ impl FromStr for Collection {
     }
 }
 
-impl From<Collection> for trc::Value {
+impl From<Collection> for crate::trc::Value {
     fn from(value: Collection) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }
 

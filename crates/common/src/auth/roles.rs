@@ -5,14 +5,14 @@
  */
 
 use crate::Server;
-use ahash::AHashSet;
-use directory::{
+use crate::directory::{
     Permission, Permissions, QueryParams, ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_USER,
     backend::internal::lookup::DirectoryStore,
 };
+use crate::trc::AddContext;
+use crate::utils::cache::CacheItemWeight;
+use ahash::AHashSet;
 use std::sync::{Arc, LazyLock};
-use trc::AddContext;
-use utils::cache::CacheItemWeight;
 
 #[derive(Debug, Clone, Default)]
 pub struct RolePermissions {
@@ -26,7 +26,10 @@ static TENANT_ADMIN_PERMISSIONS: LazyLock<Arc<RolePermissions>> =
     LazyLock::new(tenant_admin_permissions);
 
 impl Server {
-    pub async fn get_role_permissions(&self, role_id: u32) -> trc::Result<Arc<RolePermissions>> {
+    pub async fn get_role_permissions(
+        &self,
+        role_id: u32,
+    ) -> crate::trc::Result<Arc<RolePermissions>> {
         match role_id {
             ROLE_USER => Ok(USER_PERMISSIONS.clone()),
             ROLE_ADMIN => Ok(ADMIN_PERMISSIONS.clone()),
@@ -50,7 +53,10 @@ impl Server {
         }
     }
 
-    async fn build_role_permissions(&self, role_id: u32) -> trc::Result<Arc<RolePermissions>> {
+    async fn build_role_permissions(
+        &self,
+        role_id: u32,
+    ) -> crate::trc::Result<Arc<RolePermissions>> {
         let mut role_ids = vec![role_id].into_iter();
         let mut role_ids_stack = vec![];
         let mut fetched_role_ids = AHashSet::new();
@@ -97,14 +103,14 @@ impl Server {
                                 .store()
                                 .query(QueryParams::id(role_id).with_return_member_of(true))
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .ok_or_else(|| {
-                                    trc::SecurityEvent::Unauthorized
+                                    crate::trc::SecurityEvent::Unauthorized
                                         .into_err()
                                         .details(
                                             "Principal not found while building role permissions",
                                         )
-                                        .ctx(trc::Key::Id, role_id)
+                                        .ctx(crate::trc::Key::Id, role_id)
                                 })?;
 
                             // Add permissions

@@ -6,13 +6,13 @@
 
 use std::borrow::Cow;
 
-use common::{
+use crate::common::{
     core::BuildServer,
     listener::{SessionData, SessionManager, SessionResult, SessionStream},
 };
 use tokio_rustls::server::TlsStream;
 
-use crate::{
+use crate::pop3::{
     Pop3SessionManager, SERVER_GREETING, Session, State,
     protocol::{
         request::Parser,
@@ -89,28 +89,28 @@ impl<T: SessionStream> Session<T> {
                                     }
                                 }
                             } else {
-                                trc::event!(
-                                    Network(trc::NetworkEvent::Closed),
+                                crate::trc::event!(
+                                    Network(crate::trc::NetworkEvent::Closed),
                                     SpanId = self.session_id,
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
                                 break;
                             }
                         },
                         Ok(Err(err)) => {
-                            trc::event!(
-                                Network(trc::NetworkEvent::ReadError),
+                            crate::trc::event!(
+                                Network(crate::trc::NetworkEvent::ReadError),
                                 SpanId = self.session_id,
                                 Reason = err.to_string()    ,
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
                             break;
                         },
                         Err(_) => {
-                            trc::event!(
-                                Network(trc::NetworkEvent::Timeout),
+                            crate::trc::event!(
+                                Network(crate::trc::NetworkEvent::Timeout),
                                 SpanId = self.session_id,
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
 
                             self.write_bytes(&b"-ERR Connection timed out.\r\n"[..]).await.ok();
@@ -119,11 +119,11 @@ impl<T: SessionStream> Session<T> {
                     }
                 },
                 _ = shutdown_rx.changed() => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::Closed),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::Closed),
                         SpanId = self.session_id,
                         Reason = "Server shutting down",
-                        CausedBy = trc::location!()
+                        CausedBy = crate::trc::location!()
                     );
 
                     self.write_bytes(&b"* BYE Server shutting down.\r\n"[..]).await.ok();
@@ -153,44 +153,47 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> Session<T> {
-    pub async fn write_bytes(&mut self, bytes: impl AsRef<[u8]>) -> trc::Result<()> {
+    pub async fn write_bytes(&mut self, bytes: impl AsRef<[u8]>) -> crate::trc::Result<()> {
         let bytes = bytes.as_ref();
 
-        trc::event!(
-            Pop3(trc::Pop3Event::RawOutput),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::RawOutput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         self.stream.write_all(bytes.as_ref()).await.map_err(|err| {
-            trc::NetworkEvent::WriteError
+            crate::trc::NetworkEvent::WriteError
                 .into_err()
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })?;
         self.stream.flush().await.map_err(|err| {
-            trc::NetworkEvent::WriteError
+            crate::trc::NetworkEvent::WriteError
                 .into_err()
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })
     }
 
-    pub async fn write_ok(&mut self, message: impl Into<Cow<'static, str>>) -> trc::Result<()> {
+    pub async fn write_ok(
+        &mut self,
+        message: impl Into<Cow<'static, str>>,
+    ) -> crate::trc::Result<()> {
         self.write_bytes(Response::Ok::<u32>(message.into()).serialize())
             .await
     }
 
-    pub async fn write_err(&mut self, err: trc::Error) -> bool {
+    pub async fn write_err(&mut self, err: crate::trc::Error) -> bool {
         let disconnect = err.must_disconnect();
         let response = err.serialize();
         let write_err = err.should_write_err();
 
-        trc::error!(err.span_id(self.session_id));
+        crate::trc::error!(err.span_id(self.session_id));
 
         if write_err && let Err(err) = self.write_bytes(response).await {
-            trc::error!(err.span_id(self.session_id));
+            crate::trc::error!(err.span_id(self.session_id));
             return false;
         }
 

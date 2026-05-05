@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::classifier::{
+use crate::nlp::classifier::{
     feature::{CcfhFeature, CcfhFeatureBuilder, FhFeature, FhFeatureBuilder},
     sigmoid,
 };

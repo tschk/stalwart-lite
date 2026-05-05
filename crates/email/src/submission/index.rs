@@ -5,12 +5,12 @@
  */
 
 use super::{ArchivedEmailSubmission, EmailSubmission};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use store::{
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::store::{
     U32_LEN,
     write::{IndexPropertyClass, ValueClass, key::KeySerializer},
 };
-use types::{collection::SyncCollection, field::EmailSubmissionField};
+use crate::types::{collection::SyncCollection, field::EmailSubmissionField};
 
 impl IndexableObject for EmailSubmission {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

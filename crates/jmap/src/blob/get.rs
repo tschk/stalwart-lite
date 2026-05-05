@@ -5,9 +5,9 @@
  */
 
 use super::download::BlobDownload;
-use common::{Server, auth::AccessToken};
-use email::message::metadata::MessageData;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::message::metadata::MessageData;
+use crate::jmap_proto::{
     method::{
         get::{GetRequest, GetResponse},
         lookup::{BlobInfo, BlobLookupRequest, BlobLookupResponse},
@@ -15,30 +15,30 @@ use jmap_proto::{
     object::blob::{Blob, BlobProperty, BlobValue, DataProperty, DigestProperty},
     request::{IntoValid, MaybeInvalid},
 };
+use crate::store::{
+    ValueKey,
+    write::{AlignedBytes, Archive},
+};
+use crate::trc::AddContext;
+use crate::types::{blob::BlobClass, collection::Collection, id::Id, type_state::DataType};
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::{Map, Value};
 use mail_builder::encoders::base64::base64_encode;
 use sha1::{Digest, Sha1};
 use sha2::{Sha256, Sha512};
 use std::future::Future;
-use store::{
-    ValueKey,
-    write::{AlignedBytes, Archive},
-};
-use trc::AddContext;
-use types::{blob::BlobClass, collection::Collection, id::Id, type_state::DataType};
-use utils::map::vec_map::VecMap;
 
 pub trait BlobOperations: Sync + Send {
     fn blob_get(
         &self,
         request: GetRequest<Blob>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<Blob>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Blob>>> + Send;
 
     fn blob_lookup(
         &self,
         request: BlobLookupRequest,
-    ) -> impl Future<Output = trc::Result<BlobLookupResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<BlobLookupResponse>> + Send;
 }
 
 impl BlobOperations for Server {
@@ -46,7 +46,7 @@ impl BlobOperations for Server {
         &self,
         mut request: GetRequest<Blob>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<Blob>> {
+    ) -> crate::trc::Result<GetResponse<Blob>> {
         let ids = request
             .unwrap_ids(self.core.jmap.get_max_objects)?
             .unwrap_or_default();
@@ -160,7 +160,10 @@ impl BlobOperations for Server {
         Ok(response)
     }
 
-    async fn blob_lookup(&self, request: BlobLookupRequest) -> trc::Result<BlobLookupResponse> {
+    async fn blob_lookup(
+        &self,
+        request: BlobLookupRequest,
+    ) -> crate::trc::Result<BlobLookupResponse> {
         let mut include_email = false;
         let mut include_mailbox = false;
         let mut include_thread = false;
@@ -185,7 +188,7 @@ impl BlobOperations for Server {
 
                     Ok(value)
                 }
-                MaybeInvalid::Invalid(_) => Err(trc::JmapEvent::UnknownDataType.into_err()),
+                MaybeInvalid::Invalid(_) => Err(crate::trc::JmapEvent::UnknownDataType.into_err()),
             })
             .collect::<Result<Vec<_>, _>>()?;
         let req_account_id = request.account_id.document_id();
@@ -217,7 +220,7 @@ impl BlobOperations for Server {
                         {
                             let data = data_
                                 .unarchive::<MessageData>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             if include_email {
                                 matched_ids.append(
                                     DataType::Email,

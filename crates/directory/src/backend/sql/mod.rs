@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use store::Store;
+use crate::store::Store;
 
 pub mod config;
 pub mod lookup;

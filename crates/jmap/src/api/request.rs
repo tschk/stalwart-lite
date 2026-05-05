@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::http_proto::HttpSessionData;
+use crate::jmap::{
     api::auth::JmapAuthorization,
     blob::{copy::BlobCopy, get::BlobOperations, upload::BlobUpload},
     changes::{get::ChangesLookup, query::QueryChanges},
@@ -25,19 +27,17 @@ use crate::{
     thread::get::ThreadGet,
     vacation::{get::VacationResponseGet, set::VacationResponseSet},
 };
-use common::{Server, auth::AccessToken};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::jmap_proto::{
     request::{
         Call, CopyRequestMethod, GetRequestMethod, ParseRequestMethod, QueryRequestMethod, Request,
         RequestMethod, SetRequestMethod, method::MethodName,
     },
     response::{Response, ResponseMethod, SetResponseMethod},
 };
+use crate::trc::JmapEvent;
+use crate::types::{collection::Collection, id::Id};
 use std::future::Future;
 use std::{sync::Arc, time::Instant};
-use trc::JmapEvent;
-use types::{collection::Collection, id::Id};
 
 pub trait RequestHandler: Sync + Send {
     fn handle_jmap_request<'x>(
@@ -54,7 +54,7 @@ pub trait RequestHandler: Sync + Send {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<ResponseMethod<'x>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ResponseMethod<'x>>> + Send;
 }
 
 impl RequestHandler for Server {
@@ -77,7 +77,7 @@ impl RequestHandler for Server {
             if let Err(error) = response.resolve_references(&mut call.method) {
                 let method_error = error.clone();
 
-                trc::error!(error.span_id(session.session_id));
+                crate::trc::error!(error.span_id(session.session_id));
 
                 response.push_response(call.id, MethodName::error(), method_error);
                 continue;
@@ -164,10 +164,10 @@ impl RequestHandler for Server {
                     Err(error) => {
                         let method_error = error.clone();
 
-                        trc::error!(
+                        crate::trc::error!(
                             error
                                 .span_id(session.session_id)
-                                .ctx_unique(trc::Key::AccountId, access_token.primary_id())
+                                .ctx_unique(crate::trc::Key::AccountId, access_token.primary_id())
                                 .caused_by(method_name)
                         );
 
@@ -200,7 +200,7 @@ impl RequestHandler for Server {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         session: &HttpSessionData,
-    ) -> trc::Result<ResponseMethod<'x>> {
+    ) -> crate::trc::Result<ResponseMethod<'x>> {
         let op_start = Instant::now();
 
         // Check permissions
@@ -279,7 +279,7 @@ impl RequestHandler for Server {
                 | GetRequestMethod::CalendarEventNotification(_)
                 | GetRequestMethod::ParticipantIdentity(_)
                 | GetRequestMethod::ShareNotification(_) => {
-                    return Err(trc::JmapEvent::UnknownMethod.into_err());
+                    return Err(crate::trc::JmapEvent::UnknownMethod.into_err());
                 }
             },
             RequestMethod::Query(req) => match req {
@@ -322,7 +322,7 @@ impl RequestHandler for Server {
                 | QueryRequestMethod::CalendarEvent(_)
                 | QueryRequestMethod::CalendarEventNotification(_)
                 | QueryRequestMethod::ShareNotification(_) => {
-                    return Err(trc::JmapEvent::UnknownMethod.into_err());
+                    return Err(crate::trc::JmapEvent::UnknownMethod.into_err());
                 }
             },
             RequestMethod::Set(req) => match req {
@@ -378,7 +378,7 @@ impl RequestHandler for Server {
                 | SetRequestMethod::CalendarEvent(_)
                 | SetRequestMethod::CalendarEventNotification(_)
                 | SetRequestMethod::ParticipantIdentity(_) => {
-                    return Err(trc::JmapEvent::UnknownMethod.into_err());
+                    return Err(crate::trc::JmapEvent::UnknownMethod.into_err());
                 }
             },
             RequestMethod::Changes(mut req) => {
@@ -408,7 +408,7 @@ impl RequestHandler for Server {
                     self.blob_copy(req, access_token).await?.into()
                 }
                 CopyRequestMethod::ContactCard(_) | CopyRequestMethod::CalendarEvent(_) => {
-                    return Err(trc::JmapEvent::UnknownMethod.into_err());
+                    return Err(crate::trc::JmapEvent::UnknownMethod.into_err());
                 }
             },
             RequestMethod::ImportEmail(mut req) => {
@@ -425,7 +425,7 @@ impl RequestHandler for Server {
                     self.email_parse(req, access_token).await?.into()
                 }
                 ParseRequestMethod::ContactCard(_) | ParseRequestMethod::CalendarEvent(_) => {
-                    return Err(trc::JmapEvent::UnknownMethod.into_err());
+                    return Err(crate::trc::JmapEvent::UnknownMethod.into_err());
                 }
             },
             RequestMethod::QueryChanges(req) => self.query_changes(req, access_token).await?.into(),
@@ -457,7 +457,7 @@ impl RequestHandler for Server {
             RequestMethod::Error(error) => return Err(error),
         };
 
-        trc::event!(
+        crate::trc::event!(
             Jmap(JmapEvent::MethodCall),
             Id = method_name.as_str(),
             SpanId = session.session_id,

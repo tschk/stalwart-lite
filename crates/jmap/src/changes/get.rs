@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::auth::JmapAuthorization, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken};
-use email::cache::MessageCacheFetch;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::cache::MessageCacheFetch;
+use crate::jmap::{api::auth::JmapAuthorization, changes::state::JmapCacheState};
+use crate::jmap_proto::{
     method::changes::{ChangesRequest, ChangesResponse},
     object::{JmapObject, NullObject, mailbox::MailboxProperty},
     request::method::MethodObject,
     response::{ChangesResponseMethod, ResponseMethod},
     types::state::State,
 };
+use crate::store::query::log::{Change, Query};
+use crate::types::collection::{Collection, SyncCollection};
 use std::future::Future;
-use store::query::log::{Change, Query};
-use types::collection::{Collection, SyncCollection};
 
 pub trait ChangesLookup: Sync + Send {
     fn changes(
@@ -24,7 +24,7 @@ pub trait ChangesLookup: Sync + Send {
         request: ChangesRequest,
         object: MethodObject,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<IntermediateChangesResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<IntermediateChangesResponse>> + Send;
 }
 
 pub struct IntermediateChangesResponse {
@@ -39,7 +39,7 @@ impl ChangesLookup for Server {
         request: ChangesRequest,
         object: MethodObject,
         access_token: &AccessToken,
-    ) -> trc::Result<IntermediateChangesResponse> {
+    ) -> crate::trc::Result<IntermediateChangesResponse> {
         // Map collection and validate ACLs
         let (collection, is_container) = match object {
             MethodObject::Email => {
@@ -67,7 +67,7 @@ impl ChangesLookup for Server {
                 (SyncCollection::EmailSubmission, false)
             }
             _ => {
-                return Err(trc::JmapEvent::CannotCalculateChanges.into_err());
+                return Err(crate::trc::JmapEvent::CannotCalculateChanges.into_err());
             }
         };
         let max_changes = std::cmp::min(
@@ -167,13 +167,13 @@ impl ChangesLookup for Server {
         if (changelog.is_truncated || changelog.from_change_id == 0)
             && request.since_state != State::Initial
         {
-            return Err(trc::JmapEvent::CannotCalculateChanges.into_err().details(
-                if changelog.is_truncated {
+            return Err(crate::trc::JmapEvent::CannotCalculateChanges
+                .into_err()
+                .details(if changelog.is_truncated {
                     "Change log is truncated"
                 } else {
                     "Since state is invalid"
-                },
-            ));
+                }));
         }
 
         let mut changes = changelog

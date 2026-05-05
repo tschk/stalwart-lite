@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use store::{Store, Stores};
-use utils::config::{Config, utils::AsKey};
+use crate::store::{Store, Stores};
+use crate::utils::config::{Config, utils::AsKey};
 
 use super::{SqlDirectory, SqlMappings};
 

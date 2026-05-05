@@ -5,10 +5,10 @@
  */
 
 use calcard::jscalendar::JSCalendarProperty;
-use common::Server;
-use jmap_proto::error::set::SetError;
-use trc::AddContext;
-use types::{collection::Collection, field::CalendarEventField, id::Id};
+use crate::common::Server;
+use crate::jmap_proto::error::set::SetError;
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::CalendarEventField, id::Id};
 
 pub mod copy;
 pub mod get;
@@ -61,7 +61,7 @@ pub(super) async fn assert_is_unique_uid(
     server: &Server,
     account_id: u32,
     uid: Option<&str>,
-) -> trc::Result<Result<(), SetError<JSCalendarProperty<Id>>>> {
+) -> crate::trc::Result<Result<(), SetError<JSCalendarProperty<Id>>>> {
     if let Some(uid) = uid
         && server
             .document_exists(
@@ -71,7 +71,7 @@ pub(super) async fn assert_is_unique_uid(
                 uid.as_bytes(),
             )
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
     {
         Ok(Err(SetError::invalid_properties()
             .with_property(JSCalendarProperty::Uid)

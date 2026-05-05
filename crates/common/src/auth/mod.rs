@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{Server, listener::limiter::ConcurrencyLimiter};
-use directory::{
+use crate::common::{Server, listener::limiter::ConcurrencyLimiter};
+use crate::directory::{
     Directory, FALLBACK_ADMIN_ID, Permission, Permissions, Principal, QueryParams, Type,
     backend::internal::lookup::DirectoryStore, core::secret::verify_secret_hash,
+};
+use crate::types::collection::Collection;
+use crate::utils::{
+    cache::CacheItemWeight,
+    map::{bitmap::Bitmap, vec_map::VecMap},
 };
 use mail_send::Credentials;
 use oauth::GrantType;
 use std::{net::IpAddr, sync::Arc};
-use types::collection::Collection;
-use utils::{
-    cache::CacheItemWeight,
-    map::{bitmap::Bitmap, vec_map::VecMap},
-};
 
 pub mod access_token;
 pub mod oauth;
@@ -67,7 +67,10 @@ pub struct AuthRequest<'x> {
 }
 
 impl Server {
-    pub async fn authenticate(&self, req: &AuthRequest<'_>) -> trc::Result<Arc<AccessToken>> {
+    pub async fn authenticate(
+        &self,
+        req: &AuthRequest<'_>,
+    ) -> crate::trc::Result<Arc<AccessToken>> {
         // Resolve directory
         let directory = req.directory.unwrap_or(&self.core.storage.directory);
 
@@ -98,7 +101,7 @@ impl Server {
         &self,
         req: &AuthRequest<'_>,
         directory: &Directory,
-    ) -> trc::Result<Principal> {
+    ) -> crate::trc::Result<Principal> {
         // First try to authenticate the user against the default directory
         let result = match directory
             .query(
@@ -108,8 +111,8 @@ impl Server {
             .await
         {
             Ok(Some(principal)) => {
-                trc::event!(
-                    Auth(trc::AuthEvent::Success),
+                crate::trc::event!(
+                    Auth(crate::trc::AuthEvent::Success),
                     AccountName = principal.name().to_string(),
                     AccountId = principal.id(),
                     SpanId = req.session_id,
@@ -119,7 +122,9 @@ impl Server {
             }
             Ok(None) => Ok(()),
             Err(err) => {
-                if err.matches(trc::EventType::Auth(trc::AuthEvent::MissingTotp)) {
+                if err.matches(crate::trc::EventType::Auth(
+                    crate::trc::AuthEvent::MissingTotp,
+                )) {
                     return Err(err);
                 } else {
                     Err(err)
@@ -133,8 +138,8 @@ impl Server {
                 match (&self.core.jmap.fallback_admin, &self.core.jmap.master_user) {
                     (Some((fallback_admin, fallback_pass)), _) if username == fallback_admin => {
                         if verify_secret_hash(fallback_pass, secret).await? {
-                            trc::event!(
-                                Auth(trc::AuthEvent::Success),
+                            crate::trc::event!(
+                                Auth(crate::trc::AuthEvent::Success),
                                 AccountName = username.clone(),
                                 SpanId = req.session_id,
                             );
@@ -154,8 +159,8 @@ impl Server {
                                 )
                                 .await?
                             {
-                                trc::event!(
-                                    Auth(trc::AuthEvent::Success),
+                                crate::trc::event!(
+                                    Auth(crate::trc::AuthEvent::Success),
                                     AccountName = username.to_string(),
                                     SpanId = req.session_id,
                                     AccountId = principal.id(),
@@ -178,8 +183,8 @@ impl Server {
                                 .await
                             && principal.typ == Type::ApiKey
                         {
-                            trc::event!(
-                                Auth(trc::AuthEvent::Success),
+                            crate::trc::event!(
+                                Auth(crate::trc::AuthEvent::Success),
                                 AccountName = principal.name().to_string(),
                                 AccountId = principal.id(),
                                 SpanId = req.session_id,
@@ -210,8 +215,8 @@ impl Server {
                         None
                     };
                     if let Some(principal) = principal {
-                        trc::event!(
-                            Auth(trc::AuthEvent::Success),
+                        crate::trc::event!(
+                            Auth(crate::trc::AuthEvent::Success),
                             AccountName = principal.name().to_string(),
                             AccountId = principal.id(),
                             SpanId = req.session_id,
@@ -229,20 +234,20 @@ impl Server {
         } else if self.has_auth_fail2ban() {
             let login = req.credentials.login();
             if self.is_auth_fail2banned(req.remote_ip, login).await? {
-                Err(trc::SecurityEvent::AuthenticationBan
+                Err(crate::trc::SecurityEvent::AuthenticationBan
                     .into_err()
-                    .ctx(trc::Key::RemoteIp, req.remote_ip)
-                    .ctx_opt(trc::Key::AccountName, login.map(|s| s.to_string())))
+                    .ctx(crate::trc::Key::RemoteIp, req.remote_ip)
+                    .ctx_opt(crate::trc::Key::AccountName, login.map(|s| s.to_string())))
             } else {
-                Err(trc::AuthEvent::Failed
-                    .ctx(trc::Key::RemoteIp, req.remote_ip)
-                    .ctx_opt(trc::Key::AccountName, login.map(|s| s.to_string())))
+                Err(crate::trc::AuthEvent::Failed
+                    .ctx(crate::trc::Key::RemoteIp, req.remote_ip)
+                    .ctx_opt(crate::trc::Key::AccountName, login.map(|s| s.to_string())))
             }
         } else {
-            Err(trc::AuthEvent::Failed
-                .ctx(trc::Key::RemoteIp, req.remote_ip)
+            Err(crate::trc::AuthEvent::Failed
+                .ctx(crate::trc::Key::RemoteIp, req.remote_ip)
                 .ctx_opt(
-                    trc::Key::AccountName,
+                    crate::trc::Key::AccountName,
                     req.credentials.login().map(|s| s.to_string()),
                 ))
         }

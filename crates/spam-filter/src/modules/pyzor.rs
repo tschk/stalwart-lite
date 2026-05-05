@@ -11,9 +11,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use common::config::spamfilter::PyzorConfig;
+use crate::common::config::spamfilter::PyzorConfig;
+use crate::nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use mail_parser::{Message, PartType, decoders::html::add_html_token};
-use nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use sha1::{Digest, Sha1};
 use tokio::net::UdpSocket;
 
@@ -31,7 +31,7 @@ pub(crate) struct PyzorResponse {
 pub(crate) async fn pyzor_check(
     message: &Message<'_>,
     config: &PyzorConfig,
-) -> trc::Result<Option<PyzorResponse>> {
+) -> crate::trc::Result<Option<PyzorResponse>> {
     // Make sure there is at least one text part
     if !message
         .parts
@@ -75,9 +75,9 @@ pub(crate) async fn pyzor_check(
         .await
         .map(Into::into)
         .map_err(|err| {
-            trc::SpamEvent::PyzorError
+            crate::trc::SpamEvent::PyzorError
                 .into_err()
-                .ctx(trc::Key::Url, config.address.to_string())
+                .ctx(crate::trc::Key::Url, config.address.to_string())
                 .reason(err)
                 .details("Pyzor failed")
         })

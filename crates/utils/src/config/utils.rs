@@ -634,15 +634,16 @@ impl ParseValue for Rate {
     }
 }
 
-impl ParseValue for trc::Level {
+impl ParseValue for crate::trc::Level {
     fn parse_value(value: &str) -> super::Result<Self> {
-        trc::Level::from_str(value).map_err(|err| format!("Invalid log level: {err}"))
+        crate::trc::Level::from_str(value).map_err(|err| format!("Invalid log level: {err}"))
     }
 }
 
-impl ParseValue for trc::EventType {
+impl ParseValue for crate::trc::EventType {
     fn parse_value(value: &str) -> super::Result<Self> {
-        trc::EventType::try_parse(value).ok_or_else(|| format!("Unknown event type: {value}"))
+        crate::trc::EventType::try_parse(value)
+            .ok_or_else(|| format!("Unknown event type: {value}"))
     }
 }
 
@@ -789,7 +790,7 @@ where
 mod tests {
     use std::net::IpAddr;
 
-    use crate::config::Config;
+    use crate::utils::config::Config;
 
     #[test]
     fn toml_utils() {

@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::quota,
     receiver::{Request, bad},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl Request<Command> {
-    pub fn parse_get_quota_root(self, is_utf8: bool) -> trc::Result<quota::Arguments> {
+    pub fn parse_get_quota_root(self, is_utf8: bool) -> crate::trc::Result<quota::Arguments> {
         match self.tokens.len() {
             1 => Ok(quota::Arguments {
                 name: utf7_maybe_decode(
@@ -33,7 +33,7 @@ impl Request<Command> {
         }
     }
 
-    pub fn parse_get_quota(self) -> trc::Result<quota::Arguments> {
+    pub fn parse_get_quota(self) -> crate::trc::Result<quota::Arguments> {
         match self.tokens.len() {
             1 => Ok(quota::Arguments {
                 name: self
@@ -53,7 +53,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::quota, receiver::Receiver};
+    use crate::imap_proto::{protocol::quota, receiver::Receiver};
 
     #[test]
     fn parse_quota() {

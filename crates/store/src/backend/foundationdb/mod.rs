@@ -50,8 +50,8 @@ impl Default for ReadVersion {
 }
 
 #[inline(always)]
-fn into_error(error: FdbError) -> trc::Error {
-    trc::StoreEvent::FoundationdbError
+fn into_error(error: FdbError) -> crate::trc::Error {
+    crate::trc::StoreEvent::FoundationdbError
         .reason(error.message())
-        .ctx(trc::Key::Code, error.code())
+        .ctx(crate::trc::Key::Code, error.code())
 }

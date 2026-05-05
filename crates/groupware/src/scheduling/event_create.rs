@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::scheduling::{
+use crate::groupware::scheduling::{
     ItipError, ItipMessage, itip::itip_finalize, organizer::organizer_request_full,
     snapshot::itip_snapshot,
 };

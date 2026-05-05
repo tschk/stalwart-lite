@@ -4,6 +4,26 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::common::{
+    DEFAULT_LOGO_BASE64, Server,
+    auth::AccessToken,
+    config::groupware::CalendarTemplateVariable,
+    i18n,
+    listener::{ServerInstance, stream::NullIo},
+};
+use crate::groupware::{
+    calendar::itip::ItipIngest,
+    scheduling::{ArchivedItipSummary, ArchivedItipValue, ItipMessages},
+};
+use crate::smtp::core::{Session, SessionData};
+use crate::store::{
+    ValueKey,
+    ahash::AHashMap,
+    rkyv::rend::{i16_le, i32_le},
+    write::{AlignedBytes, Archive, TaskEpoch, TaskQueueClass, ValueClass, now},
+};
+use crate::trc::AddContext;
+use crate::utils::template::{Variable, Variables};
 use calcard::{
     common::timezone::Tz,
     icalendar::{
@@ -13,34 +33,14 @@ use calcard::{
     },
 };
 use chrono::{DateTime, Locale};
-use common::{
-    DEFAULT_LOGO_BASE64, Server,
-    auth::AccessToken,
-    config::groupware::CalendarTemplateVariable,
-    i18n,
-    listener::{ServerInstance, stream::NullIo},
-};
-use groupware::{
-    calendar::itip::ItipIngest,
-    scheduling::{ArchivedItipSummary, ArchivedItipValue, ItipMessages},
-};
 use mail_builder::{
     MessageBuilder,
     headers::{HeaderType, content_type::ContentType},
     mime::{BodyPart, MimePart},
 };
 use mail_parser::decoders::html::html_to_text;
-use smtp::core::{Session, SessionData};
 use smtp_proto::{MailFrom, RcptTo};
 use std::{str::FromStr, sync::Arc, time::Duration};
-use store::{
-    ValueKey,
-    ahash::AHashMap,
-    rkyv::rend::{i16_le, i32_le},
-    write::{AlignedBytes, Archive, TaskEpoch, TaskQueueClass, ValueClass, now},
-};
-use trc::AddContext;
-use utils::template::{Variable, Variables};
 
 pub trait SendImipTask: Sync + Send {
     fn send_imip(
@@ -63,10 +63,10 @@ impl SendImipTask for Server {
         match send_imip(self, account_id, document_id, due, server_instance).await {
             Ok(result) => result,
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.account_id(account_id)
                         .document_id(document_id)
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                         .details("Failed to process alarm")
                 );
                 false
@@ -81,12 +81,12 @@ async fn send_imip(
     document_id: u32,
     due: TaskEpoch,
     server_instance: Arc<ServerInstance>,
-) -> trc::Result<bool> {
+) -> crate::trc::Result<bool> {
     // Obtain access token
     let access_token = server
         .get_access_token(account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Obtain iMIP payload
     let Some(archive) = server
@@ -101,10 +101,10 @@ async fn send_imip(
             }),
         })
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
     else {
-        trc::event!(
-            Calendar(trc::CalendarEvent::ItipMessageError),
+        crate::trc::event!(
+            Calendar(crate::trc::CalendarEvent::ItipMessageError),
             AccountId = account_id,
             DocumentId = document_id,
             Reason = "Missing iMIP payload",
@@ -114,7 +114,7 @@ async fn send_imip(
 
     let imip = archive
         .unarchive::<ItipMessages>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let sender_domain = imip
         .messages
@@ -126,8 +126,8 @@ async fn send_imip(
     let logo = match server.logo_resource(sender_domain).await {
         Ok(logo) => logo,
         Err(err) => {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to fetch logo image")
             );
             None
@@ -236,8 +236,8 @@ async fn send_imip(
                     })
                     .await;
                 if let Some(error) = session.has_failed() {
-                    trc::event!(
-                        Calendar(trc::CalendarEvent::ItipMessageError),
+                    crate::trc::event!(
+                        Calendar(crate::trc::CalendarEvent::ItipMessageError),
                         AccountId = account_id,
                         DocumentId = document_id,
                         From = from,
@@ -256,8 +256,8 @@ async fn send_imip(
                     })
                     .await;
                 if let Some(error) = session.has_failed() {
-                    trc::event!(
-                        Calendar(trc::CalendarEvent::ItipMessageError),
+                    crate::trc::event!(
+                        Calendar(crate::trc::CalendarEvent::ItipMessageError),
                         AccountId = account_id,
                         DocumentId = document_id,
                         From = from,
@@ -270,9 +270,9 @@ async fn send_imip(
                 // DATA
                 session.data.message = message;
                 let response = session.queue_message().await;
-                if let smtp::core::State::Accepted(queue_id) = session.state {
-                    trc::event!(
-                        Calendar(trc::CalendarEvent::ItipMessageSent),
+                if let crate::smtp::core::State::Accepted(queue_id) = session.state {
+                    crate::trc::event!(
+                        Calendar(crate::trc::CalendarEvent::ItipMessageSent),
                         From = from,
                         To = to,
                         AccountId = account_id,
@@ -280,8 +280,8 @@ async fn send_imip(
                         QueueId = queue_id,
                     );
                 } else {
-                    trc::event!(
-                        Calendar(trc::CalendarEvent::ItipMessageError),
+                    crate::trc::event!(
+                        Calendar(crate::trc::CalendarEvent::ItipMessageError),
                         From = from,
                         To = to,
                         AccountId = account_id,
@@ -295,8 +295,10 @@ async fn send_imip(
             })
             .await
             .map_err(|_| {
-                trc::Error::new(trc::EventType::Server(trc::ServerEvent::ThreadError))
-                    .caused_by(trc::location!())
+                crate::trc::Error::new(crate::trc::EventType::Server(
+                    crate::trc::ServerEvent::ThreadError,
+                ))
+                .caused_by(crate::trc::location!())
             })?;
         }
     }

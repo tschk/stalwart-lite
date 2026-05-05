@@ -4,25 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use email::cache::{MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::email::cache::{
+    MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess,
+};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::mailbox::{Mailbox, MailboxProperty, MailboxValue},
 };
+use crate::store::ahash::AHashSet;
+use crate::types::{acl::Acl, keyword::Keyword, special_use::SpecialUse};
 use jmap_tools::{Map, Value};
 use std::future::Future;
-use store::ahash::AHashSet;
-use types::{acl::Acl, keyword::Keyword, special_use::SpecialUse};
 
-use crate::api::acl::JmapRights;
+use crate::jmap::api::acl::JmapRights;
 
 pub trait MailboxGet: Sync + Send {
     fn mailbox_get(
         &self,
         request: GetRequest<Mailbox>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<Mailbox>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Mailbox>>> + Send;
 }
 
 impl MailboxGet for Server {
@@ -30,7 +32,7 @@ impl MailboxGet for Server {
         &self,
         mut request: GetRequest<Mailbox>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<Mailbox>> {
+    ) -> crate::trc::Result<GetResponse<Mailbox>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             MailboxProperty::Id,

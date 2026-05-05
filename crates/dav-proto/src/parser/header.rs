@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{Condition, Depth, If, RequestHeaders, ResourceState, Return, Timeout};
+use crate::dav_proto::{Condition, Depth, If, RequestHeaders, ResourceState, Return, Timeout};
 use calcard::vcard::VCardVersion;
 
 impl<'x> RequestHeaders<'x> {

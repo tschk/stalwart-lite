@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError,
     common::{
         AddressbookFilter, DavQuery,
@@ -12,12 +13,7 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use calcard::vcard::{
-    ArchivedVCard, ArchivedVCardEntry, ArchivedVCardParameter, VCardParameterName, VCardProperty,
-    VCardVersion,
-};
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders,
     schema::{
         property::CardDavPropertyName,
@@ -25,12 +21,16 @@ use dav_proto::{
         response::MultiStatus,
     },
 };
-use groupware::cache::GroupwareCache;
-use http_proto::HttpResponse;
+use crate::groupware::cache::GroupwareCache;
+use crate::http_proto::HttpResponse;
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::SyncCollection};
+use calcard::vcard::{
+    ArchivedVCard, ArchivedVCardEntry, ArchivedVCardParameter, VCardParameterName, VCardProperty,
+    VCardVersion,
+};
 use hyper::StatusCode;
 use std::fmt::Write;
-use trc::AddContext;
-use types::{acl::Acl, collection::SyncCollection};
 
 pub(crate) trait CardQueryRequestHandler: Sync + Send {
     fn handle_card_query_request(
@@ -38,7 +38,7 @@ pub(crate) trait CardQueryRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: AddressbookQuery,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CardQueryRequestHandler for Server {
@@ -47,7 +47,7 @@ impl CardQueryRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: AddressbookQuery,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -57,7 +57,7 @@ impl CardQueryRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let Some(resource) = resources.by_path(
             resource_
                 .resource

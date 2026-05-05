@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{DavResourcePath, DavResources};
+use crate::dav::{
     DavError,
     common::uri::{OwnedUri, UriResource},
 };
-use common::{DavResourcePath, DavResources};
-use dav_proto::schema::property::{DavProperty, WebDavProperty};
+use crate::dav_proto::schema::property::{DavProperty, WebDavProperty};
 use hyper::StatusCode;
 
 pub mod copy_move;
@@ -77,7 +77,7 @@ pub(crate) trait DavFileResource {
     fn map_resource<T: FromDavResource>(
         &self,
         resource: &OwnedUri<'_>,
-    ) -> crate::Result<UriResource<u32, T>>;
+    ) -> crate::dav::Result<UriResource<u32, T>>;
 
     fn map_parent<'x>(&self, resource: &'x str) -> Option<(Option<DavResourcePath<'_>>, &'x str)>;
 
@@ -85,14 +85,14 @@ pub(crate) trait DavFileResource {
     fn map_parent_resource<'x, T: FromDavResource>(
         &self,
         resource: &OwnedUri<'x>,
-    ) -> crate::Result<UriResource<u32, (Option<T>, &'x str)>>;
+    ) -> crate::dav::Result<UriResource<u32, (Option<T>, &'x str)>>;
 }
 
 impl DavFileResource for DavResources {
     fn map_resource<T: FromDavResource>(
         &self,
         resource: &OwnedUri<'_>,
-    ) -> crate::Result<UriResource<u32, T>> {
+    ) -> crate::dav::Result<UriResource<u32, T>> {
         resource
             .resource
             .and_then(|r| self.by_path(r))
@@ -117,7 +117,7 @@ impl DavFileResource for DavResources {
     fn map_parent_resource<'x, T: FromDavResource>(
         &self,
         resource: &OwnedUri<'x>,
-    ) -> crate::Result<UriResource<u32, (Option<T>, &'x str)>> {
+    ) -> crate::dav::Result<UriResource<u32, (Option<T>, &'x str)>> {
         if let Some(r) = resource.resource {
             if self.by_path(r).is_none() {
                 self.map_parent(r)

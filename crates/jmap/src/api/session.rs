@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::Permission;
-use jmap_proto::request::capability::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::jmap_proto::request::capability::{
     Account, Capabilities, Capability, EmptyCapabilities, Session,
 };
+use crate::types::id::Id;
+use crate::utils::map::vec_map::VecMap;
 use std::future::Future;
 use std::sync::Arc;
-use types::id::Id;
-use utils::map::vec_map::VecMap;
 
 pub trait SessionHandler: Sync + Send {
     fn handle_session_resource(
         &self,
         base_url: String,
         access_token: Arc<AccessToken>,
-    ) -> impl Future<Output = trc::Result<Session>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Session>> + Send;
 }
 
 impl SessionHandler for Server {
@@ -27,7 +27,7 @@ impl SessionHandler for Server {
         &self,
         base_url: String,
         access_token: Arc<AccessToken>,
-    ) -> trc::Result<Session> {
+    ) -> crate::trc::Result<Session> {
         let mut session = Session::new(base_url, &self.core.jmap.capabilities);
         session.set_state(access_token.state());
         let account_capabilities = &self.core.jmap.capabilities.account;
@@ -59,10 +59,10 @@ impl SessionHandler for Server {
             let access_token = match self.get_access_token(account_id).await {
                 Ok(token) => token,
                 Err(err) => {
-                    if err.matches(trc::EventType::Auth(trc::AuthEvent::Error)) {
+                    if err.matches(crate::trc::EventType::Auth(crate::trc::AuthEvent::Error)) {
                         continue;
                     } else {
-                        return Err(err.caused_by(trc::location!()));
+                        return Err(err.caused_by(crate::trc::location!()));
                     }
                 }
             };

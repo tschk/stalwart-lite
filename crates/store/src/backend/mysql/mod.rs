@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, FileSearchField, SearchField,
         TracingSearchField,
@@ -26,8 +26,8 @@ pub struct MysqlStore {
 }
 
 #[inline(always)]
-fn into_error(err: impl Display) -> trc::Error {
-    trc::StoreEvent::MysqlError.reason(err)
+fn into_error(err: impl Display) -> crate::trc::Error {
+    crate::trc::StoreEvent::MysqlError.reason(err)
 }
 
 impl SearchIndex {

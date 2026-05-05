@@ -6,7 +6,7 @@
 
 use std::{borrow::Cow, fmt::Display, net::IpAddr, sync::Arc, time::Duration};
 
-use common::config::smtp::session::MilterVersion;
+use crate::common::config::smtp::session::MilterVersion;
 
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncWrite};

@@ -5,11 +5,8 @@
  */
 
 use super::settings::JmapConfig;
-use crate::config::groupware::GroupwareConfig;
-use ahash::AHashSet;
-use calcard::icalendar::ICalendarDuration;
-use chrono::{DateTime, Utc};
-use jmap_proto::{
+use crate::common::config::groupware::GroupwareConfig;
+use crate::jmap_proto::{
     object::email::EmailComparator,
     request::capability::{
         BlobCapabilities, CalendarCapabilities, Capabilities, Capability, ContactsCapabilities,
@@ -19,8 +16,11 @@ use jmap_proto::{
     },
     types::date::UTCDate,
 };
-use types::{collection::Collection, type_state::DataType};
-use utils::{config::Config, map::vec_map::VecMap};
+use crate::types::{collection::Collection, type_state::DataType};
+use crate::utils::{config::Config, map::vec_map::VecMap};
+use ahash::AHashSet;
+use calcard::icalendar::ICalendarDuration;
+use chrono::{DateTime, Utc};
 
 impl JmapConfig {
     pub fn add_capabilities(&mut self, config: &mut Config, groupware_config: &GroupwareConfig) {

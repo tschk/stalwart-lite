@@ -6,7 +6,7 @@
 
 use std::{net::IpAddr, sync::Arc};
 
-use common::{
+use crate::common::{
     Inner, Server,
     auth::AccessToken,
     listener::{ServerInstance, SessionStream, limiter::InFlight},

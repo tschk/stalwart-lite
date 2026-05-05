@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use nlp::tokenizers::types::{TokenType, TypesTokenizer};
+use crate::nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use sieve::{FunctionMap, runtime::Variable};
 
-use crate::scripts::functions::{ApplyString, text::tokenize_words};
+use crate::common::scripts::functions::{ApplyString, text::tokenize_words};
 
 use super::PluginContext;
 
@@ -19,7 +19,7 @@ pub fn register_domain_part(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("domain_part", plugin_id, 2);
 }
 
-pub fn exec_tokenize(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub fn exec_tokenize(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let mut v = ctx.arguments;
     let (urls, urls_without_scheme, emails) = match v[1].to_string().as_ref() {
         "words" => return Ok(tokenize_words(&v[0])),
@@ -57,7 +57,7 @@ enum DomainPart {
     Host,
 }
 
-pub fn exec_domain_part(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub fn exec_domain_part(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let v = ctx.arguments;
     let part = match v[1].to_string().as_ref() {
         "sld" => DomainPart::Sld,

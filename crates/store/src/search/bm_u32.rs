@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     IterateParams, Store, U32_LEN, ValueKey,
     search::*,
     write::{
@@ -13,14 +13,14 @@ use crate::{
         key::{DeserializeBigEndian, KeySerializer},
     },
 };
+use crate::trc::AddContext;
+use crate::utils::cheeky_hash::CheekyHash;
 use ahash::AHashMap;
 use roaring::RoaringBitmap;
 use std::{
     collections::hash_map::Entry,
     ops::{BitAndAssign, BitOrAssign},
 };
-use trc::AddContext;
-use utils::cheeky_hash::CheekyHash;
 
 #[derive(Default)]
 pub(super) struct BitmapCache {
@@ -36,7 +36,7 @@ impl BitmapCache {
         hashes: impl Iterator<Item = CheekyHash>,
         field: u8,
         is_union: bool,
-    ) -> trc::Result<Option<RoaringBitmap>> {
+    ) -> crate::trc::Result<Option<RoaringBitmap>> {
         let mut result = RoaringBitmap::new();
         for (idx, hash) in hashes.enumerate() {
             match self.cache.entry((hash, field)) {
@@ -87,7 +87,7 @@ impl BitmapCache {
                             },
                         )
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     if !documents.is_empty() {
                         if is_union {
@@ -125,7 +125,7 @@ pub(crate) async fn range_to_bitmap(
     field_id: u8,
     match_value: &[u8],
     op: SearchOperator,
-) -> trc::Result<Option<RoaringBitmap>> {
+) -> crate::trc::Result<Option<RoaringBitmap>> {
     let ((from_value, from_doc_id, from_field), (end_value, end_doc_id, end_field)) = match op {
         SearchOperator::LowerThan => ((&[][..], 0, field_id), (match_value, 0, field_id)),
         SearchOperator::LowerEqualThan => {
@@ -190,9 +190,9 @@ pub(crate) async fn range_to_bitmap(
                 }
 
                 let id_pos = key.len() - U32_LEN;
-                let value = key
-                    .get(prefix_len..id_pos)
-                    .ok_or_else(|| trc::Error::corrupted_key(key, None, trc::location!()))?;
+                let value = key.get(prefix_len..id_pos).ok_or_else(|| {
+                    crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
+                })?;
 
                 let matches = match op {
                     SearchOperator::LowerThan => value < match_value,
@@ -210,7 +210,7 @@ pub(crate) async fn range_to_bitmap(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if !bm.is_empty() {
         Ok(Some(bm))
@@ -224,7 +224,7 @@ pub(crate) async fn sort_order(
     index: SearchIndex,
     account_id: u32,
     field_id: u8,
-) -> trc::Result<AHashMap<u32, u32>> {
+) -> crate::trc::Result<AHashMap<u32, u32>> {
     let begin = ValueKey::from(ValueClass::SearchIndex(SearchIndexClass {
         index,
         id: SearchIndexId::Account {
@@ -259,9 +259,9 @@ pub(crate) async fn sort_order(
         .iterate(
             IterateParams::new(begin, end).no_values().ascending(),
             |key, _| {
-                let value = key
-                    .get(U32_LEN + 2..key.len() - U32_LEN)
-                    .ok_or_else(|| trc::Error::corrupted_key(key, None, trc::location!()))?;
+                let value = key.get(U32_LEN + 2..key.len() - U32_LEN).ok_or_else(|| {
+                    crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
+                })?;
                 if value != last_value {
                     pos += 1;
                     last_value = value.to_vec();
@@ -272,7 +272,7 @@ pub(crate) async fn sort_order(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(results)
 }

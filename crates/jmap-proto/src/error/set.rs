@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::types::id::Id;
 use jmap_tools::{Key, Property};
 use std::borrow::Cow;
-use types::id::Id;
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(bound(serialize = "InvalidProperty<P>: serde::Serialize"))]

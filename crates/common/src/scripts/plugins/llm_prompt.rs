@@ -6,9 +6,9 @@
 
 use std::time::Instant;
 
-use directory::Permission;
+use crate::directory::Permission;
+use crate::trc::{AiEvent, SecurityEvent};
 use sieve::{FunctionMap, compiler::Number, runtime::Variable};
-use trc::{AiEvent, SecurityEvent};
 
 use super::PluginContext;
 
@@ -16,7 +16,7 @@ pub fn register(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("llm_prompt", plugin_id, 3);
 }
 
-pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     // SPDX-SnippetBegin
     // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
     // SPDX-License-Identifier: LicenseRef-SEL
@@ -39,7 +39,7 @@ pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
                 if token.has_permission(Permission::AiModelInteract) {
                     true
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Security(SecurityEvent::Unauthorized),
                         AccountId = token.primary_id(),
                         Details = Permission::AiModelInteract.name(),
@@ -60,7 +60,7 @@ pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
             let time = Instant::now();
             match ai_api.send_request(prompt.as_ref(), temperature).await {
                 Ok(response) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Ai(AiEvent::LlmResponse),
                         Id = ai_api.id.clone(),
                         Value = prompt.to_string(),
@@ -72,7 +72,7 @@ pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
                     return Ok(response.into());
                 }
                 Err(err) => {
-                    trc::error!(err.span_id(ctx.session_id));
+                    crate::trc::error!(err.span_id(ctx.session_id));
                 }
             }
         }

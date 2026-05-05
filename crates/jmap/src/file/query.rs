@@ -4,27 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken};
-use groupware::cache::GroupwareCache;
-use jmap_proto::{
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::cache::GroupwareCache;
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::file_node::{FileNode, FileNodeFilter},
     request::MaybeInvalid,
 };
-use store::{
+use crate::store::{
     roaring::RoaringBitmap,
     search::{SearchFilter, SearchQuery},
     write::SearchIndex,
 };
-use types::{acl::Acl, collection::SyncCollection};
+use crate::types::{acl::Acl, collection::SyncCollection};
 
 pub trait FileNodeQuery: Sync + Send {
     fn file_node_query(
         &self,
         request: QueryRequest<FileNode>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl FileNodeQuery for Server {
@@ -32,7 +32,7 @@ impl FileNodeQuery for Server {
         &self,
         mut request: QueryRequest<FileNode>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut filters = Vec::with_capacity(request.filter.len());
         let cache = self
@@ -116,7 +116,7 @@ impl FileNodeQuery for Server {
                         )));
                     }
                     unsupported => {
-                        return Err(trc::JmapEvent::UnsupportedFilter
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
                             .into_err()
                             .details(unsupported.into_string()));
                     }
@@ -137,7 +137,7 @@ impl FileNodeQuery for Server {
         }
 
         if request.sort.as_ref().is_some_and(|s| !s.is_empty()) {
-            return Err(trc::JmapEvent::UnsupportedSort
+            return Err(crate::trc::JmapEvent::UnsupportedSort
                 .into_err()
                 .details("Sorting is not supported on FileNode"));
         }

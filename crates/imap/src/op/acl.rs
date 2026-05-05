@@ -4,44 +4,44 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    core::{MailboxId, Session, SessionData, State},
-    op::ImapContext,
-    spawn_op,
-};
-use common::{
+use crate::common::{
     auth::AccessToken, listener::SessionStream, sharing::EffectiveAcl,
     storage::index::ObjectIndexBuilder,
 };
-use compact_str::ToCompactString;
-use directory::{
+use crate::directory::{
     Permission, QueryParams, Type,
     backend::internal::{
         PrincipalField,
         manage::{ChangedPrincipals, ManageDirectory},
     },
 };
-use imap_proto::{
+use crate::imap::{
+    core::{MailboxId, Session, SessionData, State},
+    op::ImapContext,
+    spawn_op,
+};
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::acl::{
         Arguments, GetAclResponse, ListRightsResponse, ModRightsOp, MyRightsResponse, Rights,
     },
     receiver::Request,
 };
-use std::{sync::Arc, time::Instant};
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     collection::Collection,
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use compact_str::ToCompactString;
+use std::{sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_get_acl(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_get_acl(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapAclGet)?;
 
@@ -54,11 +54,11 @@ impl<T: SessionStream> Session<T> {
             let (mailbox_id, mailbox_, _) = data
                 .get_acl_mailbox(&arguments, true)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             let mut permissions = Vec::new();
             let mailbox = mailbox_
-                .to_unarchived::<email::mailbox::Mailbox>()
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .to_unarchived::<crate::email::mailbox::Mailbox>()
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             // Add the current user if they are the owner or a group member
             if data.access_token.is_member(mailbox_id.account_id) {
@@ -91,7 +91,7 @@ impl<T: SessionStream> Session<T> {
                     .store()
                     .get_principal_name(item.account_id.into())
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
                 {
                     let mut rights = Vec::new();
 
@@ -137,8 +137,8 @@ impl<T: SessionStream> Session<T> {
                 }
             }
 
-            trc::event!(
-                Imap(trc::ImapEvent::GetAcl),
+            crate::trc::event!(
+                Imap(crate::trc::ImapEvent::GetAcl),
                 SpanId = data.session_id,
                 MailboxName = arguments.mailbox_name.clone(),
                 AccountId = mailbox_id.account_id,
@@ -162,7 +162,7 @@ impl<T: SessionStream> Session<T> {
         })
     }
 
-    pub async fn handle_my_rights(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_my_rights(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapMyRights)?;
 
@@ -175,10 +175,10 @@ impl<T: SessionStream> Session<T> {
             let (mailbox_id, mailbox_, access_token) = data
                 .get_acl_mailbox(&arguments, false)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             let mailbox = mailbox_
-                .to_unarchived::<email::mailbox::Mailbox>()
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .to_unarchived::<crate::email::mailbox::Mailbox>()
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             let rights = if access_token.is_shared(mailbox_id.account_id) {
                 let acl = mailbox.inner.acls.effective_acl(&access_token);
                 let mut rights = Vec::with_capacity(5);
@@ -223,15 +223,15 @@ impl<T: SessionStream> Session<T> {
                 ]
             };
 
-            trc::event!(
-                Imap(trc::ImapEvent::MyRights),
+            crate::trc::event!(
+                Imap(crate::trc::ImapEvent::MyRights),
                 SpanId = data.session_id,
                 MailboxName = arguments.mailbox_name.clone(),
                 AccountId = mailbox_id.account_id,
                 MailboxId = mailbox_id.mailbox_id,
                 Details = rights
                     .iter()
-                    .map(|r| trc::Value::String(r.to_compact_string()))
+                    .map(|r| crate::trc::Value::String(r.to_compact_string()))
                     .collect::<Vec<_>>(),
                 Elapsed = op_start.elapsed()
             );
@@ -251,7 +251,7 @@ impl<T: SessionStream> Session<T> {
         })
     }
 
-    pub async fn handle_set_acl(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_set_acl(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapAclSet)?;
 
@@ -265,10 +265,10 @@ impl<T: SessionStream> Session<T> {
             let (mailbox_id, current_mailbox, _) = data
                 .get_acl_mailbox(&arguments, false)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             let current_mailbox = current_mailbox
-                .into_deserialized::<email::mailbox::Mailbox>()
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .into_deserialized::<crate::email::mailbox::Mailbox>()
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             // Obtain principal id
             let acl_account_id = data
@@ -281,13 +281,13 @@ impl<T: SessionStream> Session<T> {
                         .with_return_member_of(false),
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
                 .ok_or_else(|| {
-                    trc::ImapEvent::Error
+                    crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Account does not exist")
                         .id(arguments.tag.to_string())
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?
                 .id();
 
@@ -345,16 +345,16 @@ impl<T: SessionStream> Session<T> {
             }
 
             if mailbox.acls.len() > data.server.core.groupware.max_shares_per_item {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Maximum shares per item exceeded")
-                    .caused_by(trc::location!()));
+                    .caused_by(crate::trc::location!()));
             }
 
             let grants = mailbox
                 .acls
                 .iter()
-                .map(|r| trc::Value::from(r.account_id))
+                .map(|r| crate::trc::Value::from(r.account_id))
                 .collect::<Vec<_>>();
 
             // Write changes
@@ -368,13 +368,13 @@ impl<T: SessionStream> Session<T> {
                         .with_changes(mailbox)
                         .with_current(current_mailbox),
                 )
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             if !batch.is_empty() {
                 data.server
                     .commit_batch(batch)
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
             }
 
             // Invalidate ACLs
@@ -386,8 +386,8 @@ impl<T: SessionStream> Session<T> {
                 ))
                 .await;
 
-            trc::event!(
-                Imap(trc::ImapEvent::SetAcl),
+            crate::trc::event!(
+                Imap(crate::trc::ImapEvent::SetAcl),
                 SpanId = data.session_id,
                 MailboxName = arguments.mailbox_name.clone(),
                 AccountId = mailbox_id.account_id,
@@ -405,15 +405,18 @@ impl<T: SessionStream> Session<T> {
         })
     }
 
-    pub async fn handle_list_rights(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_list_rights(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapListRights)?;
 
         let op_start = Instant::now();
         let arguments = request.parse_acl(self.is_utf8)?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::ListRights),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::ListRights),
             SpanId = self.session_id,
             MailboxName = arguments.mailbox_name.clone(),
             Elapsed = op_start.elapsed()
@@ -444,7 +447,7 @@ impl<T: SessionStream> Session<T> {
         .await
     }
 
-    pub fn assert_has_permission(&self, permission: Permission) -> trc::Result<bool> {
+    pub fn assert_has_permission(&self, permission: Permission) -> crate::trc::Result<bool> {
         match &self.state {
             State::Authenticated { data } | State::Selected { data, .. } => {
                 data.access_token.assert_has_permission(permission)
@@ -459,7 +462,7 @@ impl<T: SessionStream> SessionData<T> {
         &self,
         arguments: &Arguments,
         validate: bool,
-    ) -> trc::Result<(MailboxId, Archive<AlignedBytes>, Arc<AccessToken>)> {
+    ) -> crate::trc::Result<(MailboxId, Archive<AlignedBytes>, Arc<AccessToken>)> {
         if let Some(mailbox) = self.get_mailbox_by_name(&arguments.mailbox_name) {
             if let Some(values) = self
                 .server
@@ -470,32 +473,35 @@ impl<T: SessionStream> SessionData<T> {
                     mailbox.mailbox_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
-                let access_token = self.get_access_token().await.caused_by(trc::location!())?;
+                let access_token = self
+                    .get_access_token()
+                    .await
+                    .caused_by(crate::trc::location!())?;
                 if !validate
                     || access_token.is_member(mailbox.account_id)
                     || values
-                        .unarchive::<email::mailbox::Mailbox>()
-                        .caused_by(trc::location!())?
+                        .unarchive::<crate::email::mailbox::Mailbox>()
+                        .caused_by(crate::trc::location!())?
                         .acls
                         .effective_acl(&access_token)
                         .contains(Acl::Share)
                 {
                     Ok((mailbox, values, access_token))
                 } else {
-                    Err(trc::ImapEvent::Error
+                    Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("You do not have enough permissions to perform this operation.")
                         .code(ResponseCode::NoPerm))
                 }
             } else {
-                Err(trc::ImapEvent::Error
-                    .caused_by(trc::location!())
+                Err(crate::trc::ImapEvent::Error
+                    .caused_by(crate::trc::location!())
                     .details("Mailbox does not exist."))
             }
         } else {
-            Err(trc::ImapEvent::Error
+            Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("Mailbox does not exist."))
         }

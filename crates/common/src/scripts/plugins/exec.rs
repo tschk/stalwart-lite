@@ -14,7 +14,7 @@ pub fn register(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("exec", plugin_id, 2);
 }
 
-pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let mut arguments = ctx.arguments.into_iter();
 
     tokio::task::spawn_blocking(move || {
@@ -33,17 +33,17 @@ pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
             .output()
         {
             Ok(result) => Ok(result.status.success()),
-            Err(err) => Err(trc::SieveEvent::RuntimeError
-                .ctx(trc::Key::Path, command)
+            Err(err) => Err(crate::trc::SieveEvent::RuntimeError
+                .ctx(crate::trc::Key::Path, command)
                 .reason(err)
                 .details("Failed to execute command")),
         }
     })
     .await
     .map_err(|err| {
-        trc::EventType::Server(trc::ServerEvent::ThreadError)
+        crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
             .reason(err)
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .details("Join Error")
     })?
     .map(Into::into)

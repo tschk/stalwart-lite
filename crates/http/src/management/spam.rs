@@ -4,19 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Server,
     auth::AccessToken,
     config::spamfilter::SpamFilterAction,
     manager::{SPAM_CLASSIFIER_KEY, SPAM_TRAINER_KEY},
     psl,
 };
-use directory::{
+use crate::directory::{
     Permission,
     backend::internal::manage::{self, ManageDirectory},
 };
-use email::message::ingest::EmailIngest;
-use http_proto::{request::decode_path_element, *};
+use crate::email::message::ingest::EmailIngest;
+use crate::http_proto::{request::decode_path_element, *};
+use crate::spam_filter::{
+    SpamFilterInput,
+    analysis::{init::SpamFilterInit, score::SpamFilterAnalyzeScore},
+    modules::classifier::SpamClassifier,
+};
+use crate::store::{ahash::AHashMap, write::BatchBuilder};
 use hyper::Method;
 use mail_auth::{
     AuthenticatedMessage, DmarcResult, dmarc::verify::DmarcParameters, spf::verify::SpfParameters,
@@ -24,14 +30,8 @@ use mail_auth::{
 use mail_parser::MessageParser;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use spam_filter::{
-    SpamFilterInput,
-    analysis::{init::SpamFilterInit, score::SpamFilterAnalyzeScore},
-    modules::classifier::SpamClassifier,
-};
 use std::future::Future;
 use std::net::IpAddr;
-use store::{ahash::AHashMap, write::BatchBuilder};
 
 pub trait ManageSpamHandler: Sync + Send {
     fn handle_manage_spam(
@@ -41,7 +41,7 @@ pub trait ManageSpamHandler: Sync + Send {
         body: Option<Vec<u8>>,
         session: &HttpSessionData,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -91,7 +91,7 @@ impl ManageSpamHandler for Server {
         body: Option<Vec<u8>>,
         session: &HttpSessionData,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (path.get(1).copied(), path.get(2).copied(), req.method()) {
             (Some("upload"), Some(class @ ("ham" | "spam")), &Method::POST) => {
                 // Validate the access token
@@ -155,7 +155,7 @@ impl ManageSpamHandler for Server {
                             let server = self.clone();
                             tokio::spawn(async move {
                                 if let Err(err) = server.spam_train(reset).await {
-                                    trc::error!(err.caused_by(trc::location!()));
+                                    crate::trc::error!(err.caused_by(crate::trc::location!()));
                                 }
                             });
 
@@ -180,7 +180,7 @@ impl ManageSpamHandler for Server {
                     }
                     Some("status") => self.inner.ipc.train_task_controller.is_running(),
                     _ => {
-                        return Err(trc::ResourceEvent::NotFound.into_err());
+                        return Err(crate::trc::ResourceEvent::NotFound.into_err());
                     }
                 };
 
@@ -198,7 +198,8 @@ impl ManageSpamHandler for Server {
                     body.as_deref().unwrap_or_default(),
                 )
                 .map_err(|err| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                        .from_json_error(err)
                 })?;
 
                 // Built spam filter input
@@ -366,7 +367,7 @@ impl ManageSpamHandler for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }

@@ -4,20 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::message::metadata::{ArchivedMessageData, MessageData};
-use common::{
+use crate::common::{
     MessageCache, MessageStoreCache, MessageUidCache, MessagesCache, Server, auth::AccessToken,
     sharing::EffectiveAcl,
 };
-use store::write::{AlignedBytes, Archive};
-use store::{ValueKey, ahash::AHashMap, roaring::RoaringBitmap};
-use trc::AddContext;
-use types::{
+use crate::email::message::metadata::{ArchivedMessageData, MessageData};
+use crate::store::write::{AlignedBytes, Archive};
+use crate::store::{ValueKey, ahash::AHashMap, roaring::RoaringBitmap};
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::Collection,
     keyword::{Keyword, OTHER},
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
 
 struct MessagesCacheBuilder {
     pub change_id: u64,
@@ -32,7 +32,7 @@ pub(crate) async fn update_email_cache(
     account_id: u32,
     changed_ids: &AHashMap<u32, bool>,
     store_cache: &MessageStoreCache,
-) -> trc::Result<MessagesCache> {
+) -> crate::trc::Result<MessagesCache> {
     let mut new_cache = MessagesCacheBuilder {
         index: AHashMap::with_capacity(store_cache.emails.items.len()),
         items: Vec::with_capacity(store_cache.emails.items.len()),
@@ -51,7 +51,7 @@ pub(crate) async fn update_email_cache(
                     *document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             insert_item(
                 &mut new_cache,
@@ -73,7 +73,7 @@ pub(crate) async fn update_email_cache(
 pub(crate) async fn full_email_cache_build(
     server: &Server,
     account_id: u32,
-) -> trc::Result<MessagesCache> {
+) -> crate::trc::Result<MessagesCache> {
     // Build cache
     let mut cache = MessagesCacheBuilder {
         items: Vec::with_capacity(16),
@@ -98,7 +98,7 @@ pub(crate) async fn full_email_cache_build(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(cache.build())
 }

@@ -5,7 +5,7 @@
  */
 
 use super::{AuthBind, LdapDirectory, LdapMappings};
-use crate::{
+use crate::directory::{
     IntoError, Principal, PrincipalData, QueryBy, QueryParams, ROLE_ADMIN, ROLE_USER, Type,
     backend::{
         RcptType,
@@ -16,13 +16,13 @@ use crate::{
         },
     },
 };
+use crate::store::xxhash_rust;
+use crate::trc::AddContext;
 use ldap3::{Ldap, LdapConnAsync, ResultEntry, Scope, SearchEntry};
 use mail_send::Credentials;
-use store::xxhash_rust;
-use trc::AddContext;
 
 impl LdapDirectory {
-    pub async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         let mut conn = self.pool.get().await.map_err(|err| err.into_error())?;
         let (mut external_principal, member_of, stored_principal) = match by.by {
             QueryBy::Name(username) => {
@@ -33,8 +33,8 @@ impl LdapDirectory {
                     }
                     (result.principal, result.member_of, None)
                 } else {
-                    trc::event!(
-                        Store(trc::StoreEvent::LdapWarning),
+                    crate::trc::event!(
+                        Store(crate::trc::StoreEvent::LdapWarning),
                         Reason = "Name filter yielded no results",
                         Details = filter
                     );
@@ -79,7 +79,7 @@ impl LdapDirectory {
                             &self.pool.manager().address,
                         )
                         .await
-                        .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+                        .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
 
                         ldap3::drive!(auth_bind_conn);
 
@@ -88,12 +88,12 @@ impl LdapDirectory {
                         if ldap
                             .simple_bind(&dn, secret)
                             .await
-                            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+                            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
                             .success()
                             .is_err()
                         {
-                            trc::event!(
-                                Store(trc::StoreEvent::LdapWarning),
+                            crate::trc::event!(
+                                Store(crate::trc::StoreEvent::LdapWarning),
                                 Reason = "Secret rejected during auth bind using template",
                                 Details = dn
                             );
@@ -115,23 +115,23 @@ impl LdapDirectory {
                                 (result.principal, result.member_of, None)
                             }
                             Err(err)
-                                if err
-                                    .matches(trc::EventType::Store(trc::StoreEvent::LdapError))
-                                    && err
-                                        .value(trc::Key::Code)
-                                        .and_then(|v| v.to_uint())
-                                        .is_some_and(|rc| [49, 50].contains(&rc)) =>
+                                if err.matches(crate::trc::EventType::Store(
+                                    crate::trc::StoreEvent::LdapError,
+                                )) && err
+                                    .value(crate::trc::Key::Code)
+                                    .and_then(|v| v.to_uint())
+                                    .is_some_and(|rc| [49, 50].contains(&rc)) =>
                             {
-                                trc::event!(
-                                    Store(trc::StoreEvent::LdapWarning),
+                                crate::trc::event!(
+                                    Store(crate::trc::StoreEvent::LdapWarning),
                                     Reason = "Error codes 49 or 50 returned by LDAP server",
                                     Details = vec![dn, filter]
                                 );
                                 return Ok(None);
                             }
                             Ok(None) => {
-                                trc::event!(
-                                    Store(trc::StoreEvent::LdapWarning),
+                                crate::trc::event!(
+                                    Store(crate::trc::StoreEvent::LdapWarning),
                                     Reason = "Auth bind successful but filter yielded no results",
                                     Details = vec![dn, filter]
                                 );
@@ -150,14 +150,14 @@ impl LdapDirectory {
                                 &self.pool.manager().address,
                             )
                             .await
-                            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+                            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
 
                             ldap3::drive!(auth_bind_conn);
 
                             if ldap
                                 .simple_bind(&result.dn, secret)
                                 .await
-                                .map_err(|err| err.into_error().caused_by(trc::location!()))?
+                                .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
                                 .success()
                                 .is_ok()
                             {
@@ -166,16 +166,16 @@ impl LdapDirectory {
                                 }
                                 (result.principal, result.member_of, None)
                             } else {
-                                trc::event!(
-                                    Store(trc::StoreEvent::LdapWarning),
+                                crate::trc::event!(
+                                    Store(crate::trc::StoreEvent::LdapWarning),
                                     Reason = "Secret rejected during auth bind using lookup filter",
                                     Details = vec![result.dn, filter]
                                 );
                                 return Ok(None);
                             }
                         } else {
-                            trc::event!(
-                                Store(trc::StoreEvent::LdapWarning),
+                            crate::trc::event!(
+                                Store(crate::trc::StoreEvent::LdapWarning),
                                 Reason = "Auth bind lookup filter yielded no results",
                                 Details = filter
                             );
@@ -191,16 +191,16 @@ impl LdapDirectory {
                                 }
                                 (result.principal, result.member_of, None)
                             } else {
-                                trc::event!(
-                                    Store(trc::StoreEvent::LdapWarning),
+                                crate::trc::event!(
+                                    Store(crate::trc::StoreEvent::LdapWarning),
                                     Reason = "Password verification failed",
                                     Details = vec![result.dn, filter]
                                 );
                                 return Ok(None);
                             }
                         } else {
-                            trc::event!(
-                                Store(trc::StoreEvent::LdapWarning),
+                            crate::trc::event!(
+                                Store(crate::trc::StoreEvent::LdapWarning),
                                 Reason = "Authentication filter yielded no results",
                                 Details = filter
                             );
@@ -223,9 +223,9 @@ impl LdapDirectory {
                             &self.mappings.attr_name,
                         )
                         .await
-                        .map_err(|err| err.into_error().caused_by(trc::location!()))?
+                        .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
                         .success()
-                        .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+                        .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
                     for entry in rs {
                         'outer: for (attr, value) in SearchEntry::construct(entry).attrs {
                             if self.mappings.attr_name.contains(&attr.to_lowercase())
@@ -243,7 +243,7 @@ impl LdapDirectory {
                     .data_store
                     .get_or_create_principal_id(&name, Type::Group)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 external_principal
                     .data
@@ -259,13 +259,13 @@ impl LdapDirectory {
                 .data_store
                 .get_or_create_principal_id(external_principal.name(), Type::Individual)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             self.data_store
                 .query(QueryParams::id(id).with_return_member_of(by.return_member_of))
                 .await
-                .caused_by(trc::location!())?
-                .ok_or_else(|| manage::not_found(id).caused_by(trc::location!()))?
+                .caused_by(crate::trc::location!())?
+                .ok_or_else(|| manage::not_found(id).caused_by(crate::trc::location!()))?
         };
 
         // Keep the internal store up to date with the LDAP server
@@ -278,19 +278,19 @@ impl LdapDirectory {
                         .create_domains(),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(Some(principal))
     }
 
-    pub async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    pub async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         let filter = self.mappings.filter_email.build(address.as_ref());
         let rs = self
             .pool
             .get()
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .search(
                 &self.mappings.base_dn,
                 Scope::Subtree,
@@ -298,13 +298,13 @@ impl LdapDirectory {
                 &self.mappings.attr_name,
             )
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .success()
             .map(|(rs, _res)| rs)
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
 
-        trc::event!(
-            Store(trc::StoreEvent::LdapQuery),
+        crate::trc::event!(
+            Store(crate::trc::StoreEvent::LdapQuery),
             Details = filter,
             Result = rs.iter().map(result_to_trace).collect::<Vec<_>>()
         );
@@ -326,13 +326,13 @@ impl LdapDirectory {
         Ok(None)
     }
 
-    pub async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         let filter = self.mappings.filter_email.build(address.as_ref());
         let result = self
             .pool
             .get()
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .streaming_search(
                 &self.mappings.base_dn,
                 Scope::Subtree,
@@ -340,7 +340,7 @@ impl LdapDirectory {
                 &self.mappings.attr_email_address,
             )
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .next()
             .await
             .map(|entry| {
@@ -350,15 +350,15 @@ impl LdapDirectory {
                     RcptType::Invalid
                 };
 
-                trc::event!(
-                    Store(trc::StoreEvent::LdapQuery),
+                crate::trc::event!(
+                    Store(crate::trc::StoreEvent::LdapQuery),
                     Details = filter,
                     Result = entry.as_ref().map(result_to_trace).unwrap_or_default()
                 );
 
                 result
             })
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
 
         if result != RcptType::Invalid {
             Ok(result)
@@ -373,15 +373,15 @@ impl LdapDirectory {
         }
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.vrfy(address).await
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.expn(address).await
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         self.data_store.is_local_domain(domain).await
     }
 }
@@ -391,7 +391,7 @@ impl LdapDirectory {
         &self,
         conn: &mut Ldap,
         filter: &str,
-    ) -> trc::Result<Option<LdapResult>> {
+    ) -> crate::trc::Result<Option<LdapResult>> {
         conn.search(
             &self.mappings.base_dn,
             Scope::Subtree,
@@ -399,11 +399,11 @@ impl LdapDirectory {
             &self.mappings.attrs_principal,
         )
         .await
-        .map_err(|err| err.into_error().caused_by(trc::location!()))?
+        .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
         .success()
         .map(|(rs, _)| {
-            trc::event!(
-                Store(trc::StoreEvent::LdapQuery),
+            crate::trc::event!(
+                Store(crate::trc::StoreEvent::LdapQuery),
                 Details = filter.to_string(),
                 Result = rs.first().map(result_to_trace).unwrap_or_default()
             );
@@ -413,7 +413,7 @@ impl LdapDirectory {
                     .entry_to_principal(SearchEntry::construct(entry))
             })
         })
-        .map_err(|err| err.into_error().caused_by(trc::location!()))
+        .map_err(|err| err.into_error().caused_by(crate::trc::location!()))
     }
 }
 
@@ -546,12 +546,17 @@ impl LdapMappings {
     }
 }
 
-fn result_to_trace(rs: &ResultEntry) -> trc::Value {
+fn result_to_trace(rs: &ResultEntry) -> crate::trc::Value {
     let se = SearchEntry::construct(rs.clone());
     se.attrs
         .into_iter()
-        .map(|(k, v)| trc::Value::Array(vec![trc::Value::from(k), trc::Value::from(v.join(", "))]))
-        .chain([trc::Value::from(se.dn)])
+        .map(|(k, v)| {
+            crate::trc::Value::Array(vec![
+                crate::trc::Value::from(k),
+                crate::trc::Value::from(v.join(", ")),
+            ])
+        })
+        .chain([crate::trc::Value::from(se.dn)])
         .collect::<Vec<_>>()
         .into()
 }

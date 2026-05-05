@@ -5,15 +5,10 @@
  */
 
 use super::headers::{BuildHeader, ValueToHeader};
-use crate::{
-    blob::download::BlobDownload,
-    changes::state::JmapCacheState,
-    email::{PatchResult, handle_email_patch, ingested_into_object},
-};
-use common::{
+use crate::common::{
     Server, auth::AccessToken, ipc::PushNotification, storage::index::ObjectIndexBuilder,
 };
-use email::{
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess},
     mailbox::{JUNK_ID, TRASH_ID, UidMailbox},
     message::{
@@ -22,14 +17,33 @@ use email::{
         metadata::MessageData,
     },
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap::{
+    blob::download::BlobDownload,
+    changes::state::JmapCacheState,
+    email::{PatchResult, handle_email_patch, ingested_into_object},
+};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::email::{Email, EmailProperty, EmailValue},
     references::resolve::ResolveCreatedReference,
     request::IntoValid,
     types::state::State,
+};
+use crate::store::{
+    ValueKey,
+    ahash::AHashMap,
+    roaring::RoaringBitmap,
+    write::{AlignedBytes, Archive, BatchBuilder},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    acl::Acl,
+    collection::{Collection, SyncCollection, VanishedCollection},
+    id::Id,
+    keyword::{ArchivedKeyword, Keyword},
+    type_state::{DataType, StateChange},
 };
 use jmap_tools::{Key, Value};
 use mail_builder::{
@@ -43,20 +57,6 @@ use mail_builder::{
 use mail_parser::MessageParser;
 use std::future::Future;
 use std::{borrow::Cow, collections::HashMap};
-use store::{
-    ValueKey,
-    ahash::AHashMap,
-    roaring::RoaringBitmap,
-    write::{AlignedBytes, Archive, BatchBuilder},
-};
-use trc::AddContext;
-use types::{
-    acl::Acl,
-    collection::{Collection, SyncCollection, VanishedCollection},
-    id::Id,
-    keyword::{ArchivedKeyword, Keyword},
-    type_state::{DataType, StateChange},
-};
 
 pub trait EmailSet: Sync + Send {
     fn email_set(
@@ -64,7 +64,7 @@ pub trait EmailSet: Sync + Send {
         request: SetRequest<'_, Email>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<Email>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<Email>>> + Send;
 }
 
 impl EmailSet for Server {
@@ -73,7 +73,7 @@ impl EmailSet for Server {
         mut request: SetRequest<'_, Email>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<Email>> {
+    ) -> crate::trc::Result<SetResponse<Email>> {
         // Prepare response
         let account_id = request.account_id.document_id();
         let cache = self.get_cached_messages(account_id).await?;
@@ -107,7 +107,7 @@ impl EmailSet for Server {
             {
                 self.get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .into()
             }
         } else {
@@ -775,7 +775,9 @@ impl EmailSet for Server {
                         .created
                         .insert(id, ingested_into_object(message).into());
                 }
-                Err(err) if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) => {
+                Err(err)
+                    if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota)) =>
+                {
                     response.not_created.append(
                         id,
                         SetError::new(SetErrorType::OverQuota)
@@ -816,7 +818,7 @@ impl EmailSet for Server {
             };
             let data = data_
                 .to_unarchived::<MessageData>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_data = data.inner.to_builder();
 
             for (property, mut value) in object.into_expanded_object() {
@@ -1030,7 +1032,7 @@ impl EmailSet for Server {
                         false,
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 for (uid_mailbox, uid) in new_data
                     .mailboxes
                     .iter_mut()
@@ -1051,7 +1053,7 @@ impl EmailSet for Server {
                         .with_current(data)
                         .with_changes(new_data.seal()),
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if let Some(train_spam) = train_spam {
                 self.add_account_spam_sample(
@@ -1062,7 +1064,7 @@ impl EmailSet for Server {
                     session.session_id,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             }
 
             batch.commit_point();
@@ -1102,7 +1104,7 @@ impl EmailSet for Server {
                     }
                 }
                 Err(err) => {
-                    return Err(err.caused_by(trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -1154,7 +1156,7 @@ impl EmailSet for Server {
                         .commit_batch(batch)
                         .await
                         .and_then(|ids| ids.last_change_id(account_id))
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .into();
                     self.notify_task_queue();
                 }

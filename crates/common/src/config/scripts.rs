@@ -6,12 +6,12 @@
 
 use std::{sync::Arc, time::Duration};
 
+use crate::store::Stores;
+use crate::utils::config::Config;
 use ahash::AHashMap;
 use sieve::{Compiler, Runtime, Sieve, compiler::grammar::Capability};
-use store::Stores;
-use utils::config::Config;
 
-use crate::{
+use crate::common::{
     VERSION_PUBLIC,
     scripts::{
         functions::{register_functions_trusted, register_functions_untrusted},

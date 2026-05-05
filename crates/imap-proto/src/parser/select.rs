@@ -6,7 +6,7 @@
 
 use compact_str::{CompactString, ToCompactString, format_compact};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::select::{self, QResync},
     receiver::{Request, Token, bad},
@@ -16,7 +16,7 @@ use crate::{
 use super::{parse_number, parse_sequence_set};
 
 impl Request<Command> {
-    pub fn parse_select(self, is_utf8: bool) -> trc::Result<select::Arguments> {
+    pub fn parse_select(self, is_utf8: bool) -> crate::trc::Result<select::Arguments> {
         if !self.tokens.is_empty() {
             let mut tokens = self.tokens.into_iter().peekable();
 
@@ -189,7 +189,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Sequence,
             select::{self, QResync},

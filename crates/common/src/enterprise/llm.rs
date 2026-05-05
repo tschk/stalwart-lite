@@ -8,10 +8,10 @@
  *
  */
 
+use crate::utils::config::{Config, http::parse_http_headers};
 use hyper::{HeaderMap, header::CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use utils::config::{Config, http::parse_http_headers};
 
 #[derive(Clone, Debug)]
 pub struct AiApiConfig {
@@ -88,9 +88,9 @@ impl AiApiConfig {
         &self,
         prompt: impl Into<String>,
         temperature: Option<f64>,
-    ) -> trc::Result<String> {
+    ) -> crate::trc::Result<String> {
         self.post_api(prompt, temperature).await.map_err(|err| {
-            trc::Error::new(trc::EventType::Ai(trc::AiEvent::ApiError))
+            crate::trc::Error::new(crate::trc::EventType::Ai(crate::trc::AiEvent::ApiError))
                 .id(self.id.clone())
                 .details("OpenAPI request failed")
                 .reason(err)

@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_IMAP,
     listener::{SessionResult, SessionStream},
 };
+use crate::trc::{AddContext, SecurityEvent};
 use mail_send::Credentials;
-use trc::{AddContext, SecurityEvent};
 
-use crate::{
+use crate::pop3::{
     Session, State,
     protocol::{Command, Mechanism, request::Error},
 };
 
 impl<T: SessionStream> Session<T> {
     pub async fn ingest(&mut self, bytes: &[u8]) -> SessionResult {
-        trc::event!(
-            Pop3(trc::Pop3Event::RawInput),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::RawInput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         let mut bytes = bytes.iter();
@@ -56,7 +56,7 @@ impl<T: SessionStream> Session<T> {
                     if matches!(&self.state, State::NotAuthenticated { .. },) {
                         match self.server.is_scanner_fail2banned(self.remote_addr).await {
                             Ok(true) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Security(SecurityEvent::ScanBan),
                                     SpanId = self.session_id,
                                     RemoteIp = self.remote_addr,
@@ -67,14 +67,14 @@ impl<T: SessionStream> Session<T> {
                             }
                             Ok(false) => {}
                             Err(err) => {
-                                trc::error!(
+                                crate::trc::error!(
                                     err.span_id(self.session_id)
                                         .details("Failed to check for fail2ban")
                                 );
                             }
                         }
                     }
-                    requests.push(Err(trc::Pop3Event::Error.into_err().details(err)));
+                    requests.push(Err(crate::trc::Pop3Event::Error.into_err().details(err)));
                 }
             }
         }
@@ -133,10 +133,10 @@ impl<T: SessionStream> Session<T> {
                             self.handle_uidl(msg).await.map(|_| SessionResult::Continue)
                         }
                         Command::Noop => {
-                            trc::event!(
-                                Pop3(trc::Pop3Event::Noop),
+                            crate::trc::event!(
+                                Pop3(crate::trc::Pop3Event::Noop),
                                 SpanId = self.session_id,
-                                Elapsed = trc::Value::Duration(0)
+                                Elapsed = crate::trc::Value::Duration(0)
                             );
 
                             self.write_ok("NOOP").await.map(|_| SessionResult::Continue)
@@ -151,7 +151,7 @@ impl<T: SessionStream> Session<T> {
                             .handle_sasl(mechanism, params)
                             .await
                             .map(|_| SessionResult::Continue),
-                        Command::Apop { .. } => Err(trc::Pop3Event::Error
+                        Command::Apop { .. } => Err(crate::trc::Pop3Event::Error
                             .into_err()
                             .details("APOP not supported.")),
                     },
@@ -177,7 +177,7 @@ impl<T: SessionStream> Session<T> {
     async fn validate_request(
         &self,
         command: Command<String, Mechanism>,
-    ) -> trc::Result<Command<String, Mechanism>> {
+    ) -> crate::trc::Result<Command<String, Mechanism>> {
         match &command {
             Command::Capa | Command::Quit | Command::Noop => Ok(command),
             Command::Auth {
@@ -192,17 +192,17 @@ impl<T: SessionStream> Session<T> {
                         if !matches!(command, Command::Pass { .. }) || username.is_some() {
                             Ok(command)
                         } else {
-                            Err(trc::Pop3Event::Error
+                            Err(crate::trc::Pop3Event::Error
                                 .into_err()
                                 .details("Username was not provided."))
                         }
                     } else {
-                        Err(trc::Pop3Event::Error
+                        Err(crate::trc::Pop3Event::Error
                             .into_err()
                             .details("Cannot authenticate over plain-text."))
                     }
                 } else {
-                    Err(trc::Pop3Event::Error
+                    Err(crate::trc::Pop3Event::Error
                         .into_err()
                         .details("Already authenticated."))
                 }
@@ -211,7 +211,7 @@ impl<T: SessionStream> Session<T> {
                 if let State::NotAuthenticated { .. } = &self.state {
                     Ok(command)
                 } else {
-                    Err(trc::Pop3Event::Error
+                    Err(crate::trc::Pop3Event::Error
                         .into_err()
                         .details("Already authenticated."))
                 }
@@ -220,7 +220,7 @@ impl<T: SessionStream> Session<T> {
                 if !self.stream.is_tls() {
                     Ok(command)
                 } else {
-                    Err(trc::Pop3Event::Error
+                    Err(crate::trc::Pop3Event::Error
                         .into_err()
                         .details("Already in TLS mode."))
                 }
@@ -249,18 +249,18 @@ impl<T: SessionStream> Session<T> {
                                 true,
                             )
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .is_none()
                         {
                             Ok(command)
                         } else {
-                            Err(trc::LimitEvent::TooManyRequests.into_err())
+                            Err(crate::trc::LimitEvent::TooManyRequests.into_err())
                         }
                     } else {
                         Ok(command)
                     }
                 } else {
-                    Err(trc::Pop3Event::Error
+                    Err(crate::trc::Pop3Event::Error
                         .into_err()
                         .details("Not authenticated."))
                 }

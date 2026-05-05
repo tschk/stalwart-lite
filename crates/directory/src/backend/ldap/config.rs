@@ -6,11 +6,11 @@
 
 use std::time::Duration;
 
+use crate::store::Store;
+use crate::utils::config::{Config, utils::AsKey};
 use ldap3::LdapConnSettings;
-use store::Store;
-use utils::config::{Config, utils::AsKey};
 
-use crate::core::config::build_pool;
+use crate::directory::core::config::build_pool;
 
 use super::{
     AuthBind, Bind, LdapConnectionManager, LdapDirectory, LdapFilter, LdapFilterItem, LdapMappings,

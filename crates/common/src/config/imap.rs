@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use utils::config::{Config, Rate};
+use crate::utils::config::{Config, Rate};
 
 #[derive(Default, Clone)]
 pub struct ImapConfig {

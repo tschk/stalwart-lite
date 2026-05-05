@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::acl::{JmapAcl, JmapRights};
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{
+use crate::jmap::api::acl::{JmapAcl, JmapRights};
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     contact::{AddressBook, AddressBookPreferences, ContactCard},
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::addressbook::{self, AddressBookProperty, AddressBookValue},
@@ -21,13 +21,13 @@ use jmap_proto::{
 };
 use jmap_tools::{JsonPointerItem, Key, Value};
 use rand::{Rng, distr::Alphanumeric};
-use store::{
+use crate::store::{
     SerializeInfallible, ValueKey,
     ahash::AHashSet,
     write::{AlignedBytes, Archive, BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     field::PrincipalField,
@@ -39,7 +39,7 @@ pub trait AddressBookSet: Sync + Send {
         request: SetRequest<'_, addressbook::AddressBook>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<addressbook::AddressBook>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<addressbook::AddressBook>>> + Send;
 }
 
 impl AddressBookSet for Server {
@@ -48,7 +48,7 @@ impl AddressBookSet for Server {
         mut request: SetRequest<'_, addressbook::AddressBook>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<addressbook::AddressBook>> {
+    ) -> crate::trc::Result<SetResponse<addressbook::AddressBook>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
@@ -105,10 +105,10 @@ impl AddressBookSet for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::AddressBook, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             address_book
                 .insert(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if let Some(MaybeIdReference::Reference(id_ref)) =
                 &request.arguments.on_success_set_is_default
@@ -146,10 +146,10 @@ impl AddressBookSet for Server {
             };
             let address_book = address_book_
                 .to_unarchived::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_address_book = address_book
                 .deserialize::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Apply changes
             let has_acl_changes =
@@ -194,7 +194,7 @@ impl AddressBookSet for Server {
                     document_id,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.updated.append(id, None);
         }
 
@@ -212,7 +212,7 @@ impl AddressBookSet for Server {
                     class: ValueClass::Property(PrincipalField::DefaultAddressBookId.into()),
                 })
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             let on_destroy_remove_contents = request
                 .arguments
@@ -235,7 +235,7 @@ impl AddressBookSet for Server {
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 else {
                     response.not_destroyed.append(id, SetError::not_found());
                     continue;
@@ -243,7 +243,7 @@ impl AddressBookSet for Server {
 
                 let address_book = address_book_
                     .to_unarchived::<AddressBook>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 // Validate ACLs
                 if is_shared
@@ -275,7 +275,7 @@ impl AddressBookSet for Server {
                 // Delete record
                 DestroyArchive(address_book)
                     .delete(access_token, account_id, document_id, None, &mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if default_address_book_id == Some(document_id) {
                     reset_default_address_book = true;
@@ -298,7 +298,7 @@ impl AddressBookSet for Server {
                     {
                         let card = card_
                             .to_unarchived::<ContactCard>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         if card
                             .inner
@@ -317,7 +317,7 @@ impl AddressBookSet for Server {
                             // Unlink addressbook id from card
                             let mut new_card = card
                                 .deserialize::<ContactCard>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             new_card
                                 .names
                                 .retain(|n| !destroy_parents.contains(&n.parent_id));
@@ -365,7 +365,7 @@ impl AddressBookSet for Server {
             && let Ok(change_id) = self
                 .commit_batch(batch)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .last_change_id(account_id)
         {
             self.notify_task_queue();

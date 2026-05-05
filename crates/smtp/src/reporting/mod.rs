@@ -4,24 +4,24 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    core::Session,
-    inbound::DkimSign,
-    queue::{MessageSource, MessageWrapper, spool::SmtpSpool},
-};
-use common::{
+use crate::common::{
     Server, USER_AGENT,
     config::smtp::report::{AddressMatch, AggregateFrequency},
     expr::if_block::IfBlock,
     ipc::ReportingEvent,
 };
+use crate::smtp::{
+    core::Session,
+    inbound::DkimSign,
+    queue::{MessageSource, MessageWrapper, spool::SmtpSpool},
+};
+use crate::store::write::{ReportEvent, key::KeySerializer};
 use mail_auth::{
     common::headers::HeaderWriter,
     report::{AuthFailureType, DeliveryResult, Feedback, FeedbackType},
 };
 use mail_parser::DateTime;
 use std::{future::Future, io, time::SystemTime};
-use store::write::{ReportEvent, key::KeySerializer};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub mod analysis;
@@ -126,7 +126,7 @@ impl SmtpReporting for Server {
         if !deliver_now {
             #[cfg(not(feature = "test_mode"))]
             {
-                use common::config::smtp::queue::QueueExpiry;
+                use crate::common::config::smtp::queue::QueueExpiry;
                 use rand::Rng;
 
                 let delivery_time = rand::rng().random_range(0u64..10800u64);
@@ -188,9 +188,9 @@ impl SmtpReporting for Server {
 
     async fn schedule_report(&self, report: impl Into<ReportingEvent> + Sync + Send) {
         if self.inner.ipc.report_tx.send(report.into()).await.is_err() {
-            trc::event!(
-                Server(trc::ServerEvent::ThreadError),
-                CausedBy = trc::location!(),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::ThreadError),
+                CausedBy = crate::trc::location!(),
                 Details = "Failed to send event to ReportScheduler"
             );
         }
@@ -215,11 +215,11 @@ impl SmtpReporting for Server {
                             signature.write_header(&mut headers);
                         }
                         Err(err) => {
-                            trc::error!(
-                                trc::Error::from(err)
+                            crate::trc::error!(
+                                crate::trc::Error::from(err)
                                     .span_id(message.span_id)
                                     .details("Failed to sign message")
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                             );
                         }
                     }

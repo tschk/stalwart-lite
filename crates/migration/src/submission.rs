@@ -5,37 +5,37 @@
  */
 
 use super::object::Object;
-use crate::{
+use crate::common::Server;
+use crate::email::submission::{
+    Address, Delivered, DeliveryStatus, EmailSubmission, Envelope, UndoStatus,
+};
+use crate::migration::{
     get_document_ids,
     object::{FromLegacy, Property, Value},
     v014::{SUBSPACE_BITMAP_TAG, SUBSPACE_BITMAP_TEXT},
 };
-use common::Server;
-use email::submission::{
-    Address, Delivered, DeliveryStatus, EmailSubmission, Envelope, UndoStatus,
-};
-use store::{
+use crate::store::{
     SUBSPACE_INDEXES, Serialize, U32_LEN, U64_LEN, ValueKey,
     write::{
         AlignedBytes, AnyKey, Archive, Archiver, BatchBuilder, IndexPropertyClass, ValueClass,
         key::KeySerializer,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::Collection,
     field::{EmailSubmissionField, Field},
 };
-use utils::map::vec_map::VecMap;
+use crate::utils::map::vec_map::VecMap;
 
 pub(crate) async fn migrate_email_submissions(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let email_submission_ids = get_document_ids(server, account_id, Collection::EmailSubmission)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_email_submissions = email_submission_ids.len();
     if num_email_submissions == 0 {
@@ -65,7 +65,7 @@ pub(crate) async fn migrate_email_submissions(
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     for email_submission_id in &email_submission_ids {
@@ -100,7 +100,9 @@ pub(crate) async fn migrate_email_submissions(
                     )
                     .set(
                         Field::ARCHIVE,
-                        Archiver::new(es).serialize().caused_by(trc::location!())?,
+                        Archiver::new(es)
+                            .serialize()
+                            .caused_by(crate::trc::location!())?,
                     );
                 did_migrate = true;
 
@@ -108,7 +110,7 @@ pub(crate) async fn migrate_email_submissions(
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => (),
             Err(err) => {
@@ -126,7 +128,7 @@ pub(crate) async fn migrate_email_submissions(
                     return Err(err
                         .account_id(account_id)
                         .document_id(email_submission_id)
-                        .caused_by(trc::location!()));
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -146,7 +148,7 @@ pub(crate) async fn migrate_email_submissions(
                     + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         Ok(num_email_submissions)
     } else {
         Ok(0)

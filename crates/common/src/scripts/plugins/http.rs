@@ -15,7 +15,7 @@ pub fn register_header(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("http_header", plugin_id, 4);
 }
 
-pub async fn exec_header(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec_header(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let url = ctx.arguments[0].to_string();
     let header = ctx.arguments[1].to_string();
     let agent = ctx.arguments[2].to_string();
@@ -33,7 +33,7 @@ pub async fn exec_header(ctx: PluginContext<'_>) -> trc::Result<Variable> {
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|err| {
-            trc::SieveEvent::RuntimeError
+            crate::trc::SieveEvent::RuntimeError
                 .into_err()
                 .reason(err)
                 .details("Failed to build request")
@@ -42,7 +42,7 @@ pub async fn exec_header(ctx: PluginContext<'_>) -> trc::Result<Variable> {
         .send()
         .await
         .map_err(|err| {
-            trc::SieveEvent::RuntimeError
+            crate::trc::SieveEvent::RuntimeError
                 .into_err()
                 .reason(err)
                 .details("Failed to send request")

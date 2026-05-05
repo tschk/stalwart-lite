@@ -5,12 +5,12 @@
  */
 
 use super::CurrentUserPrincipal;
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavResourceName,
     common::propfind::{PropFindRequestHandler, SyncTokenUrn},
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::schema::{
+use crate::dav_proto::schema::{
     Namespace,
     property::{
         DavProperty, DavValue, PrincipalProperty, Privilege, ReportSet, ResourceType,
@@ -19,13 +19,15 @@ use dav_proto::schema::{
     request::{DavPropertyValue, PropFind},
     response::{Href, MultiStatus, PropStat, Response},
 };
-use directory::{PrincipalData, QueryParams, Type, backend::internal::manage::ManageDirectory};
-use groupware::RFC_3986;
-use groupware::cache::GroupwareCache;
+use crate::directory::{
+    PrincipalData, QueryParams, Type, backend::internal::manage::ManageDirectory,
+};
+use crate::groupware::RFC_3986;
+use crate::groupware::cache::GroupwareCache;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 use hyper::StatusCode;
 use std::borrow::Cow;
-use trc::AddContext;
-use types::collection::Collection;
 
 pub(crate) trait PrincipalPropFind: Sync + Send {
     fn prepare_principal_propfind_response(
@@ -35,20 +37,20 @@ pub(crate) trait PrincipalPropFind: Sync + Send {
         documents: impl Iterator<Item = u32> + Sync + Send,
         request: &PropFind,
         response: &mut MultiStatus,
-    ) -> impl Future<Output = crate::Result<()>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<()>> + Send;
 
     fn expand_principal(
         &self,
         access_token: &AccessToken,
         account_id: u32,
         propfind: &PropFind,
-    ) -> impl Future<Output = crate::Result<Option<Response>>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<Option<Response>>> + Send;
 
     fn owner_href(
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Href>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Href>> + Send;
 }
 
 impl PrincipalPropFind for Server {
@@ -59,7 +61,7 @@ impl PrincipalPropFind for Server {
         account_ids: impl Iterator<Item = u32> + Sync + Send,
         request: &PropFind,
         response: &mut MultiStatus,
-    ) -> crate::Result<()> {
+    ) -> crate::dav::Result<()> {
         let properties = match request {
             PropFind::PropName => {
                 let props = all_props(collection, None);
@@ -67,7 +69,7 @@ impl PrincipalPropFind for Server {
                     response.add_response(Response::new_propstat(
                         self.owner_href(access_token, account_id)
                             .await
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                         vec![PropStat::new_list(
                             props.iter().cloned().map(DavPropertyValue::empty).collect(),
                         )],
@@ -121,7 +123,7 @@ impl PrincipalPropFind for Server {
                 self.directory()
                     .query(QueryParams::id(account_id).with_return_member_of(false))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .map(|p| {
                         let name = p.name;
                         let mut description = None;
@@ -167,7 +169,7 @@ impl PrincipalPropFind for Server {
             let quota = if needs_quota {
                 self.dav_quota(access_token, account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
             } else {
                 Default::default()
             };
@@ -218,7 +220,7 @@ impl PrincipalPropFind for Server {
                             let sync_token = self
                                 .fetch_dav_resources(access_token, account_id, collection.into())
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .sync_token();
 
                             fields.push(DavPropertyValue::new(property.clone(), sync_token));
@@ -227,7 +229,7 @@ impl PrincipalPropFind for Server {
                             let ctag = self
                                 .fetch_dav_resources(access_token, account_id, collection.into())
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .highest_change_id;
 
                             fields.push(DavPropertyValue::new(
@@ -294,7 +296,7 @@ impl PrincipalPropFind for Server {
                             let hrefs =
                                 build_home_set(self, access_token, name.as_ref(), account_id, true)
                                     .await
-                                    .caused_by(trc::location!())?;
+                                    .caused_by(crate::trc::location!())?;
 
                             fields.push(DavPropertyValue::new(property.clone(), hrefs));
                             response.set_namespace(Namespace::CalDav);
@@ -308,7 +310,7 @@ impl PrincipalPropFind for Server {
                                 false,
                             )
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                             fields.push(DavPropertyValue::new(property.clone(), hrefs));
                             response.set_namespace(Namespace::CardDav);
@@ -396,7 +398,7 @@ impl PrincipalPropFind for Server {
         access_token: &AccessToken,
         account_id: u32,
         propfind: &PropFind,
-    ) -> crate::Result<Option<Response>> {
+    ) -> crate::dav::Result<Option<Response>> {
         let mut status = MultiStatus::new(vec![]);
         self.prepare_principal_propfind_response(
             access_token,
@@ -410,7 +412,11 @@ impl PrincipalPropFind for Server {
         Ok(status.response.0.into_iter().next())
     }
 
-    async fn owner_href(&self, access_token: &AccessToken, account_id: u32) -> trc::Result<Href> {
+    async fn owner_href(
+        &self,
+        access_token: &AccessToken,
+        account_id: u32,
+    ) -> crate::trc::Result<Href> {
         if access_token.primary_id() == account_id {
             Ok(access_token.current_user_principal())
         } else {
@@ -418,7 +424,7 @@ impl PrincipalPropFind for Server {
                 .store()
                 .get_principal_name(account_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .unwrap_or_else(|| format!("_{account_id}"));
             Ok(Href(format!(
                 "{}/{}/",
@@ -435,7 +441,7 @@ pub(crate) async fn build_home_set(
     name: &str,
     account_id: u32,
     is_calendar: bool,
-) -> trc::Result<Vec<Href>> {
+) -> crate::trc::Result<Vec<Href>> {
     let (collection, resource_name) = if is_calendar {
         (Collection::Calendar, DavResourceName::Cal)
     } else {
@@ -456,7 +462,7 @@ pub(crate) async fn build_home_set(
                     .store()
                     .get_principal_name(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .unwrap_or_else(|| format!("_{account_id}"));
 
                 hrefs.push(Href(format!(

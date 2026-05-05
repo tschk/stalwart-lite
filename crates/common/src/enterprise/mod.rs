@@ -14,20 +14,20 @@ pub mod license;
 pub mod llm;
 pub mod undelete;
 
-use ahash::{AHashMap, AHashSet};
-use directory::{
+use crate::directory::{
     QueryParams, Type,
     backend::internal::{lookup::DirectoryStore, manage::ManageDirectory},
 };
+use crate::store::Store;
+use crate::trc::{AddContext, EventType, MetricType};
+use crate::utils::{HttpLimitResponse, config::cron::SimpleCron, template::Template};
+use ahash::{AHashMap, AHashSet};
 use license::LicenseKey;
 use llm::AiApiConfig;
 use mail_parser::DateTime;
 use std::{sync::Arc, time::Duration};
-use store::Store;
-use trc::{AddContext, EventType, MetricType};
-use utils::{HttpLimitResponse, config::cron::SimpleCron, template::Template};
 
-use crate::{
+use crate::common::{
     Core, Server, config::groupware::CalendarTemplateVariable, expr::Expression,
     manager::webadmin::Resource,
 };
@@ -141,8 +141,8 @@ impl Server {
 
     pub fn log_license_details(&self) {
         if let Some(enterprise) = &self.core.enterprise {
-            trc::event!(
-                Server(trc::ServerEvent::Licensing),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::Licensing),
                 Details = "Stalwart Enterprise Edition license key is valid",
                 Domain = enterprise.license.domain.clone(),
                 Total = enterprise.license.accounts,
@@ -153,17 +153,17 @@ impl Server {
         }
     }
 
-    pub async fn can_create_account(&self) -> trc::Result<bool> {
+    pub async fn can_create_account(&self) -> crate::trc::Result<bool> {
         if let Some(enterprise) = &self.core.enterprise {
             let total_accounts = self
                 .store()
                 .count_principals(None, Type::Individual.into(), None)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if total_accounts + 1 > enterprise.license.accounts as u64 {
-                trc::event!(
-                    Server(trc::ServerEvent::Licensing),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::Licensing),
                     Details = "Account creation not possible: license key account limit reached",
                     Domain = enterprise.license.domain.clone(),
                     Total = total_accounts,
@@ -177,7 +177,10 @@ impl Server {
         Ok(true)
     }
 
-    pub async fn logo_resource(&self, domain: &str) -> trc::Result<Option<Resource<Vec<u8>>>> {
+    pub async fn logo_resource(
+        &self,
+        domain: &str,
+    ) -> crate::trc::Result<Option<Resource<Vec<u8>>>> {
         const MAX_IMAGE_SIZE: usize = 1024 * 1024;
 
         if self.is_enterprise_edition() {
@@ -192,7 +195,7 @@ impl Server {
                     .store()
                     .query(QueryParams::name(domain).with_return_member_of(false))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .filter(|p| p.typ() == Type::Domain)
                 {
                     if let Some(logo) = principal.picture_mut().filter(|l| l.starts_with("http")) {
@@ -202,7 +205,7 @@ impl Server {
                             .store()
                             .query(QueryParams::id(tenant_id).with_return_member_of(false))
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .and_then(|mut p| p.picture_mut().map(std::mem::take))
                             .filter(|l| l.starts_with("http"))
                         {
@@ -220,7 +223,7 @@ impl Server {
                 let mut logo = None;
                 if let Some(logo_url) = logo_url {
                     let response = reqwest::get(logo_url.as_str()).await.map_err(|err| {
-                        trc::ResourceEvent::DownloadExternal
+                        crate::trc::ResourceEvent::DownloadExternal
                             .into_err()
                             .details("Failed to download logo")
                             .reason(err)
@@ -237,13 +240,13 @@ impl Server {
                         .bytes_with_limit(MAX_IMAGE_SIZE)
                         .await
                         .map_err(|err| {
-                            trc::ResourceEvent::DownloadExternal
+                            crate::trc::ResourceEvent::DownloadExternal
                                 .into_err()
                                 .details("Failed to download logo")
                                 .reason(err)
                         })?
                         .ok_or_else(|| {
-                            trc::ResourceEvent::DownloadExternal
+                            crate::trc::ResourceEvent::DownloadExternal
                                 .into_err()
                                 .details("Download exceeded maximum size")
                         })?;

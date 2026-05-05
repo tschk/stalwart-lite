@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use email::message::crypto::{
+use crate::common::Server;
+use crate::email::message::crypto::{
     ENCRYPT_ALGO_AES128, ENCRYPT_ALGO_AES256, ENCRYPT_METHOD_PGP, ENCRYPT_METHOD_SMIME,
     EncryptionParams,
 };
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::PrincipalField};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::PrincipalField};
 
 #[derive(
     rkyv::Serialize,
@@ -67,7 +67,7 @@ pub struct LegacyEncryptionParams {
 pub(crate) async fn migrate_encryption_params_v014(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     let Some(params) = server
         .store()
         .get_value::<Archive<AlignedBytes>>(ValueKey {
@@ -77,7 +77,7 @@ pub(crate) async fn migrate_encryption_params_v014(
             class: ValueClass::from(PrincipalField::EncryptionKeys),
         })
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
     else {
         return Ok(0);
     };
@@ -93,19 +93,21 @@ pub(crate) async fn migrate_encryption_params_v014(
                     PrincipalField::EncryptionKeys,
                     Archiver::new(EncryptionParams::from(legacy))
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
 
             server
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             Ok(1)
         }
         Err(err) => {
             if params.deserialize_untrusted::<EncryptionParams>().is_err() {
-                return Err(err.account_id(account_id).caused_by(trc::location!()));
+                return Err(err
+                    .account_id(account_id)
+                    .caused_by(crate::trc::location!()));
             }
             Ok(0)
         }

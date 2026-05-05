@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ETag,
@@ -12,20 +13,19 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::{RequestHeaders, schema::property::Rfc1123DateTime};
-use groupware::{cache::GroupwareCache, calendar::CalendarEvent};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::{
+use crate::dav_proto::{RequestHeaders, schema::property::Rfc1123DateTime};
+use crate::groupware::{cache::GroupwareCache, calendar::CalendarEvent};
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait CalendarGetRequestHandler: Sync + Send {
     fn handle_calendar_get_request(
@@ -33,7 +33,7 @@ pub(crate) trait CalendarGetRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarGetRequestHandler for Server {
@@ -42,7 +42,7 @@ impl CalendarGetRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -52,7 +52,7 @@ impl CalendarGetRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resources
             .by_path(
                 resource_
@@ -84,11 +84,11 @@ impl CalendarGetRequestHandler for Server {
                 resource.document_id(),
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
         let event = event_
             .unarchive::<CalendarEvent>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Validate headers
         let etag = event_.etag();

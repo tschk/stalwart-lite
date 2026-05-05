@@ -10,7 +10,7 @@ use std::vec::IntoIter;
 
 use compact_str::{CompactString, ToCompactString, format_compact};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::fetch::{self, Attribute, Section},
     receiver::{Request, Token, bad},
@@ -20,7 +20,7 @@ use super::{PushUnique, parse_number, parse_sequence_set};
 
 impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_fetch(self) -> trc::Result<fetch::Arguments> {
+    pub fn parse_fetch(self) -> crate::trc::Result<fetch::Arguments> {
         if self.tokens.len() < 2 {
             return Err(self.into_error("Missing parameters."));
         }
@@ -511,7 +511,7 @@ pub fn parse_partial(tokens: &mut Peekable<IntoIter<Token>>) -> super::Result<Op
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Sequence,
             fetch::{self, Attribute, Section},

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{calendar_event::CalendarSyntheticId, changes::state::JmapCacheState};
+use crate::jmap::{calendar_event::CalendarSyntheticId, changes::state::JmapCacheState};
 use calcard::{
     common::{PartialDateTime, timezone::Tz},
     icalendar::{
@@ -17,29 +17,29 @@ use calcard::{
     },
 };
 use chrono::DateTime;
-use common::{Server, auth::AccessToken};
-use groupware::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{
     cache::GroupwareCache,
     calendar::{
         CalendarEvent, EVENT_DRAFT, EVENT_HIDE_ATTENDEES, EVENT_INVITE_OTHERS, EVENT_INVITE_SELF,
         PREF_USE_DEFAULT_ALERTS, expand::CalendarEventExpansion,
     },
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::{JmapObjectId, calendar_event},
     request::{IntoValid, reference::MaybeResultReference},
 };
 use jmap_tools::{Key, Map, Value};
 use std::{str::FromStr, sync::Arc};
-use store::{
+use crate::store::{
     ValueKey,
     ahash::{AHashMap, AHashSet},
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     blob::BlobId,
     collection::{Collection, SyncCollection},
@@ -51,7 +51,7 @@ pub trait CalendarEventGet: Sync + Send {
         &self,
         request: GetRequest<calendar_event::CalendarEvent>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<calendar_event::CalendarEvent>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<calendar_event::CalendarEvent>>> + Send;
 }
 
 impl CalendarEventGet for Server {
@@ -59,7 +59,7 @@ impl CalendarEventGet for Server {
         &self,
         mut request: GetRequest<calendar_event::CalendarEvent>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<calendar_event::CalendarEvent>> {
+    ) -> crate::trc::Result<GetResponse<calendar_event::CalendarEvent>> {
         let return_all_properties = request
             .properties
             .as_ref()
@@ -77,7 +77,7 @@ impl CalendarEventGet for Server {
         let (mut ids, has_synthetic_ids) = if let Some(rr) = request.ids.take() {
             let rr = rr.unwrap();
             if rr.len() > self.core.jmap.get_max_objects {
-                return Err(trc::JmapEvent::RequestTooLarge.into_err());
+                return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
             }
             let mut ids = Vec::with_capacity(rr.len());
             let mut has_synthetic_ids = false;
@@ -218,7 +218,7 @@ impl CalendarEventGet for Server {
             };
             let mut calendar_event = _calendar_event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Extract expansion ids from synthetic ids
             let mut expansion_ids = AHashSet::new();

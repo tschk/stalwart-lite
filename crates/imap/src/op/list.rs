@@ -6,14 +6,14 @@
 
 use std::time::Instant;
 
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::imap::{
     core::{Session, SessionData},
     spawn_op,
 };
-use common::listener::SessionStream;
 
-use directory::Permission;
-use imap_proto::{
+use crate::directory::Permission;
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{
         ImapResponse, ProtocolVersion,
@@ -23,12 +23,12 @@ use imap_proto::{
     },
     receiver::Request,
 };
-use trc::StoreEvent;
+use crate::trc::StoreEvent;
 
 use super::ImapContext;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_list(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_list(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         let op_start = Instant::now();
         let command = request.command;
         let is_lsub = command == Command::Lsub;
@@ -86,7 +86,7 @@ impl<T: SessionStream> SessionData<T> {
         version: ProtocolVersion,
         is_utf8: bool,
         op_start: Instant,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let (tag, reference_name, mut patterns, selection_options, return_options) = match arguments
         {
             Arguments::Basic {
@@ -118,7 +118,7 @@ impl<T: SessionStream> SessionData<T> {
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&tag, trc::location!())?;
+            .imap_ctx(&tag, crate::trc::location!())?;
 
         // Process arguments
         let mut filter_subscribed = false;
@@ -161,7 +161,7 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
         if recursive_match && !filter_subscribed {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("RECURSIVEMATCH requires the SUBSCRIBED selection option.")
                 .id(tag));
@@ -214,7 +214,7 @@ impl<T: SessionStream> SessionData<T> {
                     let mailbox = if let Some(mailbox) = account.mailbox_state.get(mailbox_id) {
                         mailbox
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             Store(StoreEvent::UnexpectedError),
                             Details = "IMAP mailbox no longer present in account state",
                             Id = *mailbox_id,
@@ -222,7 +222,7 @@ impl<T: SessionStream> SessionData<T> {
                                 .mailbox_state
                                 .keys()
                                 .copied()
-                                .map(trc::Value::from)
+                                .map(crate::trc::Value::from)
                                 .collect::<Vec<_>>()
                         );
                         continue;
@@ -279,7 +279,7 @@ impl<T: SessionStream> SessionData<T> {
                 match self
                     .status(list_item.mailbox_name.clone(), include_status)
                     .await
-                    .imap_ctx(&tag, trc::location!())
+                    .imap_ctx(&tag, crate::trc::location!())
                 {
                     Ok(status_item) => {
                         status_items.push(status_item);
@@ -291,16 +291,16 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
 
-        trc::event!(
+        crate::trc::event!(
             Imap(if !is_lsub {
-                trc::ImapEvent::List
+                crate::trc::ImapEvent::List
             } else {
-                trc::ImapEvent::Lsub
+                crate::trc::ImapEvent::Lsub
             }),
             SpanId = self.session_id,
             Details = list_items
                 .iter()
-                .map(|item| trc::Value::from(item.mailbox_name.clone()))
+                .map(|item| crate::trc::Value::from(item.mailbox_name.clone()))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );

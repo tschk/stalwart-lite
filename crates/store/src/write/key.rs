@@ -8,7 +8,7 @@ use super::{
     AnyKey, BlobOp, DirectoryClass, InMemoryClass, QueueClass, ReportClass, ReportEvent,
     TaskQueueClass, TelemetryClass, ValueClass,
 };
-use crate::{
+use crate::store::{
     Deserialize, IndexKey, IndexKeyPrefix, Key, LogKey, SUBSPACE_ACL, SUBSPACE_BLOB_EXTRA,
     SUBSPACE_BLOB_LINK, SUBSPACE_COUNTER, SUBSPACE_DIRECTORY, SUBSPACE_IN_MEMORY_COUNTER,
     SUBSPACE_IN_MEMORY_VALUE, SUBSPACE_INDEXES, SUBSPACE_LOGS, SUBSPACE_PROPERTY,
@@ -18,9 +18,9 @@ use crate::{
     WITH_SUBSPACE,
     write::{BlobLink, IndexPropertyClass, SearchIndex, SearchIndexId, SearchIndexType},
 };
+use crate::types::{blob_hash::BLOB_HASH_LEN, collection::SyncCollection, field::Field};
+use crate::utils::codec::leb128::Leb128_;
 use std::convert::TryInto;
-use types::{blob_hash::BLOB_HASH_LEN, collection::SyncCollection, field::Field};
-use utils::codec::leb128::Leb128_;
 
 pub struct KeySerializer {
     pub buf: Vec<u8>,
@@ -31,9 +31,9 @@ pub trait KeySerialize {
 }
 
 pub trait DeserializeBigEndian {
-    fn deserialize_be_u16(&self, index: usize) -> trc::Result<u16>;
-    fn deserialize_be_u32(&self, index: usize) -> trc::Result<u32>;
-    fn deserialize_be_u64(&self, index: usize) -> trc::Result<u64>;
+    fn deserialize_be_u16(&self, index: usize) -> crate::trc::Result<u16>;
+    fn deserialize_be_u32(&self, index: usize) -> crate::trc::Result<u32>;
+    fn deserialize_be_u64(&self, index: usize) -> crate::trc::Result<u64>;
 }
 
 impl KeySerializer {
@@ -101,52 +101,52 @@ impl KeySerialize for u64 {
 }
 
 impl DeserializeBigEndian for &[u8] {
-    fn deserialize_be_u16(&self, index: usize) -> trc::Result<u16> {
+    fn deserialize_be_u16(&self, index: usize) -> crate::trc::Result<u16> {
         self.get(index..index + U16_LEN)
             .ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Value, *self)
+                crate::trc::StoreEvent::DataCorruption
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Value, *self)
             })
             .and_then(|bytes| {
                 bytes.try_into().map_err(|_| {
-                    trc::StoreEvent::DataCorruption
-                        .caused_by(trc::location!())
-                        .ctx(trc::Key::Value, *self)
+                    crate::trc::StoreEvent::DataCorruption
+                        .caused_by(crate::trc::location!())
+                        .ctx(crate::trc::Key::Value, *self)
                 })
             })
             .map(u16::from_be_bytes)
     }
 
-    fn deserialize_be_u32(&self, index: usize) -> trc::Result<u32> {
+    fn deserialize_be_u32(&self, index: usize) -> crate::trc::Result<u32> {
         self.get(index..index + U32_LEN)
             .ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Value, *self)
+                crate::trc::StoreEvent::DataCorruption
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Value, *self)
             })
             .and_then(|bytes| {
                 bytes.try_into().map_err(|_| {
-                    trc::StoreEvent::DataCorruption
-                        .caused_by(trc::location!())
-                        .ctx(trc::Key::Value, *self)
+                    crate::trc::StoreEvent::DataCorruption
+                        .caused_by(crate::trc::location!())
+                        .ctx(crate::trc::Key::Value, *self)
                 })
             })
             .map(u32::from_be_bytes)
     }
 
-    fn deserialize_be_u64(&self, index: usize) -> trc::Result<u64> {
+    fn deserialize_be_u64(&self, index: usize) -> crate::trc::Result<u64> {
         self.get(index..index + U64_LEN)
             .ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Value, *self)
+                crate::trc::StoreEvent::DataCorruption
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Value, *self)
             })
             .and_then(|bytes| {
                 bytes.try_into().map_err(|_| {
-                    trc::StoreEvent::DataCorruption
-                        .caused_by(trc::location!())
-                        .ctx(trc::Key::Value, *self)
+                    crate::trc::StoreEvent::DataCorruption
+                        .caused_by(crate::trc::location!())
+                        .ctx(crate::trc::Key::Value, *self)
                 })
             })
             .map(u64::from_be_bytes)
@@ -200,7 +200,7 @@ impl Key for IndexKeyPrefix {
         {
             if (flags & WITH_SUBSPACE) != 0 {
                 KeySerializer::new(std::mem::size_of::<IndexKeyPrefix>() + 1)
-                    .write(crate::SUBSPACE_INDEXES)
+                    .write(crate::store::SUBSPACE_INDEXES)
             } else {
                 KeySerializer::new(std::mem::size_of::<IndexKeyPrefix>())
             }
@@ -230,7 +230,8 @@ impl Key for LogKey {
     fn serialize(&self, flags: u32) -> Vec<u8> {
         {
             if (flags & WITH_SUBSPACE) != 0 {
-                KeySerializer::new(std::mem::size_of::<LogKey>() + 1).write(crate::SUBSPACE_LOGS)
+                KeySerializer::new(std::mem::size_of::<LogKey>() + 1)
+                    .write(crate::store::SUBSPACE_LOGS)
             } else {
                 KeySerializer::new(std::mem::size_of::<LogKey>())
             }
@@ -537,7 +538,7 @@ impl<T: AsRef<[u8]> + Sync + Send + Clone> Key for IndexKey<T> {
         {
             if (flags & WITH_SUBSPACE) != 0 {
                 KeySerializer::new(std::mem::size_of::<IndexKey<T>>() + key.len() + 1)
-                    .write(crate::SUBSPACE_INDEXES)
+                    .write(crate::store::SUBSPACE_INDEXES)
             } else {
                 KeySerializer::new(std::mem::size_of::<IndexKey<T>>() + key.len())
             }
@@ -740,7 +741,7 @@ impl From<BlobOp> for ValueClass {
 }
 
 impl Deserialize for ReportEvent {
-    fn deserialize(key: &[u8]) -> trc::Result<Self> {
+    fn deserialize(key: &[u8]) -> crate::trc::Result<Self> {
         Ok(ReportEvent {
             due: key.deserialize_be_u64(1)?,
             policy_hash: key.deserialize_be_u64(key.len() - (U64_LEN * 2 + 1))?,
@@ -750,9 +751,9 @@ impl Deserialize for ReportEvent {
                 .and_then(|domain| std::str::from_utf8(domain).ok())
                 .map(|s| s.to_string())
                 .ok_or_else(|| {
-                    trc::StoreEvent::DataCorruption
-                        .caused_by(trc::location!())
-                        .ctx(trc::Key::Key, key)
+                    crate::trc::StoreEvent::DataCorruption
+                        .caused_by(crate::trc::location!())
+                        .ctx(crate::trc::Key::Key, key)
                 })?,
         })
     }

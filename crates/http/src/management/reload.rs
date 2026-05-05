@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Server,
     auth::AccessToken,
     ipc::{BroadcastEvent, HousekeeperEvent},
 };
-use directory::Permission;
+use crate::directory::Permission;
+use crate::utils::url_params::UrlParams;
 use hyper::Method;
 use serde_json::json;
 use std::future::Future;
-use utils::url_params::UrlParams;
 
-use http_proto::*;
+use crate::http_proto::*;
 
 pub trait ManageReload: Sync + Send {
     fn handle_manage_reload(
@@ -23,14 +23,14 @@ pub trait ManageReload: Sync + Send {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_manage_update(
         &self,
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl ManageReload for Server {
@@ -39,7 +39,7 @@ impl ManageReload for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Validate the access token
         access_token.assert_has_permission(Permission::SettingsReload)?;
 
@@ -101,13 +101,13 @@ impl ManageReload for Server {
                         .send(HousekeeperEvent::ReloadSettings)
                         .await
                         .map_err(|err| {
-                            trc::EventType::Server(trc::ServerEvent::ThreadError)
+                            crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                                 .reason(err)
                                 .details(concat!(
                                     "Failed to send settings reload ",
                                     "event to housekeeper"
                                 ))
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         })?;
                 }
 
@@ -116,7 +116,7 @@ impl ManageReload for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 
@@ -125,7 +125,7 @@ impl ManageReload for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (path.get(1).copied(), req.method()) {
             (Some("spam-filter"), &Method::GET) => {
                 // Validate the access token
@@ -146,8 +146,10 @@ impl ManageReload for Server {
                 }))
                 .into_http_response())
             }
-            (Some("webadmin"), &Method::GET) => Err(trc::ManageEvent::NotSupported.into_err()),
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            (Some("webadmin"), &Method::GET) => {
+                Err(crate::trc::ManageEvent::NotSupported.into_err())
+            }
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }

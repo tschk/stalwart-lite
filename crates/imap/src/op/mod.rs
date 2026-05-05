@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use ::store::query::log::Query;
-use imap_proto::ResponseCode;
+use crate::imap_proto::ResponseCode;
+use crate::store::query::log::Query;
 
 pub mod acl;
 pub mod append;
@@ -78,21 +78,21 @@ macro_rules! spawn_op {
     };
 }
 pub trait ImapContext<T> {
-    fn imap_ctx(self, tag: &str, location: &'static str) -> trc::Result<T>;
+    fn imap_ctx(self, tag: &str, location: &'static str) -> crate::trc::Result<T>;
 }
 
-impl<T> ImapContext<T> for trc::Result<T> {
-    fn imap_ctx(self, tag: &str, location: &'static str) -> trc::Result<T> {
+impl<T> ImapContext<T> for crate::trc::Result<T> {
+    fn imap_ctx(self, tag: &str, location: &'static str) -> crate::trc::Result<T> {
         match self {
             Ok(value) => Ok(value),
             Err(err) => Err(
-                if !err.matches(trc::EventType::Imap(trc::ImapEvent::Error)) {
-                    err.ctx(trc::Key::Id, tag.to_string())
-                        .ctx(trc::Key::Details, "Internal Server Error")
-                        .ctx(trc::Key::Code, ResponseCode::ContactAdmin)
-                        .ctx(trc::Key::CausedBy, location)
+                if !err.matches(crate::trc::EventType::Imap(crate::trc::ImapEvent::Error)) {
+                    err.ctx(crate::trc::Key::Id, tag.to_string())
+                        .ctx(crate::trc::Key::Details, "Internal Server Error")
+                        .ctx(crate::trc::Key::Code, ResponseCode::ContactAdmin)
+                        .ctx(crate::trc::Key::CausedBy, location)
                 } else {
-                    err.ctx(trc::Key::Id, tag.to_string())
+                    err.ctx(crate::trc::Key::Id, tag.to_string())
                 },
             ),
         }

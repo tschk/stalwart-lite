@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{DavError, DavResourceName};
-use common::{Server, auth::AccessToken};
-use directory::backend::internal::manage::ManageDirectory;
-use groupware::cache::GroupwareCache;
-use http_proto::request::decode_path_element;
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{DavError, DavResourceName};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::groupware::cache::GroupwareCache;
+use crate::http_proto::request::decode_path_element;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 use hyper::StatusCode;
 use std::fmt::Display;
-use trc::AddContext;
-use types::collection::Collection;
 
 #[derive(Debug)]
 pub(crate) struct UriResource<A, R> {
@@ -36,19 +36,19 @@ pub(crate) trait DavUriResource: Sync + Send {
         access_token: &AccessToken,
         uri: &'x str,
         error_status: StatusCode,
-    ) -> impl Future<Output = crate::Result<UnresolvedUri<'x>>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<UnresolvedUri<'x>>> + Send;
 
     fn validate_uri<'x>(
         &self,
         access_token: &AccessToken,
         uri: &'x str,
-    ) -> impl Future<Output = crate::Result<UnresolvedUri<'x>>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<UnresolvedUri<'x>>> + Send;
 
     fn map_uri_resource(
         &self,
         access_token: &AccessToken,
         uri: OwnedUri<'_>,
-    ) -> impl Future<Output = trc::Result<Option<DocumentUri>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<DocumentUri>>> + Send;
 }
 
 impl DavUriResource for Server {
@@ -56,7 +56,7 @@ impl DavUriResource for Server {
         &self,
         access_token: &AccessToken,
         uri: &'x str,
-    ) -> crate::Result<UnresolvedUri<'x>> {
+    ) -> crate::dav::Result<UnresolvedUri<'x>> {
         self.validate_uri_with_status(access_token, uri, StatusCode::NOT_FOUND)
             .await
     }
@@ -66,7 +66,7 @@ impl DavUriResource for Server {
         access_token: &AccessToken,
         uri: &'x str,
         error_status: StatusCode,
-    ) -> crate::Result<UnresolvedUri<'x>> {
+    ) -> crate::dav::Result<UnresolvedUri<'x>> {
         let (_, uri_parts) = uri
             .split_once("/dav/")
             .ok_or(DavError::Code(error_status))?;
@@ -98,7 +98,7 @@ impl DavUriResource for Server {
                     self.store()
                         .get_principal_id(&account)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .ok_or(DavError::Code(error_status))?
                 }
             };
@@ -122,12 +122,12 @@ impl DavUriResource for Server {
         &self,
         access_token: &AccessToken,
         uri: OwnedUri<'_>,
-    ) -> trc::Result<Option<DocumentUri>> {
+    ) -> crate::trc::Result<Option<DocumentUri>> {
         if let Some(resource) = uri.resource {
             if let Some(resource) = self
                 .fetch_dav_resources(access_token, uri.account_id, uri.collection.into())
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .by_path(resource)
             {
                 Ok(Some(DocumentUri {
@@ -149,7 +149,7 @@ impl DavUriResource for Server {
 }
 
 impl<'x> UnresolvedUri<'x> {
-    pub fn into_owned_uri(self) -> crate::Result<OwnedUri<'x>> {
+    pub fn into_owned_uri(self) -> crate::dav::Result<OwnedUri<'x>> {
         Ok(OwnedUri {
             collection: self.collection,
             account_id: self

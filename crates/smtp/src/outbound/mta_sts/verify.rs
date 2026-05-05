@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::config::smtp::resolver::{Mode, MxPattern, Policy};
+use crate::common::config::smtp::resolver::{Mode, MxPattern, Policy};
 
 pub trait VerifyPolicy {
     fn verify(&self, mx_host: &str) -> bool;

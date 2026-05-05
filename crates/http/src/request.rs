@@ -4,7 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    Inner, KV_ACME, Server,
+    auth::{AccessToken, oauth::GrantType},
+    core::BuildServer,
+    ipc::PushEvent,
+    listener::{SessionData, SessionManager, SessionStream},
+    manager::webadmin::Resource,
+};
+use crate::directory::Permission;
+use crate::http::{
     HttpSessionManager,
     auth::{
         authenticate::{Authenticator, HttpHeaders},
@@ -19,32 +28,23 @@ use crate::{
         ManagementApi, ToManageHttpResponse, UnauthorizedResponse, troubleshoot::TroubleshootApi,
     },
 };
-use common::{
-    Inner, KV_ACME, Server,
-    auth::{AccessToken, oauth::GrantType},
-    core::BuildServer,
-    ipc::PushEvent,
-    listener::{SessionData, SessionManager, SessionStream},
-    manager::webadmin::Resource,
-};
-use directory::Permission;
-use http_proto::{
+use crate::http_proto::{
     HttpContext, HttpRequest, HttpResponse, HttpResponseBody, HttpSessionData, JsonProblemResponse,
     ToHttpResponse, request::fetch_body,
 };
+use crate::store::dispatch::lookup::KeyValue;
+use crate::trc::SecurityEvent;
+use crate::utils::url_params::UrlParams;
 use hyper::{Method, StatusCode, body, header, server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use std::{net::IpAddr, sync::Arc};
-use store::dispatch::lookup::KeyValue;
-use trc::SecurityEvent;
-use utils::url_params::UrlParams;
 
 pub trait ParseHttp: Sync + Send {
     fn parse_http_request(
         &self,
         req: HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl ParseHttp for Server {
@@ -52,7 +52,7 @@ impl ParseHttp for Server {
         &self,
         mut req: HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let mut path = req.uri().path().split('/');
         path.next();
 
@@ -98,7 +98,7 @@ impl ParseHttp for Server {
                         {
                             Some(proof) => Ok(Resource::new("text/plain", proof.into_bytes())
                                 .into_http_response()),
-                            None => Err(trc::ResourceEvent::NotFound.into_err()),
+                            None => Err(crate::trc::ResourceEvent::NotFound.into_err()),
                         };
                     }
                 }
@@ -111,7 +111,7 @@ impl ParseHttp for Server {
                         Ok(Resource::new("text/plain", policy.to_string().into_bytes())
                             .into_http_response())
                     } else {
-                        Err(trc::ResourceEvent::NotFound.into_err())
+                        Err(crate::trc::ResourceEvent::NotFound.into_err())
                     };
                 }
                 ("mail-v1.xml", &Method::GET) => {
@@ -197,7 +197,7 @@ impl ParseHttp for Server {
                             .await;
                     }
                     Err(err) => {
-                        if err.matches(trc::EventType::Auth(trc::AuthEvent::Failed)) {
+                        if err.matches(crate::trc::EventType::Auth(crate::trc::AuthEvent::Failed)) {
                             let params = UrlParams::new(req.uri().query());
                             let path = req.uri().path().split('/').skip(2).collect::<Vec<_>>();
 
@@ -236,7 +236,7 @@ impl ParseHttp for Server {
                                 // SPDX-License-Identifier: LicenseRef-SEL
                                 #[cfg(feature = "enterprise")]
                                 GrantType::LiveTracing | GrantType::LiveMetrics => {
-                                    use crate::management::enterprise::telemetry::TelemetryApi;
+                                    use crate::http::management::enterprise::telemetry::TelemetryApi;
                                     self.handle_telemetry_api_request(
                                         &req,
                                         path,
@@ -334,10 +334,10 @@ impl ParseHttp for Server {
                                 .authorization_basic()
                                 .is_none_or(|secret| secret != auth)
                         {
-                            return Err(trc::AuthEvent::Failed
+                            return Err(crate::trc::AuthEvent::Failed
                                 .into_err()
                                 .details("Invalid or missing credentials.")
-                                .caused_by(trc::location!()));
+                                .caused_by(crate::trc::location!()));
                         }
 
                         return Ok(Resource::new(
@@ -372,7 +372,7 @@ impl ParseHttp for Server {
                     }
                     Ok(None) => (),
                     Err(err) => {
-                        trc::error!(err.span_id(session.session_id));
+                        crate::trc::error!(err.span_id(session.session_id));
                     }
                 }
             }
@@ -405,7 +405,7 @@ impl ParseHttp for Server {
         // Block dangerous URLs
         let path = req.uri().path();
         if self.is_http_banned_path(path, session.remote_ip).await? {
-            trc::event!(
+            crate::trc::event!(
                 Security(SecurityEvent::ScanBan),
                 SpanId = session.session_id,
                 RemoteIp = session.remote_ip,
@@ -413,7 +413,7 @@ impl ParseHttp for Server {
             );
         }
 
-        Err(trc::ResourceEvent::NotFound.into_err())
+        Err(crate::trc::ResourceEvent::NotFound.into_err())
     }
 }
 
@@ -434,8 +434,8 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
 
                     // Obtain remote IP
                     let remote_ip = if !server.core.jmap.http_use_forwarded {
-                        trc::event!(
-                            Http(trc::HttpEvent::RequestUrl),
+                        crate::trc::event!(
+                            Http(crate::trc::HttpEvent::RequestUrl),
                             SpanId = session.session_id,
                             Url = req.uri().to_string(),
                         );
@@ -480,8 +480,8 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
                     {
                         // Check if the forwarded IP has been blocked
                         if server.is_ip_blocked(&forwarded_for) {
-                            trc::event!(
-                                Security(trc::SecurityEvent::IpBlocked),
+                            crate::trc::event!(
+                                Security(crate::trc::SecurityEvent::IpBlocked),
                                 ListenerId = instance.id.clone(),
                                 RemoteIp = forwarded_for,
                                 SpanId = session.session_id,
@@ -494,8 +494,8 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
                             );
                         }
 
-                        trc::event!(
-                            Http(trc::HttpEvent::RequestUrl),
+                        crate::trc::event!(
+                            Http(crate::trc::HttpEvent::RequestUrl),
                             SpanId = session.session_id,
                             RemoteIp = forwarded_for,
                             Url = req.uri().to_string(),
@@ -503,8 +503,8 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
 
                         forwarded_for
                     } else {
-                        trc::event!(
-                            Http(trc::HttpEvent::XForwardedMissing),
+                        crate::trc::event!(
+                            Http(crate::trc::HttpEvent::XForwardedMissing),
                             SpanId = session.session_id,
                         );
                         session.remote_ip
@@ -528,21 +528,22 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
                         Ok(response) => response,
                         Err(err) => {
                             let response = err.into_http_response();
-                            trc::error!(err.span_id(session.session_id));
+                            crate::trc::error!(err.span_id(session.session_id));
                             response
                         }
                     };
 
-                    trc::event!(
-                        Http(trc::HttpEvent::ResponseBody),
+                    crate::trc::event!(
+                        Http(crate::trc::HttpEvent::ResponseBody),
                         SpanId = session.session_id,
                         Contents = match response.body() {
                             HttpResponseBody::Text(value) =>
-                                trc::Value::String(value.as_str().into()),
+                                crate::trc::Value::String(value.as_str().into()),
                             HttpResponseBody::Binary(_) =>
-                                trc::Value::String("[binary data]".into()),
-                            HttpResponseBody::Stream(_) => trc::Value::String("[stream]".into()),
-                            _ => trc::Value::None,
+                                crate::trc::Value::String("[binary data]".into()),
+                            HttpResponseBody::Stream(_) =>
+                                crate::trc::Value::String("[stream]".into()),
+                            _ => crate::trc::Value::None,
                         },
                         Code = response.status().as_u16(),
                         Size = response.size(),
@@ -572,7 +573,7 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
             if !server.core.jmap.http_use_forwarded {
                 match server.is_scanner_fail2banned(session.remote_ip).await {
                     Ok(true) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Security(SecurityEvent::ScanBan),
                             SpanId = session.session_id,
                             RemoteIp = session.remote_ip,
@@ -582,7 +583,7 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
                     }
                     Ok(false) => {}
                     Err(err) => {
-                        trc::error!(
+                        crate::trc::error!(
                             err.span_id(session.session_id)
                                 .details("Failed to check for fail2ban")
                         );
@@ -591,8 +592,8 @@ async fn handle_session<T: SessionStream>(inner: Arc<Inner>, session: SessionDat
             }
         }
 
-        trc::event!(
-            Http(trc::HttpEvent::Error),
+        crate::trc::event!(
+            Http(crate::trc::HttpEvent::Error),
             SpanId = session.session_id,
             Reason = http_err.to_string(),
         );

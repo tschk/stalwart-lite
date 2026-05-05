@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::Server;
+use crate::email::message::delivery::{
+    IngestMessage, IngestRecipient, LocalDeliveryStatus, MailDelivery,
+};
+use crate::smtp::{
     outbound::DeliveryResult,
     queue::{
         Error, ErrorDetails, FROM_AUTHENTICATED, FROM_UNAUTHENTICATED_DMARC, HostResponse,
@@ -13,10 +17,8 @@ use crate::{
     },
     reporting::SmtpReporting,
 };
-use common::Server;
-use email::message::delivery::{IngestMessage, IngestRecipient, LocalDeliveryStatus, MailDelivery};
+use crate::trc::SieveEvent;
 use smtp_proto::Response;
-use trc::SieveEvent;
 
 impl MessageWrapper {
     pub(super) async fn deliver_local(
@@ -125,7 +127,7 @@ impl MessageWrapper {
                     )
                     .await;
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Sieve(SieveEvent::QuotaExceeded),
                     SpanId = self.span_id,
                     From = message.message.return_path,
@@ -133,7 +135,7 @@ impl MessageWrapper {
                         .message
                         .recipients
                         .into_iter()
-                        .map(|r| trc::Value::from(r.address().to_string()))
+                        .map(|r| crate::trc::Value::from(r.address().to_string()))
                         .collect::<Vec<_>>(),
                 );
             }

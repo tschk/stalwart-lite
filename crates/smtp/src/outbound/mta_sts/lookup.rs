@@ -9,13 +9,13 @@ use std::{fmt::Display, sync::Arc, time::Duration};
 #[cfg(feature = "test_mode")]
 pub static STS_TEST_POLICY: parking_lot::Mutex<Vec<u8>> = parking_lot::Mutex::new(Vec::new());
 
-use common::{Server, config::smtp::resolver::Policy};
+use crate::common::{Server, config::smtp::resolver::Policy};
 use mail_auth::{mta_sts::MtaSts, report::tlsrpt::ResultType};
 
 use super::{Error, parse::ParsePolicy};
 
 #[cfg(not(feature = "test_mode"))]
-use utils::HttpLimitResponse;
+use crate::utils::HttpLimitResponse;
 
 #[cfg(not(feature = "test_mode"))]
 const MAX_POLICY_SIZE: usize = 1024 * 1024;
@@ -68,7 +68,7 @@ impl MtaStsLookup for Server {
         // Fetch policy
         #[cfg(not(feature = "test_mode"))]
         let bytes = reqwest::Client::builder()
-            .user_agent(common::USER_AGENT)
+            .user_agent(crate::common::USER_AGENT)
             .timeout(timeout)
             .redirect(reqwest::redirect::Policy::none())
             .build()?

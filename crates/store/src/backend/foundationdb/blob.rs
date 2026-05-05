@@ -5,21 +5,21 @@
  */
 
 use super::{FdbStore, MAX_VALUE_SIZE};
-use crate::{
+use crate::store::{
     IterateParams, SUBSPACE_BLOBS,
     backend::foundationdb::into_error,
     write::{AnyKey, key::KeySerializer},
 };
+use crate::trc::AddContext;
+use crate::types::blob_hash::BLOB_HASH_LEN;
 use std::ops::Range;
-use trc::AddContext;
-use types::blob_hash::BLOB_HASH_LEN;
 
 impl FdbStore {
     pub(crate) async fn get_blob(
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let block_start = range.start / MAX_VALUE_SIZE;
         let bytes_start = range.start % MAX_VALUE_SIZE;
         let block_end = (range.end / MAX_VALUE_SIZE) + 1;
@@ -92,12 +92,12 @@ impl FdbStore {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(blob_data)
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         const N_CHUNKS: usize = (1 << 5) - 1;
         let last_chunk = std::cmp::max(
             (data.len() / MAX_VALUE_SIZE)
@@ -132,7 +132,7 @@ impl FdbStore {
         Ok(())
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         if key.len() < BLOB_HASH_LEN {
             return Ok(false);
         }

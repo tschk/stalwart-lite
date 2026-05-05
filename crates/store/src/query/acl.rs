@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 use ahash::AHashSet;
-use trc::AddContext;
-use types::collection::Collection;
 
-use crate::{
+use crate::store::{
     Deserialize, IterateParams, Store, U32_LEN, ValueKey,
     write::{BatchBuilder, ValueClass, key::DeserializeBigEndian},
 };
@@ -33,7 +33,7 @@ pub struct AclItem {
 }
 
 impl Store {
-    pub async fn acl_query(&self, query: AclQuery) -> trc::Result<Vec<AclItem>> {
+    pub async fn acl_query(&self, query: AclQuery) -> crate::trc::Result<Vec<AclItem>> {
         let mut results = Vec::new();
         let (from_key, to_key) = match query {
             AclQuery::SharedWith {
@@ -77,11 +77,11 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| results)
     }
 
-    pub async fn acl_revoke_all(&self, account_id: u32) -> trc::Result<AHashSet<u32>> {
+    pub async fn acl_revoke_all(&self, account_id: u32) -> crate::trc::Result<AHashSet<u32>> {
         let from_key = ValueKey {
             account_id: 0,
             collection: 0,
@@ -110,7 +110,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Remove permissions
         let mut batch = BatchBuilder::new();
@@ -120,7 +120,7 @@ impl Store {
             if batch.is_large_batch() {
                 self.write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 batch = BatchBuilder::new();
                 batch.with_account_id(account_id);
                 last_collection = Collection::None;
@@ -136,7 +136,7 @@ impl Store {
         if !batch.is_empty() {
             self.write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(revoked_accounts)
@@ -144,13 +144,15 @@ impl Store {
 }
 
 impl Deserialize for AclItem {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(AclItem {
             to_account_id: bytes.deserialize_be_u32(U32_LEN)?,
             to_collection: bytes
                 .get(U32_LEN * 2)
                 .map(|b| Collection::from(*b))
-                .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?,
+                .ok_or_else(|| {
+                    crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+                })?,
             to_document_id: bytes.deserialize_be_u32((U32_LEN * 2) + 1)?,
             permissions: 0,
         })

@@ -5,14 +5,20 @@
  */
 
 use super::{AggregateTimestamp, SerializedSize};
-use crate::{core::Session, queue::RecipientDomain, reporting::SmtpReporting};
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     Server,
     config::smtp::report::AggregateFrequency,
     ipc::{DmarcEvent, ToHash},
     listener::SessionStream,
 };
+use crate::smtp::{core::Session, queue::RecipientDomain, reporting::SmtpReporting};
+use crate::store::{
+    Deserialize, IterateParams, Serialize, ValueKey,
+    write::{AlignedBytes, Archive, Archiver, BatchBuilder, QueueClass, ReportEvent, ValueClass},
+};
+use crate::trc::{AddContext, OutgoingReportEvent};
+use crate::utils::{DomainPart, config::Rate};
+use ahash::AHashMap;
 use compact_str::ToCompactString;
 use mail_auth::{
     ArcOutput, AuthenticatedMessage, AuthenticationResults, DkimOutput, DkimResult, DmarcOutput,
@@ -22,12 +28,6 @@ use mail_auth::{
     report::{AuthFailureType, IdentityAlignment, PolicyPublished, Record, Report, SPFDomainScope},
 };
 use std::{collections::hash_map::Entry, future::Future};
-use store::{
-    Deserialize, IterateParams, Serialize, ValueKey,
-    write::{AlignedBytes, Archive, Archiver, BatchBuilder, QueueClass, ReportEvent, ValueClass},
-};
-use trc::{AddContext, OutgoingReportEvent};
-use utils::{DomainPart, config::Rate};
 
 #[derive(
     Debug,
@@ -93,13 +93,13 @@ impl<T: SessionStream> Session<T> {
                         new_rcpts
                     } else {
                         if !dmarc_record.ruf().is_empty() {
-                            trc::event!(
+                            crate::trc::event!(
                                 OutgoingReport(OutgoingReportEvent::UnauthorizedReportingAddress),
                                 SpanId = self.data.session_id,
                                 Url = dmarc_record
                                     .ruf()
                                     .iter()
-                                    .map(|u| trc::Value::String(u.uri().to_compact_string()))
+                                    .map(|u| crate::trc::Value::String(u.uri().to_compact_string()))
                                     .collect::<Vec<_>>(),
                             );
                         }
@@ -107,13 +107,13 @@ impl<T: SessionStream> Session<T> {
                     }
                 }
                 None => {
-                    trc::event!(
+                    crate::trc::event!(
                         OutgoingReport(OutgoingReportEvent::ReportingAddressValidationError),
                         SpanId = self.data.session_id,
                         Url = dmarc_record
                             .ruf()
                             .iter()
-                            .map(|u| trc::Value::String(u.uri().to_compact_string()))
+                            .map(|u| crate::trc::Value::String(u.uri().to_compact_string()))
                             .collect::<Vec<_>>(),
                     );
 
@@ -225,13 +225,13 @@ impl<T: SessionStream> Session<T> {
                     )
                     .ok();
 
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::DmarcReport),
                     SpanId = self.data.session_id,
                     From = from_addr.to_string(),
                     To = rcpts
                         .iter()
-                        .map(|a| trc::Value::String(a.to_compact_string()))
+                        .map(|a| crate::trc::Value::String(a.to_compact_string()))
                         .collect::<Vec<_>>(),
                 );
 
@@ -247,12 +247,12 @@ impl<T: SessionStream> Session<T> {
                     )
                     .await;
             } else {
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::DmarcRateLimited),
                     SpanId = self.data.session_id,
                     Limit = vec![
-                        trc::Value::from(failure_rate.requests),
-                        trc::Value::from(failure_rate.period)
+                        crate::trc::Value::from(failure_rate.requests),
+                        crate::trc::Value::from(failure_rate.period)
                     ],
                 );
             }
@@ -316,7 +316,7 @@ pub trait DmarcReporting: Sync + Send {
         rua: &mut Vec<URI>,
         serialized_size: Option<&mut serde_json::Serializer<SerializedSize>>,
         span_id: u64,
-    ) -> impl Future<Output = trc::Result<Option<Report>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<Report>>> + Send;
     fn delete_dmarc_report(&self, event: ReportEvent) -> impl Future<Output = ()> + Send;
     fn schedule_dmarc(&self, event: Box<DmarcEvent>) -> impl Future<Output = ()> + Send;
 }
@@ -325,13 +325,13 @@ impl DmarcReporting for Server {
     async fn send_dmarc_aggregate_report(&self, event: ReportEvent) {
         let span_id = self.inner.data.span_id_gen.generate();
 
-        trc::event!(
+        crate::trc::event!(
             OutgoingReport(OutgoingReportEvent::DmarcAggregateReport),
             SpanId = span_id,
             ReportId = event.seq_id,
             Domain = event.domain.clone(),
-            RangeFrom = trc::Value::Timestamp(event.seq_id),
-            RangeTo = trc::Value::Timestamp(event.due),
+            RangeFrom = crate::trc::Value::Timestamp(event.seq_id),
+            RangeTo = crate::trc::Value::Timestamp(event.due),
         );
 
         // Generate report
@@ -351,16 +351,16 @@ impl DmarcReporting for Server {
         {
             Ok(Some(report)) => report,
             Ok(None) => {
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::NotFound),
                     SpanId = span_id,
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
 
                 return;
             }
             Err(err) => {
-                trc::error!(err.span_id(span_id).details("Failed to read DMARC report"));
+                crate::trc::error!(err.span_id(span_id).details("Failed to read DMARC report"));
                 return;
             }
         };
@@ -381,12 +381,12 @@ impl DmarcReporting for Server {
                         .map(|u| u.uri().to_string())
                         .collect::<Vec<_>>()
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         OutgoingReport(OutgoingReportEvent::UnauthorizedReportingAddress),
                         SpanId = span_id,
                         Url = rua
                             .iter()
-                            .map(|u| trc::Value::String(u.uri().to_compact_string()))
+                            .map(|u| crate::trc::Value::String(u.uri().to_compact_string()))
                             .collect::<Vec<_>>(),
                     );
 
@@ -395,12 +395,12 @@ impl DmarcReporting for Server {
                 }
             }
             None => {
-                trc::event!(
+                crate::trc::event!(
                     OutgoingReport(OutgoingReportEvent::ReportingAddressValidationError),
                     SpanId = span_id,
                     Url = rua
                         .iter()
-                        .map(|u| trc::Value::String(u.uri().to_compact_string()))
+                        .map(|u| crate::trc::Value::String(u.uri().to_compact_string()))
                         .collect::<Vec<_>>(),
                 );
 
@@ -464,7 +464,7 @@ impl DmarcReporting for Server {
         rua: &mut Vec<URI>,
         mut serialized_size: Option<&mut serde_json::Serializer<SerializedSize>>,
         span_id: u64,
-    ) -> trc::Result<Option<Report>> {
+    ) -> crate::trc::Result<Option<Report>> {
         // Deserialize report
         let dmarc = match self
             .store()
@@ -566,7 +566,7 @@ impl DmarcReporting for Server {
                 }
             })
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for (record, count) in record_map {
             report = report.with_record(record.with_count(count));
@@ -599,8 +599,8 @@ impl DmarcReporting for Server {
             )
             .await
         {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to delete DMARC report")
             );
             return;
@@ -609,8 +609,8 @@ impl DmarcReporting for Server {
         let mut batch = BatchBuilder::new();
         batch.clear(ValueClass::Queue(QueueClass::DmarcReportHeader(event)));
         if let Err(err) = self.core.storage.data.write(batch.build_all()).await {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to delete DMARC report")
             );
         }
@@ -655,8 +655,8 @@ impl DmarcReporting for Server {
                 match Archiver::new(entry).serialize() {
                     Ok(data) => data.to_vec(),
                     Err(err) => {
-                        trc::error!(
-                            err.caused_by(trc::location!())
+                        crate::trc::error!(
+                            err.caused_by(crate::trc::location!())
                                 .details("Failed to serialize DMARC report")
                         );
                         return;
@@ -672,8 +672,8 @@ impl DmarcReporting for Server {
             match Archiver::new(event.report_record).serialize() {
                 Ok(data) => data.to_vec(),
                 Err(err) => {
-                    trc::error!(
-                        err.caused_by(trc::location!())
+                    crate::trc::error!(
+                        err.caused_by(crate::trc::location!())
                             .details("Failed to serialize DMARC report")
                     );
                     return;
@@ -682,8 +682,8 @@ impl DmarcReporting for Server {
         );
 
         if let Err(err) = self.core.storage.data.write(builder.build_all()).await {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to write DMARC report")
             );
         }

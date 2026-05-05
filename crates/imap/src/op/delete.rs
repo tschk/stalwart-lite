@@ -5,20 +5,23 @@
  */
 
 use super::ImapContext;
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::mailbox::destroy::{MailboxDestroy, MailboxDestroyError};
+use crate::imap::{
     core::{Session, SessionData},
     spawn_op,
 };
-use common::listener::SessionStream;
-use directory::Permission;
-use email::mailbox::destroy::{MailboxDestroy, MailboxDestroyError};
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse, protocol::delete::Arguments, receiver::Request,
 };
 use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_delete(&mut self, requests: Vec<Request<Command>>) -> trc::Result<()> {
+    pub async fn handle_delete(
+        &mut self,
+        requests: Vec<Request<Command>>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapDelete)?;
 
@@ -46,20 +49,20 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> SessionData<T> {
-    pub async fn delete_folder(&self, arguments: Arguments) -> trc::Result<StatusResponse> {
+    pub async fn delete_folder(&self, arguments: Arguments) -> crate::trc::Result<StatusResponse> {
         let op_start = Instant::now();
 
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate mailbox
         let (account_id, mailbox_id) =
             if let Some(mailbox) = self.get_mailbox_by_name(&arguments.mailbox_name) {
                 (mailbox.account_id, mailbox.mailbox_id)
             } else {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Mailbox does not exist.")
                     .code(ResponseCode::TryCreate)
@@ -70,13 +73,13 @@ impl<T: SessionStream> SessionData<T> {
         let access_token = self
             .get_access_token()
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         if let Err(err) = self
             .server
             .mailbox_destroy(account_id, mailbox_id, &access_token, true)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?
+            .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
             let (code, message) = match err {
                 MailboxDestroyError::CannotDestroy => {
@@ -97,7 +100,7 @@ impl<T: SessionStream> SessionData<T> {
                 ),
             };
 
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(message)
                 .code(code)
@@ -113,8 +116,8 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
 
-        trc::event!(
-            Imap(trc::ImapEvent::DeleteMailbox),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::DeleteMailbox),
             SpanId = self.session_id,
             MailboxName = arguments.mailbox_name,
             AccountId = account_id,

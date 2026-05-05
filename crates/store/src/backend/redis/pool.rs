@@ -14,14 +14,15 @@ use super::{RedisClusterConnectionManager, RedisConnectionManager, into_error};
 
 impl managed::Manager for RedisConnectionManager {
     type Type = MultiplexedConnection;
-    type Error = trc::Error;
+    type Error = crate::trc::Error;
 
-    async fn create(&self) -> Result<MultiplexedConnection, trc::Error> {
+    async fn create(&self) -> Result<MultiplexedConnection, crate::trc::Error> {
         match tokio::time::timeout(self.timeout, self.client.get_multiplexed_tokio_connection())
             .await
         {
             Ok(conn) => conn.map_err(into_error),
-            Err(_) => Err(trc::StoreEvent::RedisError.ctx(trc::Key::Details, "Connection Timeout")),
+            Err(_) => Err(crate::trc::StoreEvent::RedisError
+                .ctx(crate::trc::Key::Details, "Connection Timeout")),
         }
     }
 
@@ -29,7 +30,7 @@ impl managed::Manager for RedisConnectionManager {
         &self,
         conn: &mut MultiplexedConnection,
         _: &managed::Metrics,
-    ) -> managed::RecycleResult<trc::Error> {
+    ) -> managed::RecycleResult<crate::trc::Error> {
         conn.req_packed_command(&redis::cmd("PING"))
             .await
             .map(|_| ())
@@ -39,12 +40,13 @@ impl managed::Manager for RedisConnectionManager {
 
 impl managed::Manager for RedisClusterConnectionManager {
     type Type = ClusterConnection;
-    type Error = trc::Error;
+    type Error = crate::trc::Error;
 
-    async fn create(&self) -> Result<ClusterConnection, trc::Error> {
+    async fn create(&self) -> Result<ClusterConnection, crate::trc::Error> {
         match tokio::time::timeout(self.timeout, self.client.get_async_connection()).await {
             Ok(conn) => conn.map_err(into_error),
-            Err(_) => Err(trc::StoreEvent::RedisError.ctx(trc::Key::Details, "Connection Timeout")),
+            Err(_) => Err(crate::trc::StoreEvent::RedisError
+                .ctx(crate::trc::Key::Details, "Connection Timeout")),
         }
     }
 
@@ -52,7 +54,7 @@ impl managed::Manager for RedisClusterConnectionManager {
         &self,
         conn: &mut ClusterConnection,
         _: &managed::Metrics,
-    ) -> managed::RecycleResult<trc::Error> {
+    ) -> managed::RecycleResult<crate::trc::Error> {
         conn.req_packed_command(&redis::cmd("PING"))
             .await
             .map(|_| ())

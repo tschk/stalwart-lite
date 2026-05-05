@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     core::BuildServer,
     listener::{SessionData, SessionManager, SessionResult, SessionStream},
 };
-use imap_proto::receiver::{self, Receiver};
+use crate::imap_proto::receiver::{self, Receiver};
 use tokio_rustls::server::TlsStream;
 
-use crate::SERVER_GREETING;
+use crate::managesieve::SERVER_GREETING;
 
 use super::{ManageSieveSessionManager, Session, State};
 
@@ -85,28 +85,28 @@ impl<T: SessionStream> Session<T> {
                                         }
                                     }
                                 } else {
-                                    trc::event!(
-                                        Network(trc::NetworkEvent::Closed),
+                                    crate::trc::event!(
+                                        Network(crate::trc::NetworkEvent::Closed),
                                         SpanId = self.session_id,
-                                        CausedBy = trc::location!()
+                                        CausedBy = crate::trc::location!()
                                     );
                                     break;
                                 }
                             }
                             Ok(Err(err)) => {
-                                trc::event!(
-                                    Network(trc::NetworkEvent::ReadError),
+                                crate::trc::event!(
+                                    Network(crate::trc::NetworkEvent::ReadError),
                                     SpanId = self.session_id,
                                     Reason = err,
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
                                 break;
                             }
                             Err(_) => {
-                                trc::event!(
-                                    Network(trc::NetworkEvent::Timeout),
+                                crate::trc::event!(
+                                    Network(crate::trc::NetworkEvent::Timeout),
                                     SpanId = self.session_id,
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
                                 self
                                     .write(b"BYE \"Connection timed out.\"\r\n")
@@ -117,11 +117,11 @@ impl<T: SessionStream> Session<T> {
                         }
                 },
                 _ = shutdown_rx.changed() => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::Closed),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::Closed),
                         SpanId = self.session_id,
                         Reason = "Server shutting down",
-                        CausedBy = trc::location!()
+                        CausedBy = crate::trc::location!()
                     );
                     self.write(b"BYE \"Server shutting down.\"\r\n").await.ok();
                     break;

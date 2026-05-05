@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{AnyId, JmapObject, JmapObjectId},
     request::{MaybeInvalid, deserialize::DeserializeArguments},
 };
+use crate::types::{blob::BlobId, id::Id};
 use calcard::{
     common::timezone::Tz,
     jscalendar::{JSCalendarDateTime, JSCalendarProperty, JSCalendarValue},
@@ -15,7 +16,6 @@ use calcard::{
 use jmap_tools::{JsonPointerItem, Key};
 use mail_parser::DateTime;
 use std::{borrow::Cow, str::FromStr};
-use types::{blob::BlobId, id::Id};
 
 #[derive(Debug, Clone, Default)]
 pub struct CalendarEvent;

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use utils::map::vec_map::VecMap;
+use crate::utils::map::vec_map::VecMap;
 
 pub mod index;
 

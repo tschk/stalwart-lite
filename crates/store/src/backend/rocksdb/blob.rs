@@ -13,7 +13,7 @@ impl RocksDbStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             db.get_pinned_cf(&db.cf_handle(CF_BLOBS).unwrap(), key)
@@ -34,7 +34,7 @@ impl RocksDbStore {
         .await
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             db.put_cf(&db.cf_handle(CF_BLOBS).unwrap(), key, data)
@@ -43,7 +43,7 @@ impl RocksDbStore {
         .await
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             db.delete_cf(&db.cf_handle(CF_BLOBS).unwrap(), key)

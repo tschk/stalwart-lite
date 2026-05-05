@@ -5,7 +5,7 @@
  */
 
 use super::ResponseMethod;
-use crate::request::Call;
+use crate::jmap_proto::request::Call;
 use serde::{Serialize, ser::SerializeSeq};
 
 impl Serialize for Call<ResponseMethod<'_>> {

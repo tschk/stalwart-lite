@@ -7,7 +7,7 @@
 pub mod acl;
 pub mod log;
 
-use crate::{IterateParams, Key};
+use crate::store::{IterateParams, Key};
 
 impl<T: Key> IterateParams<T> {
     pub fn new(begin: T, end: T) -> Self {

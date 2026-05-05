@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{KV_LOCK_HOUSEKEEPER, Server};
+use crate::migration::{
     LOCK_RETRY_TIME, LOCK_WAIT_TIME_ACCOUNT, LOCK_WAIT_TIME_CORE,
     changelog::reset_changelog,
     get_document_ids,
@@ -12,15 +13,14 @@ use crate::{
     queue_v1::migrate_queue_v011,
     report::migrate_reports,
 };
-use common::{KV_LOCK_HOUSEKEEPER, Server};
-use store::{
+use crate::store::{
     dispatch::lookup::KeyValue,
     rand::{self, seq::SliceRandom},
 };
-use trc::AddContext;
-use types::collection::Collection;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 
-pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_v0_11(server: &Server) -> crate::trc::Result<()> {
     let force_lock = std::env::var("FORCE_LOCK").is_ok();
     let in_memory = server.in_memory_store();
     let principal_ids;
@@ -34,7 +34,7 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                     LOCK_WAIT_TIME_CORE,
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             if in_memory
                 .key_get::<()>(KeyValue::<()>::build_key(
@@ -42,17 +42,21 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                     b"migrate_core_done",
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .is_none()
             {
                 migrate_queue_v011(server)
                     .await
-                    .caused_by(trc::location!())?;
-                migrate_reports(server).await.caused_by(trc::location!())?;
-                reset_changelog(server).await.caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
+                migrate_reports(server)
+                    .await
+                    .caused_by(crate::trc::location!())?;
+                reset_changelog(server)
+                    .await
+                    .caused_by(crate::trc::location!())?;
                 principal_ids = migrate_principals_v0_11(server)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 in_memory
                     .key_set(
@@ -63,15 +67,15 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                         .expires(86400),
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             } else {
                 principal_ids = get_document_ids(server, u32::MAX, Collection::Principal)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .unwrap_or_default();
 
-                trc::event!(
-                    Server(trc::ServerEvent::Startup),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::Startup),
                     Details = format!("Migration completed by another node.",)
                 );
             }
@@ -79,11 +83,11 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
             in_memory
                 .remove_lock(KV_LOCK_HOUSEKEEPER, b"migrate_core_lock")
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             break;
         } else {
-            trc::event!(
-                Server(trc::ServerEvent::Startup),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::Startup),
                 Details = format!("Migration lock busy, waiting 30 seconds.",)
             );
 
@@ -111,7 +115,7 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                             LOCK_WAIT_TIME_ACCOUNT,
                         )
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                 {
                     if in_memory
                         .key_get::<()>(KeyValue::<()>::build_key(
@@ -119,12 +123,12 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                             done_key.as_bytes(),
                         ))
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .is_none()
                     {
                         migrate_principal_v0_11(server, principal_id)
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         num_migrated += 1;
 
@@ -140,21 +144,21 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                                 .expires(86400),
                             )
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                     }
 
                     in_memory
                         .remove_lock(KV_LOCK_HOUSEKEEPER, lock_key.as_bytes())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 } else {
                     skipped_principal_ids.push(principal_id);
                 }
             }
 
             if !skipped_principal_ids.is_empty() {
-                trc::event!(
-                    Server(trc::ServerEvent::Startup),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::Startup),
                     Details = format!(
                         "Migrated {num_migrated} accounts and {} are locked by another node, waiting 30 seconds.",
                         skipped_principal_ids.len()
@@ -163,8 +167,8 @@ pub(crate) async fn migrate_v0_11(server: &Server) -> trc::Result<()> {
                 tokio::time::sleep(LOCK_RETRY_TIME).await;
                 principal_ids = skipped_principal_ids;
             } else {
-                trc::event!(
-                    Server(trc::ServerEvent::Startup),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::Startup),
                     Details = format!("Account migration completed.",)
                 );
                 break;

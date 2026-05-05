@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::acl::{self, ModRights, ModRightsOp, Rights},
     receiver::{Request, bad},
@@ -31,7 +31,7 @@ use super::PushUnique;
 */
 
 impl Request<Command> {
-    pub fn parse_acl(self, is_utf8: bool) -> trc::Result<acl::Arguments> {
+    pub fn parse_acl(self, is_utf8: bool) -> crate::trc::Result<acl::Arguments> {
         let (has_identifier, has_mod_rights) = match self.command {
             Command::SetAcl => (true, true),
             Command::DeleteAcl | Command::ListRights => (true, false),
@@ -126,7 +126,7 @@ impl ModRights {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::acl::{self, ModRights, ModRightsOp, Rights},
         receiver::Receiver,
     };

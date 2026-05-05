@@ -11,9 +11,9 @@ static SERVER_GREETING: &str = "Stalwart ManageSieve at your service.";
 
 #[cfg(test)]
 mod tests {
-    use imap_proto::receiver::{Error, Receiver, Request, State, Token};
+    use crate::imap_proto::receiver::{Error, Receiver, Request, State, Token};
 
-    use crate::core::Command;
+    use crate::managesieve::core::Command;
 
     #[test]
     fn receiver_parse_managesieve() {

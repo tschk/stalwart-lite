@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use store::{
+use crate::common::Server;
+use crate::store::{
     SUBSPACE_LOGS, U64_LEN,
     write::{AnyKey, key::KeySerializer},
 };
-use trc::AddContext;
+use crate::trc::AddContext;
 
-pub(crate) async fn reset_changelog(server: &Server) -> trc::Result<()> {
+pub(crate) async fn reset_changelog(server: &Server) -> crate::trc::Result<()> {
     // Delete changes
     server
         .store()
@@ -28,5 +28,5 @@ pub(crate) async fn reset_changelog(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
 }

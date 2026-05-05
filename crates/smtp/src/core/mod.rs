@@ -4,14 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{inbound::auth::SaslToken, queue::QueueId};
-use common::{
+use crate::common::{
     Inner, Server,
     auth::AccessToken,
     config::smtp::auth::VerifyStrategy,
     listener::{ServerInstance, asn::AsnGeoLookupResult},
 };
-use directory::Directory;
+use crate::directory::Directory;
+use crate::smtp::{inbound::auth::SaslToken, queue::QueueId};
+use crate::utils::DomainPart;
 use mail_auth::{IprevOutput, SpfOutput};
 use smtp_proto::request::receiver::{
     BdatReceiver, DataReceiver, DummyDataReceiver, DummyLineReceiver, LineReceiver, RequestReceiver,
@@ -23,7 +24,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::io::{AsyncRead, AsyncWrite};
-use utils::DomainPart;
 
 pub mod params;
 pub mod throttle;
@@ -208,7 +208,7 @@ impl PartialOrd for SessionAddress {
     }
 }
 
-impl Session<common::listener::stream::NullIo> {
+impl Session<crate::common::listener::stream::NullIo> {
     pub fn local(
         server: Server,
         instance: std::sync::Arc<ServerInstance>,
@@ -219,7 +219,7 @@ impl Session<common::listener::stream::NullIo> {
             state: State::None,
             instance,
             server,
-            stream: common::listener::stream::NullIo::default(),
+            stream: crate::common::listener::stream::NullIo::default(),
             data,
             params: SessionParameters {
                 timeout: Default::default(),

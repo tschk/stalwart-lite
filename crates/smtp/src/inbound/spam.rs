@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{config::spamfilter::SpamFilterAction, listener::SessionStream};
-use mail_auth::{ArcOutput, DkimOutput, DmarcResult, dmarc::Policy};
-use mail_parser::Message;
-use spam_filter::{
+use crate::common::{config::spamfilter::SpamFilterAction, listener::SessionStream};
+use crate::spam_filter::{
     SpamFilterInput,
     analysis::{
         init::SpamFilterInit,
         score::{SpamFilterAnalyzeScore, SpamFilterScore},
     },
 };
+use mail_auth::{ArcOutput, DkimOutput, DmarcResult, dmarc::Policy};
+use mail_parser::Message;
 
-use crate::core::Session;
+use crate::smtp::core::Session;
 
 impl<T: SessionStream> Session<T> {
     pub async fn spam_classify<'x>(

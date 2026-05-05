@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     error::set::SetError,
     method::JmapDict,
     object::{
@@ -19,10 +19,10 @@ use crate::{
     response::Response,
     types::{date::UTCDate, state::State},
 };
+use crate::types::{blob::BlobId, id::Id, keyword::Keyword};
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::{Key, Value};
 use serde::{Deserialize, Deserializer};
-use types::{blob::BlobId, id::Id, keyword::Keyword};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct ImportEmailRequest {

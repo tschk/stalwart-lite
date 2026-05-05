@@ -4,29 +4,36 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::AddContext;
+use crate::utils::config::ConfigKey;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use trc::AddContext;
-use utils::config::ConfigKey;
 
 use crate::Server;
 
 use super::AcmeProvider;
 
 impl Server {
-    pub(crate) async fn load_cert(&self, provider: &AcmeProvider) -> trc::Result<Option<Vec<u8>>> {
+    pub(crate) async fn load_cert(
+        &self,
+        provider: &AcmeProvider,
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         self.read_if_exists(provider, "cert", provider.domains.as_slice())
             .await
             .add_context(|err| {
-                err.caused_by(trc::location!())
+                err.caused_by(crate::trc::location!())
                     .details("Failed to load certificates")
             })
     }
 
-    pub(crate) async fn store_cert(&self, provider: &AcmeProvider, cert: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn store_cert(
+        &self,
+        provider: &AcmeProvider,
+        cert: &[u8],
+    ) -> crate::trc::Result<()> {
         self.write(provider, "cert", provider.domains.as_slice(), cert)
             .await
             .add_context(|err| {
-                err.caused_by(trc::location!())
+                err.caused_by(crate::trc::location!())
                     .details("Failed to store certificate")
             })
     }
@@ -34,11 +41,11 @@ impl Server {
     pub(crate) async fn load_account(
         &self,
         provider: &AcmeProvider,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         self.read_if_exists(provider, "account-key", provider.contact.as_slice())
             .await
             .add_context(|err| {
-                err.caused_by(trc::location!())
+                err.caused_by(crate::trc::location!())
                     .details("Failed to load account")
             })
     }
@@ -47,7 +54,7 @@ impl Server {
         &self,
         provider: &AcmeProvider,
         account: &[u8],
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         self.write(
             provider,
             "account-key",
@@ -56,7 +63,7 @@ impl Server {
         )
         .await
         .add_context(|err| {
-            err.caused_by(trc::location!())
+            err.caused_by(crate::trc::location!())
                 .details("Failed to store account")
         })
     }
@@ -66,7 +73,7 @@ impl Server {
         provider: &AcmeProvider,
         class: &str,
         items: &[String],
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         if let Some(content) = self
             .core
             .storage
@@ -77,8 +84,8 @@ impl Server {
             URL_SAFE_NO_PAD
                 .decode(content.as_bytes())
                 .map_err(|err| {
-                    trc::EventType::Acme(trc::AcmeEvent::Error)
-                        .caused_by(trc::location!())
+                    crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+                        .caused_by(crate::trc::location!())
                         .reason(err)
                         .details("failed to decode certificate")
                 })
@@ -94,7 +101,7 @@ impl Server {
         class: &str,
         items: &[String],
         contents: impl AsRef<[u8]>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         self.core
             .storage
             .config

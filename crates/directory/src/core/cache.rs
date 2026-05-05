@@ -6,12 +6,12 @@
 
 use std::time::Duration;
 
-use utils::{
+use crate::utils::{
     cache::CacheWithTtl,
     config::{Config, utils::AsKey},
 };
 
-use crate::backend::RcptType;
+use crate::directory::backend::RcptType;
 
 pub struct CachedDirectory {
     cached_domains: CacheWithTtl<String, bool>,

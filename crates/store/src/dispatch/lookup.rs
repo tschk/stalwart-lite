@@ -6,11 +6,11 @@
 
 use std::borrow::Cow;
 
-use trc::AddContext;
-use utils::config::Rate;
+use crate::trc::AddContext;
+use crate::utils::config::Rate;
 
 #[allow(unused_imports)]
-use crate::{
+use crate::store::{
     Deserialize, InMemoryStore, IterateParams, QueryResult, Store, U64_LEN, Value, ValueKey,
     write::{
         BatchBuilder, Operation, ValueClass, ValueOp,
@@ -18,7 +18,7 @@ use crate::{
         now,
     },
 };
-use crate::{
+use crate::store::{
     SerializeInfallible,
     backend::http::lookup::HttpStoreGet,
     write::{InMemoryClass, assert::AssertValue},
@@ -31,7 +31,7 @@ pub struct KeyValue<T> {
 }
 
 impl InMemoryStore {
-    pub async fn key_set(&self, kv: KeyValue<Vec<u8>>) -> trc::Result<()> {
+    pub async fn key_set(&self, kv: KeyValue<Vec<u8>>) -> crate::trc::Result<()> {
         match self {
             InMemoryStore::Store(store) => {
                 let mut batch = BatchBuilder::new();
@@ -55,13 +55,17 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.key_set(kv).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn counter_incr(&self, kv: KeyValue<i64>, return_value: bool) -> trc::Result<i64> {
+    pub async fn counter_incr(
+        &self,
+        kv: KeyValue<i64>,
+        return_value: bool,
+    ) -> crate::trc::Result<i64> {
         match self {
             InMemoryStore::Store(store) => {
                 let mut batch = BatchBuilder::new();
@@ -106,13 +110,13 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.counter_incr(kv).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn key_delete(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<()> {
+    pub async fn key_delete(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<()> {
         match self {
             InMemoryStore::Store(store) => {
                 let mut batch = BatchBuilder::new();
@@ -131,13 +135,13 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.key_delete(key).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn counter_delete(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<()> {
+    pub async fn counter_delete(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<()> {
         match self {
             InMemoryStore::Store(store) => {
                 let mut batch = BatchBuilder::new();
@@ -156,13 +160,13 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.counter_delete(key).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> trc::Result<()> {
+    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> crate::trc::Result<()> {
         match self {
             InMemoryStore::Store(store) => {
                 if prefix.is_empty() {
@@ -201,16 +205,16 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.key_delete_prefix(prefix).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     pub async fn key_get<T: Deserialize + From<Value<'static>> + std::fmt::Debug + 'static>(
         &self,
         key: impl Into<LookupKey<'_>>,
-    ) -> trc::Result<Option<T>> {
+    ) -> crate::trc::Result<Option<T>> {
         match self {
             InMemoryStore::Store(store) => store
                 .get_value::<LookupValue<T>>(ValueKey::from(ValueClass::InMemory(
@@ -233,10 +237,10 @@ impl InMemoryStore {
                 Ok(store.get(key.into().as_str()).map(|value| T::from(value)))
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn counter_get(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<i64> {
+    pub async fn counter_get(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<i64> {
         match self {
             InMemoryStore::Store(store) => {
                 store
@@ -254,13 +258,13 @@ impl InMemoryStore {
             InMemoryStore::Sharded(store) => store.counter_get(key).await,
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn key_exists(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<bool> {
+    pub async fn key_exists(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<bool> {
         match self {
             InMemoryStore::Store(store) => store
                 .get_value::<LookupValue<()>>(ValueKey::from(ValueClass::InMemory(
@@ -279,7 +283,7 @@ impl InMemoryStore {
             InMemoryStore::Static(store) => Ok(store.get(key.into().as_str()).is_some()),
             InMemoryStore::Http(store) => Ok(store.contains(key.into().as_str())),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     pub async fn is_rate_allowed(
@@ -288,7 +292,7 @@ impl InMemoryStore {
         key: &[u8],
         rate: &Rate,
         soft_check: bool,
-    ) -> trc::Result<Option<u64>> {
+    ) -> crate::trc::Result<Option<u64>> {
         let now = now();
         let range_start = now / rate.period.as_secs();
         let range_end = (range_start * rate.period.as_secs()) + rate.period.as_secs();
@@ -302,9 +306,12 @@ impl InMemoryStore {
         let requests = if !soft_check {
             self.counter_incr(KeyValue::new(bucket, 1).expires(expires_in), true)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         } else {
-            self.counter_get(bucket).await.caused_by(trc::location!())? + 1
+            self.counter_get(bucket)
+                .await
+                .caused_by(crate::trc::location!())?
+                + 1
         };
 
         if requests <= rate.requests as i64 {
@@ -314,7 +321,12 @@ impl InMemoryStore {
         }
     }
 
-    pub async fn try_lock(&self, prefix: u8, key: &[u8], duration: u64) -> trc::Result<bool> {
+    pub async fn try_lock(
+        &self,
+        prefix: u8,
+        key: &[u8],
+        duration: u64,
+    ) -> crate::trc::Result<bool> {
         match self {
             InMemoryStore::Store(store) => {
                 let key = KeyValue::<()>::build_key(prefix, key);
@@ -326,7 +338,9 @@ impl InMemoryStore {
                 {
                     Ok(lock_expiry) => lock_expiry,
                     Err(err)
-                        if err.matches(trc::EventType::Store(trc::StoreEvent::DataCorruption)) =>
+                        if err.matches(crate::trc::EventType::Store(
+                            crate::trc::StoreEvent::DataCorruption,
+                        )) =>
                     {
                         // TODO remove in 1.0
                         let mut batch = BatchBuilder::new();
@@ -337,13 +351,13 @@ impl InMemoryStore {
                         store
                             .write(batch.build_all())
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         None
                     }
                     Err(err) => {
                         return Err(err
                             .details("Failed to read lock.")
-                            .caused_by(trc::location!()));
+                            .caused_by(crate::trc::location!()));
                     }
                 };
 
@@ -367,7 +381,7 @@ impl InMemoryStore {
                     Err(err) if err.is_assertion_failure() => Ok(false),
                     Err(err) => Err(err
                         .details("Failed to lock event.")
-                        .caused_by(trc::location!())),
+                        .caused_by(crate::trc::location!())),
                 }
             }
             #[cfg(feature = "redis")]
@@ -385,17 +399,17 @@ impl InMemoryStore {
                 .map(|count| count == 1),
             // SPDX-SnippetEnd
             InMemoryStore::Static(_) | InMemoryStore::Http(_) => {
-                Err(trc::StoreEvent::NotSupported.into_err())
+                Err(crate::trc::StoreEvent::NotSupported.into_err())
             }
         }
     }
 
-    pub async fn remove_lock(&self, prefix: u8, key: &[u8]) -> trc::Result<()> {
+    pub async fn remove_lock(&self, prefix: u8, key: &[u8]) -> crate::trc::Result<()> {
         self.key_delete(KeyValue::<()>::build_key(prefix, key))
             .await
     }
 
-    pub async fn purge_in_memory_store(&self) -> trc::Result<()> {
+    pub async fn purge_in_memory_store(&self) -> crate::trc::Result<()> {
         match self {
             InMemoryStore::Store(store) => {
                 // Delete expired keys and counters
@@ -408,11 +422,13 @@ impl InMemoryStore {
                 let mut expired_counters = Vec::new();
                 store
                     .iterate(IterateParams::new(from_key, to_key), |key, value| {
-                        let expiry = value.deserialize_be_u64(0).caused_by(trc::location!())?;
+                        let expiry = value
+                            .deserialize_be_u64(0)
+                            .caused_by(crate::trc::location!())?;
                         if expiry == 0 {
                             if value
                                 .deserialize_be_u64(U64_LEN)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 <= current_time
                             {
                                 expired_counters.push(key.to_vec());
@@ -423,7 +439,7 @@ impl InMemoryStore {
                         Ok(true)
                     })
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if !expired_keys.is_empty() {
                     let mut batch = BatchBuilder::new();
@@ -436,7 +452,7 @@ impl InMemoryStore {
                             store
                                 .write(batch.build_all())
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             batch = BatchBuilder::new();
                         }
                     }
@@ -444,7 +460,7 @@ impl InMemoryStore {
                         store
                             .write(batch.build_all())
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                     }
                 }
 
@@ -463,7 +479,7 @@ impl InMemoryStore {
                             store
                                 .write(batch.build_all())
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             batch = BatchBuilder::new();
                         }
                     }
@@ -471,7 +487,7 @@ impl InMemoryStore {
                         store
                             .write(batch.build_all())
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                     }
                 }
             }
@@ -623,12 +639,12 @@ enum LookupValue<T> {
 }
 
 impl<T: Deserialize> Deserialize for LookupValue<T> {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         bytes.deserialize_be_u64(0).and_then(|expires| {
             Ok(if expires > now() {
                 LookupValue::Value(
                     T::deserialize(bytes.get(U64_LEN..).unwrap_or_default())
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 )
             } else {
                 LookupValue::None

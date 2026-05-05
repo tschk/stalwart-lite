@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::config::telemetry::OtelMetrics;
+use crate::common::config::telemetry::OtelMetrics;
+use crate::trc::{Collector, TelemetryEvent};
 use opentelemetry_sdk::metrics::{
     Temporality,
     data::{
@@ -14,7 +15,6 @@ use opentelemetry_sdk::metrics::{
     exporter::PushMetricExporter,
 };
 use std::time::SystemTime;
-use trc::{Collector, TelemetryEvent};
 
 impl OtelMetrics {
     pub async fn push_metrics(&self, is_enterprise: bool, start_time: SystemTime) {
@@ -95,7 +95,7 @@ impl OtelMetrics {
             })
             .await
         {
-            trc::event!(
+            crate::trc::event!(
                 Telemetry(TelemetryEvent::OtelMetricsExporterError),
                 Reason = err.to_string(),
             );
@@ -105,7 +105,7 @@ impl OtelMetrics {
     pub fn enable_errors() {
         // TODO: Remove this when the OpenTelemetry SDK supports error handling
         /*let _ = set_error_handler(|error| {
-            trc::event!(
+            crate::trc::event!(
                 Telemetry(TelemetryEvent::OtelMetricsExporterError),
                 Reason = error.to_string(),
             );

@@ -7,48 +7,48 @@
 use mail_send::{Credentials, smtp::AssertReply};
 use smtp_proto::Severity;
 
-use crate::{IntoError, Principal, QueryBy, Type, backend::RcptType};
+use crate::directory::{IntoError, Principal, QueryBy, Type, backend::RcptType};
 
 use super::{SmtpClient, SmtpDirectory};
 
 impl SmtpDirectory {
-    pub async fn query(&self, query: QueryBy<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, query: QueryBy<'_>) -> crate::trc::Result<Option<Principal>> {
         if let QueryBy::Credentials(credentials) = query {
             self.pool
                 .get()
                 .await
-                .map_err(|err| err.into_error().caused_by(trc::location!()))?
+                .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
                 .authenticate(credentials)
                 .await
         } else {
-            Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+            Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
         }
     }
 
-    pub async fn email_to_id(&self, _address: &str) -> trc::Result<Option<u32>> {
-        Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+    pub async fn email_to_id(&self, _address: &str) -> crate::trc::Result<Option<u32>> {
+        Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
     }
 
-    pub async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         let mut conn = self
             .pool
             .get()
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
         if !conn.sent_mail_from {
             conn.client
                 .cmd(b"MAIL FROM:<>\r\n")
                 .await
-                .map_err(|err| err.into_error().caused_by(trc::location!()))?
+                .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
                 .assert_positive_completion()
-                .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+                .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
             conn.sent_mail_from = true;
         }
         let reply = conn
             .client
             .cmd(format!("RCPT TO:<{address}>\r\n").as_bytes())
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
         match reply.severity() {
             Severity::PositiveCompletion => {
                 conn.num_rcpts += 1;
@@ -60,31 +60,31 @@ impl SmtpDirectory {
                 Ok(RcptType::Mailbox)
             }
             Severity::PermanentNegativeCompletion => Ok(RcptType::Invalid),
-            _ => Err(trc::StoreEvent::UnexpectedError
-                .ctx(trc::Key::Code, reply.code())
-                .ctx(trc::Key::Details, reply.message)),
+            _ => Err(crate::trc::StoreEvent::UnexpectedError
+                .ctx(crate::trc::Key::Code, reply.code())
+                .ctx(crate::trc::Key::Details, reply.message)),
         }
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.pool
             .get()
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .expand(&format!("VRFY {address}\r\n"))
             .await
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.pool
             .get()
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?
             .expand(&format!("EXPN {address}\r\n"))
             .await
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         Ok(self.domains.contains(domain))
     }
 }
@@ -93,7 +93,7 @@ impl SmtpClient {
     async fn authenticate(
         &mut self,
         credentials: &Credentials<String>,
-    ) -> trc::Result<Option<Principal>> {
+    ) -> crate::trc::Result<Option<Principal>> {
         match self
             .client
             .authenticate(credentials, &self.capabilities)
@@ -110,12 +110,12 @@ impl SmtpClient {
         }
     }
 
-    async fn expand(&mut self, command: &str) -> trc::Result<Vec<String>> {
+    async fn expand(&mut self, command: &str) -> crate::trc::Result<Vec<String>> {
         let reply = self
             .client
             .cmd(command.as_bytes())
             .await
-            .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+            .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
         match reply.code() {
             250 | 251 => Ok(reply
                 .message()
@@ -123,11 +123,11 @@ impl SmtpClient {
                 .map(|p| p.into())
                 .collect::<Vec<String>>()),
             code @ (550 | 551 | 553 | 500 | 502) => {
-                Err(trc::StoreEvent::NotSupported.ctx(trc::Key::Code, code))
+                Err(crate::trc::StoreEvent::NotSupported.ctx(crate::trc::Key::Code, code))
             }
-            code => Err(trc::StoreEvent::UnexpectedError
-                .ctx(trc::Key::Code, code)
-                .ctx(trc::Key::Details, reply.message)),
+            code => Err(crate::trc::StoreEvent::UnexpectedError
+                .ctx(crate::trc::Key::Code, code)
+                .ctx(crate::trc::Key::Details, reply.message)),
         }
     }
 }

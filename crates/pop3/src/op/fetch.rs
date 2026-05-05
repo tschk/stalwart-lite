@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{Session, protocol::response::Response};
-use common::listener::SessionStream;
-use directory::Permission;
-use email::message::metadata::MessageMetadata;
-use std::time::Instant;
-use store::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::message::metadata::MessageMetadata;
+use crate::pop3::{Session, protocol::response::Response};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::EmailField};
-use utils::chained_bytes::ChainedBytes;
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::EmailField};
+use crate::utils::chained_bytes::ChainedBytes;
+use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_fetch(&mut self, msg: u32, lines: Option<u32>) -> trc::Result<()> {
+    pub async fn handle_fetch(&mut self, msg: u32, lines: Option<u32>) -> crate::trc::Result<()> {
         // Validate access
         self.state
             .access_token()
@@ -37,20 +37,20 @@ impl<T: SessionStream> Session<T> {
                     EmailField::Metadata,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let metadata = metadata_
                     .unarchive::<MessageMetadata>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 if let Some(bytes) = self
                     .server
                     .blob_store()
                     .get_blob(metadata.blob_hash.0.as_slice(), 0..usize::MAX)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 {
-                    trc::event!(
-                        Pop3(trc::Pop3Event::Fetch),
+                    crate::trc::event!(
+                        Pop3(crate::trc::Pop3Event::Fetch),
                         SpanId = self.session_id,
                         DocumentId = message.id,
                         Elapsed = op_start.elapsed()
@@ -73,19 +73,21 @@ impl<T: SessionStream> Session<T> {
                     )
                     .await
                 } else {
-                    Err(trc::Pop3Event::Error
+                    Err(crate::trc::Pop3Event::Error
                         .into_err()
                         .details("Failed to fetch message. Perhaps another session deleted it?")
-                        .caused_by(trc::location!()))
+                        .caused_by(crate::trc::location!()))
                 }
             } else {
-                Err(trc::Pop3Event::Error
+                Err(crate::trc::Pop3Event::Error
                     .into_err()
                     .details("Failed to fetch message. Perhaps another session deleted it?")
-                    .caused_by(trc::location!()))
+                    .caused_by(crate::trc::location!()))
             }
         } else {
-            Err(trc::Pop3Event::Error.into_err().details("No such message."))
+            Err(crate::trc::Pop3Event::Error
+                .into_err()
+                .details("No such message."))
         }
     }
 }

@@ -6,17 +6,17 @@
 
 use std::{collections::HashSet, future::Future, vec};
 
-use common::{
+use crate::common::{
     Server,
     scripts::{
         IsMixedCharset,
         functions::{array::cosine_similarity, unicode::CharUtils},
     },
 };
+use crate::nlp::tokenizers::types::TokenType;
 use mail_parser::{HeaderName, MimeHeaders, PartType};
-use nlp::tokenizers::types::TokenType;
 
-use crate::{SpamFilterContext, TextPart};
+use crate::spam_filter::{SpamFilterContext, TextPart};
 
 pub trait SpamFilterAnalyzeMime: Sync + Send {
     fn spam_filter_analyze_mime(

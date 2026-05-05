@@ -6,13 +6,17 @@
 
 use std::{borrow::Cow, ops::Range, time::Instant};
 
-use trc::{AddContext, StoreEvent};
-use utils::config::utils::ParseValue;
+use crate::trc::{AddContext, StoreEvent};
+use crate::utils::config::utils::ParseValue;
 
-use crate::{BlobBackend, BlobStore, CompressionAlgo, Store};
+use crate::store::{BlobBackend, BlobStore, CompressionAlgo, Store};
 
 impl BlobStore {
-    pub async fn get_blob(&self, key: &[u8], range: Range<usize>) -> trc::Result<Option<Vec<u8>>> {
+    pub async fn get_blob(
+        &self,
+        key: &[u8],
+        range: Range<usize>,
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let read_range = match self.compression {
             CompressionAlgo::None => range.clone(),
             CompressionAlgo::Lz4 => 0..usize::MAX,
@@ -36,7 +40,7 @@ impl BlobStore {
                 #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
                 Store::SQLReadReplica(store) => store.get_blob(key, read_range).await,
                 // SPDX-SnippetEnd
-                Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
             },
             BlobBackend::Fs(store) => store.get_blob(key, read_range).await,
             #[cfg(feature = "s3")]
@@ -51,7 +55,7 @@ impl BlobStore {
             // SPDX-SnippetEnd
         };
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::BlobRead),
             Key = key,
             Elapsed = start_time.elapsed(),
@@ -61,7 +65,7 @@ impl BlobStore {
         );
 
         let decompressed = match self.compression {
-            CompressionAlgo::Lz4 => match result.caused_by(trc::location!())? {
+            CompressionAlgo::Lz4 => match result.caused_by(crate::trc::location!())? {
                 Some(data)
                     if data.last().copied().unwrap_or_default()
                         == CompressionAlgo::Lz4.marker() =>
@@ -70,14 +74,14 @@ impl BlobStore {
                         data.get(..data.len() - 1).unwrap_or_default(),
                     )
                     .map_err(|err| {
-                        trc::StoreEvent::DecompressError
+                        crate::trc::StoreEvent::DecompressError
                             .reason(err)
-                            .ctx(trc::Key::Key, key)
-                            .ctx(trc::Key::CausedBy, trc::location!())
+                            .ctx(crate::trc::Key::Key, key)
+                            .ctx(crate::trc::Key::CausedBy, crate::trc::location!())
                     })?
                 }
                 Some(data) => {
-                    trc::event!(Store(StoreEvent::BlobMissingMarker), Key = key,);
+                    crate::trc::event!(Store(StoreEvent::BlobMissingMarker), Key = key,);
                     data
                 }
                 None => return Ok(None),
@@ -97,7 +101,7 @@ impl BlobStore {
         }
     }
 
-    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let data: Cow<[u8]> = match self.compression {
             CompressionAlgo::None => data.into(),
             CompressionAlgo::Lz4 => {
@@ -126,7 +130,7 @@ impl BlobStore {
                 #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
                 Store::SQLReadReplica(store) => store.put_blob(key, data.as_ref()).await,
                 // SPDX-SnippetEnd
-                Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
             },
             BlobBackend::Fs(store) => store.put_blob(key, data.as_ref()).await,
             #[cfg(feature = "s3")]
@@ -140,9 +144,9 @@ impl BlobStore {
             BlobBackend::Sharded(store) => store.put_blob(key, data.as_ref()).await,
             // SPDX-SnippetEnd
         }
-        .caused_by(trc::location!());
+        .caused_by(crate::trc::location!());
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::BlobWrite),
             Key = key,
             Elapsed = start_time.elapsed(),
@@ -152,7 +156,7 @@ impl BlobStore {
         result
     }
 
-    pub async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let start_time = Instant::now();
         let result = match &self.backend {
             BlobBackend::Store(store) => match store {
@@ -172,7 +176,7 @@ impl BlobStore {
                 #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
                 Store::SQLReadReplica(store) => store.delete_blob(key).await,
                 // SPDX-SnippetEnd
-                Store::None => Err(trc::StoreEvent::NotConfigured.into()),
+                Store::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
             },
             BlobBackend::Fs(store) => store.delete_blob(key).await,
             #[cfg(feature = "s3")]
@@ -186,9 +190,9 @@ impl BlobStore {
             BlobBackend::Sharded(store) => store.delete_blob(key).await,
             // SPDX-SnippetEnd
         }
-        .caused_by(trc::location!());
+        .caused_by(crate::trc::location!());
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::BlobWrite),
             Key = key,
             Elapsed = start_time.elapsed(),

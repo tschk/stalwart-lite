@@ -5,38 +5,38 @@
  */
 
 use super::{ImapContext, ToModSeq};
-use crate::core::{ImapId, SavedSearch, SelectedMailbox, Session, SessionData};
-use ahash::AHashMap;
-use common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use email::{
+use crate::common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
+use crate::directory::Permission;
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     message::metadata::MessageData,
 };
-use imap_proto::{
+use crate::imap::core::{ImapId, SavedSearch, SelectedMailbox, Session, SessionData};
+use crate::imap_proto::{
     Command, ResponseCode, ResponseType, StatusResponse,
     parser::parse_sequence_set,
     receiver::{Request, Token},
 };
-use std::{sync::Arc, time::Instant};
-use store::{
+use crate::store::{
     SerializeInfallible,
     roaring::RoaringBitmap,
     write::{BatchBuilder, SearchIndex, TaskEpoch, TaskQueueClass, ValueClass},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, VanishedCollection},
     keyword::Keyword,
 };
+use ahash::AHashMap;
+use std::{sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_expunge(
         &mut self,
         request: Request<Command>,
         is_uid: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapExpunge)?;
 
@@ -51,9 +51,9 @@ impl<T: SessionStream> Session<T> {
                 Acl::RemoveItems,
             )
             .await
-            .imap_ctx(&request.tag, trc::location!())?
+            .imap_ctx(&request.tag, crate::trc::location!())?
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(concat!(
                     "You do not have the required permissions ",
@@ -67,10 +67,10 @@ impl<T: SessionStream> Session<T> {
         let sequence = match request.tokens.into_iter().next() {
             Some(Token::Argument(value)) if is_uid => {
                 let sequence = parse_sequence_set(&value).map_err(|err| {
-                    trc::ImapEvent::Error
+                    crate::trc::ImapEvent::Error
                         .into_err()
                         .details(err)
-                        .ctx(trc::Key::Type, ResponseType::Bad)
+                        .ctx(crate::trc::Key::Type, ResponseType::Bad)
                         .id(request.tag.clone())
                 })?;
                 Some(
@@ -87,7 +87,7 @@ impl<T: SessionStream> Session<T> {
         // Expunge
         data.expunge(mailbox.clone(), sequence, op_start)
             .await
-            .imap_ctx(&request.tag, trc::location!())?;
+            .imap_ctx(&request.tag, crate::trc::location!())?;
 
         // Clear saved searches
         *mailbox.saved_search.lock() = SavedSearch::None;
@@ -96,7 +96,7 @@ impl<T: SessionStream> Session<T> {
         let modseq = data
             .write_mailbox_changes(&mailbox, self.is_qresync)
             .await
-            .imap_ctx(&request.tag, trc::location!())?;
+            .imap_ctx(&request.tag, crate::trc::location!())?;
         let mut response =
             StatusResponse::completed(Command::Expunge(is_uid)).with_tag(request.tag);
 
@@ -116,14 +116,14 @@ impl<T: SessionStream> SessionData<T> {
         mailbox: Arc<SelectedMailbox>,
         sequence: Option<AHashMap<u32, ImapId>>,
         op_start: Instant,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Obtain message ids
         let account_id = mailbox.id.account_id;
         let mut deleted_ids = RoaringBitmap::from_iter(
             self.server
                 .get_cached_messages(account_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .in_mailbox_with_keyword(mailbox.id.mailbox_id, &Keyword::Deleted)
                 .map(|m| m.document_id),
         );
@@ -137,14 +137,17 @@ impl<T: SessionStream> SessionData<T> {
         let mut batch = BatchBuilder::new();
         self.email_untag_or_delete(account_id, mailbox.id.mailbox_id, &deleted_ids, &mut batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::Expunge),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Expunge),
             SpanId = self.session_id,
             AccountId = account_id,
             MailboxId = mailbox.id.mailbox_id,
-            DocumentId = deleted_ids.iter().map(trc::Value::from).collect::<Vec<_>>(),
+            DocumentId = deleted_ids
+                .iter()
+                .map(crate::trc::Value::from)
+                .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );
 
@@ -153,7 +156,7 @@ impl<T: SessionStream> SessionData<T> {
             self.server
                 .commit_batch(batch)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             self.server.notify_task_queue();
         }
 
@@ -166,7 +169,7 @@ impl<T: SessionStream> SessionData<T> {
         mailbox_id: u32,
         deleted_ids: &RoaringBitmap,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         batch
             .with_account_id(account_id)
             .with_collection(Collection::Email);
@@ -179,7 +182,7 @@ impl<T: SessionStream> SessionData<T> {
                 |document_id, data_| {
                     let metadata = data_
                         .to_unarchived::<MessageData>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     if let Some(message_uid) = metadata.inner.message_uid(mailbox_id) {
                         // Add vanished items
@@ -197,7 +200,7 @@ impl<T: SessionStream> SessionData<T> {
                                         .with_access_token(&self.access_token)
                                         .with_current(metadata),
                                 )
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .set(
                                     ValueClass::TaskQueue(TaskQueueClass::UpdateIndex {
                                         index: SearchIndex::Email,
@@ -220,7 +223,7 @@ impl<T: SessionStream> SessionData<T> {
                                         .with_current(metadata)
                                         .with_changes(new_metadata.seal()),
                                 )
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .commit_point();
                         }
                     }
@@ -229,7 +232,7 @@ impl<T: SessionStream> SessionData<T> {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(())
     }

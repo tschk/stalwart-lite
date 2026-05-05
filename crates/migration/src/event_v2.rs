@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{DavName, Server};
-use groupware::calendar::{
+use crate::common::{DavName, Server};
+use crate::groupware::calendar::{
     Alarm, CalendarEvent, CalendarEventData, CalendarEventNotification, ComponentTimeRange,
 };
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, serialize::rkyv_deserialize},
 };
-use trc::AddContext;
-use types::{collection::Collection, dead_property::DeadProperty, field::Field};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, dead_property::DeadProperty, field::Field};
 
-use crate::get_document_ids;
+use crate::migration::get_document_ids;
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,
@@ -68,10 +68,10 @@ pub struct CalendarEventNotificationV2 {
 pub(crate) async fn migrate_calendar_events_v013(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     let document_ids = get_document_ids(server, account_id, Collection::CalendarEvent)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
 
     let mut num_migrated = 0;
@@ -85,7 +85,7 @@ pub(crate) async fn migrate_calendar_events_v013(
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         else {
             continue;
         };
@@ -122,19 +122,19 @@ pub(crate) async fn migrate_calendar_events_v013(
                         Field::ARCHIVE,
                         Archiver::new(new_event)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 num_migrated += 1;
             }
             Err(err) => {
                 if let Err(err_) = archive.unarchive_untrusted::<CalendarEvent>() {
-                    trc::error!(err_.caused_by(trc::location!()));
-                    return Err(err.caused_by(trc::location!()));
+                    crate::trc::error!(err_.caused_by(crate::trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -146,10 +146,10 @@ pub(crate) async fn migrate_calendar_events_v013(
 pub(crate) async fn migrate_calendar_scheduling_v013(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     let document_ids = get_document_ids(server, account_id, Collection::CalendarEventNotification)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
 
     let mut num_migrated = 0;
@@ -163,7 +163,7 @@ pub(crate) async fn migrate_calendar_scheduling_v013(
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         else {
             continue;
         };
@@ -190,19 +190,19 @@ pub(crate) async fn migrate_calendar_scheduling_v013(
                         Field::ARCHIVE,
                         Archiver::new(new_event)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 num_migrated += 1;
             }
             Err(err) => {
                 if let Err(err_) = archive.unarchive_untrusted::<CalendarEventNotification>() {
-                    trc::error!(err_.caused_by(trc::location!()));
-                    return Err(err.caused_by(trc::location!()));
+                    crate::trc::error!(err_.caused_by(crate::trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -213,6 +213,6 @@ pub(crate) async fn migrate_calendar_scheduling_v013(
 
 pub(crate) fn migrate_icalendar_v02(
     ical: calcard_v01::icalendar::ICalendar,
-) -> calcard_latest::icalendar::ICalendar {
-    calcard_latest::icalendar::ICalendar::parse(ical.to_string()).unwrap_or_default()
+) -> calcard::icalendar::ICalendar {
+    calcard::icalendar::ICalendar::parse(ical.to_string()).unwrap_or_default()
 }

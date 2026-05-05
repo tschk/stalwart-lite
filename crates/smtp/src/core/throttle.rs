@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_SMTP, ThrottleKey,
     config::smtp::*,
     expr::{functions::ResolveVariable, *},
     listener::SessionStream,
 };
+use crate::trc::SmtpEvent;
+use crate::utils::config::Rate;
 use queue::QueueQuota;
-use trc::SmtpEvent;
-use utils::config::Rate;
 
 use super::Session;
 
@@ -183,22 +183,22 @@ impl<T: SessionStream> Session<T> {
                     .await
                 {
                     Ok(Some(_)) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::RateLimitExceeded),
                             SpanId = self.data.session_id,
                             Id = t.id.clone(),
                             Limit = vec![
-                                trc::Value::from(t.rate.requests),
-                                trc::Value::from(t.rate.period)
+                                crate::trc::Value::from(t.rate.requests),
+                                crate::trc::Value::from(t.rate.period)
                             ],
                         );
 
                         return false;
                     }
                     Err(err) => {
-                        trc::error!(
+                        crate::trc::error!(
                             err.span_id(self.data.session_id)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         );
                     }
                     _ => (),
@@ -232,9 +232,9 @@ impl<T: SessionStream> Session<T> {
             Ok(None) => true,
             Ok(Some(_)) => false,
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(self.data.session_id)
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 );
                 true
             }

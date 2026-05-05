@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::object::{AnyId, JmapObject, JmapObjectId};
-use crate::types::date::UTCDate;
+use crate::jmap_proto::object::{AnyId, JmapObject, JmapObjectId};
+use crate::jmap_proto::types::date::UTCDate;
+use crate::types::{id::Id, type_state::DataType};
 use jmap_tools::{Element, JsonPointer, JsonPointerItem};
 use jmap_tools::{Key, Property};
 use std::borrow::Cow;
 use std::str::FromStr;
-use types::{id::Id, type_state::DataType};
 
 #[derive(Debug, Clone, Default)]
 pub struct PushSubscription;

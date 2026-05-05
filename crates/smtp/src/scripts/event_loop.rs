@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, config::smtp::queue::QueueExpiry, scripts::plugins::PluginContext};
+use crate::smtp::{
     inbound::DkimSign,
     queue::{MessageSource, quota::HasQueueQuota, spool::SmtpSpool},
 };
-use common::{Server, config::smtp::queue::QueueExpiry, scripts::plugins::PluginContext};
+use crate::trc::SieveEvent;
 use mail_auth::common::headers::HeaderWriter;
 use mail_parser::{Encoding, Message, MessagePart, PartType};
 use sieve::{
@@ -20,7 +21,6 @@ use smtp_proto::{
     RCPT_NOTIFY_NEVER, RCPT_NOTIFY_SUCCESS,
 };
 use std::{borrow::Cow, future::Future, sync::Arc, time::Instant};
-use trc::SieveEvent;
 
 use super::{ScriptModification, ScriptParameters, ScriptResult};
 
@@ -82,7 +82,7 @@ impl RunScript for Server {
                         } else if optional {
                             input = false.into();
                         } else {
-                            trc::event!(
+                            crate::trc::event!(
                                 Sieve(SieveEvent::ScriptNotFound),
                                 Id = script_id.clone(),
                                 SpanId = session_id,
@@ -113,7 +113,7 @@ impl RunScript for Server {
                                     }
                                 }
                             } else {
-                                trc::event!(
+                                crate::trc::event!(
                                     Sieve(SieveEvent::ListNotFound),
                                     Id = script_id.clone(),
                                     SpanId = session_id,
@@ -169,7 +169,7 @@ impl RunScript for Server {
                                 }
                             }
                             Recipient::List(list) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Sieve(SieveEvent::NotSupported),
                                     Id = script_id.clone(),
                                     SpanId = session_id,
@@ -284,10 +284,10 @@ impl RunScript for Server {
                                                 signature.write_header(&mut headers);
                                             }
                                             Err(err) => {
-                                                trc::error!(
-                                                    trc::Error::from(err)
+                                                crate::trc::error!(
+                                                    crate::trc::Error::from(err)
                                                         .span_id(session_id)
-                                                        .caused_by(trc::location!())
+                                                        .caused_by(crate::trc::location!())
                                                         .details("DKIM sign failed")
                                                 );
                                             }
@@ -317,7 +317,7 @@ impl RunScript for Server {
                                     )
                                     .await;
                             } else {
-                                trc::event!(
+                                crate::trc::event!(
                                     Sieve(SieveEvent::QuotaExceeded),
                                     SpanId = session_id,
                                     Id = script_id.clone(),
@@ -326,7 +326,7 @@ impl RunScript for Server {
                                         .message
                                         .recipients
                                         .into_iter()
-                                        .map(|r| trc::Value::from(r.address().to_string()))
+                                        .map(|r| crate::trc::Value::from(r.address().to_string()))
                                         .collect::<Vec<_>>(),
                                 );
                             }
@@ -346,7 +346,7 @@ impl RunScript for Server {
                         input = true.into();
                     }
                     unsupported => {
-                        trc::event!(
+                        crate::trc::event!(
                             Sieve(SieveEvent::NotSupported),
                             Id = script_id.clone(),
                             SpanId = session_id,
@@ -357,7 +357,7 @@ impl RunScript for Server {
                     }
                 },
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Sieve(SieveEvent::RuntimeError),
                         Id = script_id.clone(),
                         SpanId = session_id,
@@ -374,7 +374,7 @@ impl RunScript for Server {
         // MAX - 1 = discard message
 
         if keep_id == 0 {
-            trc::event!(
+            crate::trc::event!(
                 Sieve(SieveEvent::ActionAccept),
                 SpanId = session_id,
                 Id = script_id,
@@ -383,7 +383,7 @@ impl RunScript for Server {
 
             ScriptResult::Accept { modifications }
         } else if let Some(mut reject_reason) = reject_reason {
-            trc::event!(
+            crate::trc::event!(
                 Sieve(SieveEvent::ActionReject),
                 Id = script_id,
                 SpanId = session_id,
@@ -406,7 +406,7 @@ impl RunScript for Server {
             }
         } else if keep_id != usize::MAX - 1 {
             if let Some(message) = messages.into_iter().nth(keep_id - 1) {
-                trc::event!(
+                crate::trc::event!(
                     Sieve(SieveEvent::ActionAccept),
                     SpanId = session_id,
                     Id = script_id,
@@ -418,7 +418,7 @@ impl RunScript for Server {
                     modifications,
                 }
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Sieve(SieveEvent::ActionAcceptReplace),
                     SpanId = session_id,
                     Id = script_id,
@@ -428,7 +428,7 @@ impl RunScript for Server {
                 ScriptResult::Accept { modifications }
             }
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Sieve(SieveEvent::ActionDiscard),
                 SpanId = session_id,
                 Id = script_id,

@@ -6,7 +6,7 @@
 
 use std::ops::Range;
 
-use crate::backend::postgres::into_pool_error;
+use crate::store::backend::postgres::into_pool_error;
 
 use super::{PostgresStore, into_error};
 
@@ -15,7 +15,7 @@ impl PostgresStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let s = conn
             .prepare_cached("SELECT v FROM t WHERE k = $1")
@@ -41,7 +41,7 @@ impl PostgresStore {
             .map_err(into_error)
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let s = conn
             .prepare_cached(
@@ -55,7 +55,7 @@ impl PostgresStore {
             .map(|_| ())
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let s = conn
             .prepare_cached("DELETE FROM t WHERE k = $1")

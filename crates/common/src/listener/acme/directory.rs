@@ -5,6 +5,10 @@ use super::jose::{
     Body, eab_sign, key_authorization, key_authorization_sha256, key_authorization_sha256_base64,
     sign,
 };
+use crate::store::Serialize;
+use crate::store::write::Archiver;
+use crate::trc::AddContext;
+use crate::trc::event::conv::AssertSuccess;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use hyper::header::USER_AGENT;
@@ -15,10 +19,6 @@ use ring::rand::SystemRandom;
 use ring::signature::{ECDSA_P256_SHA256_FIXED_SIGNING, EcdsaKeyPair, EcdsaSigningAlgorithm};
 use serde::Deserialize;
 use std::time::Duration;
-use store::Serialize;
-use store::write::Archiver;
-use trc::AddContext;
-use trc::event::conv::AssertSuccess;
 
 pub const LETS_ENCRYPT_STAGING_DIRECTORY: &str =
     "https://acme-staging-v02.api.letsencrypt.org/directory";
@@ -53,27 +53,27 @@ impl Account {
             .to_vec()
     }
 
-    pub async fn create(directory: Directory, provider: &AcmeProvider) -> trc::Result<Self> {
+    pub async fn create(directory: Directory, provider: &AcmeProvider) -> crate::trc::Result<Self> {
         Self::create_with_keypair(directory, provider).await
     }
 
     pub async fn create_with_keypair(
         directory: Directory,
         provider: &AcmeProvider,
-    ) -> trc::Result<Self> {
+    ) -> crate::trc::Result<Self> {
         let key_pair = EcdsaKeyPair::from_pkcs8(
             ALG,
             provider.account_key.load().as_slice(),
             &SystemRandom::new(),
         )
         .map_err(|err| {
-            trc::EventType::Acme(trc::AcmeEvent::Error)
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })?;
         let eab = if let Some(eab) = &provider.eab {
             eab_sign(&key_pair, &eab.kid, &eab.hmac_key, &directory.new_account)
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .into()
         } else {
             None
@@ -106,7 +106,7 @@ impl Account {
         &self,
         url: impl AsRef<str>,
         payload: &str,
-    ) -> trc::Result<(Option<String>, String)> {
+    ) -> crate::trc::Result<(Option<String>, String)> {
         let body = sign(
             &self.key_pair,
             Some(&self.kid),
@@ -116,82 +116,91 @@ impl Account {
         )?;
         let response = https(url.as_ref(), Method::POST, Some(body)).await?;
         let location = get_header(&response, "Location").ok();
-        let body = response
-            .text()
-            .await
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_http_error(err))?;
+        let body = response.text().await.map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_http_error(err)
+        })?;
         Ok((location, body))
     }
 
-    pub async fn new_order(&self, domains: Vec<String>) -> trc::Result<(String, Order)> {
+    pub async fn new_order(&self, domains: Vec<String>) -> crate::trc::Result<(String, Order)> {
         let domains: Vec<Identifier> = domains.into_iter().map(Identifier::Dns).collect();
         let payload = format!(
             "{{\"identifiers\":{}}}",
-            serde_json::to_string(&domains)
-                .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))?
+            serde_json::to_string(&domains).map_err(|err| crate::trc::EventType::Acme(
+                crate::trc::AcmeEvent::Error
+            )
+            .from_json_error(err))?
         );
         let response = self.request(&self.directory.new_order, &payload).await?;
         let url = response.0.ok_or(
-            trc::EventType::Acme(trc::AcmeEvent::Error)
-                .caused_by(trc::location!())
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+                .caused_by(crate::trc::location!())
                 .details("Missing header")
-                .ctx(trc::Key::Id, "Location"),
+                .ctx(crate::trc::Key::Id, "Location"),
         )?;
-        let order = serde_json::from_str(&response.1)
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))?;
+        let order = serde_json::from_str(&response.1).map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })?;
         Ok((url, order))
     }
 
-    pub async fn auth(&self, url: impl AsRef<str>) -> trc::Result<Auth> {
+    pub async fn auth(&self, url: impl AsRef<str>) -> crate::trc::Result<Auth> {
         let response = self.request(url, "").await?;
-        serde_json::from_str(&response.1)
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+        serde_json::from_str(&response.1).map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })
     }
 
-    pub async fn challenge(&self, url: impl AsRef<str>) -> trc::Result<()> {
+    pub async fn challenge(&self, url: impl AsRef<str>) -> crate::trc::Result<()> {
         self.request(&url, "{}").await.map(|_| ())
     }
 
-    pub async fn order(&self, url: impl AsRef<str>) -> trc::Result<Order> {
+    pub async fn order(&self, url: impl AsRef<str>) -> crate::trc::Result<Order> {
         let response = self.request(&url, "").await?;
-        serde_json::from_str(&response.1)
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+        serde_json::from_str(&response.1).map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })
     }
 
-    pub async fn finalize(&self, url: impl AsRef<str>, csr: Vec<u8>) -> trc::Result<Order> {
+    pub async fn finalize(&self, url: impl AsRef<str>, csr: Vec<u8>) -> crate::trc::Result<Order> {
         let payload = format!("{{\"csr\":\"{}\"}}", URL_SAFE_NO_PAD.encode(csr));
         let response = self.request(&url, &payload).await?;
-        serde_json::from_str(&response.1)
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+        serde_json::from_str(&response.1).map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })
     }
 
-    pub async fn certificate(&self, url: impl AsRef<str>) -> trc::Result<String> {
+    pub async fn certificate(&self, url: impl AsRef<str>) -> crate::trc::Result<String> {
         Ok(self.request(&url, "").await?.1)
     }
 
-    pub fn http_proof(&self, challenge: &Challenge) -> trc::Result<Vec<u8>> {
+    pub fn http_proof(&self, challenge: &Challenge) -> crate::trc::Result<Vec<u8>> {
         key_authorization(&self.key_pair, &challenge.token).map(|key| key.into_bytes())
     }
 
-    pub fn dns_proof(&self, challenge: &Challenge) -> trc::Result<String> {
+    pub fn dns_proof(&self, challenge: &Challenge) -> crate::trc::Result<String> {
         key_authorization_sha256_base64(&self.key_pair, &challenge.token)
     }
 
-    pub fn tls_alpn_key(&self, challenge: &Challenge, domain: String) -> trc::Result<Vec<u8>> {
+    pub fn tls_alpn_key(
+        &self,
+        challenge: &Challenge,
+        domain: String,
+    ) -> crate::trc::Result<Vec<u8>> {
         let mut params = rcgen::CertificateParams::new(vec![domain]);
         let key_auth = key_authorization_sha256(&self.key_pair, &challenge.token)?;
         params.alg = &PKCS_ECDSA_P256_SHA256;
         params.custom_extensions = vec![CustomExtension::new_acme_identifier(key_auth.as_ref())];
         let cert = Certificate::from_params(params).map_err(|err| {
-            trc::EventType::Acme(trc::AcmeEvent::Error)
-                .caused_by(trc::location!())
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })?;
 
         Archiver::new(SerializedCert {
             certificate: cert.serialize_der().map_err(|err| {
-                trc::EventType::Acme(trc::AcmeEvent::Error)
-                    .caused_by(trc::location!())
+                crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })?,
             private_key: cert.serialize_private_key_der(),
@@ -218,17 +227,21 @@ pub struct Directory {
 }
 
 impl Directory {
-    pub async fn discover(url: impl AsRef<str>) -> trc::Result<Self> {
+    pub async fn discover(url: impl AsRef<str>) -> crate::trc::Result<Self> {
         serde_json::from_str(
             &https(url, Method::GET, None)
                 .await?
                 .text()
                 .await
-                .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_http_error(err))?,
+                .map_err(|err| {
+                    crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_http_error(err)
+                })?,
         )
-        .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+        .map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })
     }
-    pub async fn nonce(&self) -> trc::Result<String> {
+    pub async fn nonce(&self) -> crate::trc::Result<String> {
         get_header(
             &https(&self.new_nonce.as_str(), Method::HEAD, None).await?,
             "replay-nonce",
@@ -316,7 +329,7 @@ async fn https(
     url: impl AsRef<str>,
     method: Method,
     body: Option<String>,
-) -> trc::Result<Response> {
+) -> crate::trc::Result<Response> {
     let url = url.as_ref();
     let mut builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -331,9 +344,11 @@ async fn https(
 
     let mut request = builder
         .build()
-        .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_http_error(err))?
+        .map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_http_error(err)
+        })?
         .request(method, url)
-        .header(USER_AGENT, crate::USER_AGENT);
+        .header(USER_AGENT, crate::common::USER_AGENT);
 
     if let Some(body) = body {
         request = request
@@ -344,21 +359,25 @@ async fn https(
     request
         .send()
         .await
-        .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_http_error(err))?
-        .assert_success(trc::EventType::Acme(trc::AcmeEvent::Error))
+        .map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_http_error(err)
+        })?
+        .assert_success(crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error))
         .await
 }
 
-fn get_header(response: &Response, header: &'static str) -> trc::Result<String> {
+fn get_header(response: &Response, header: &'static str) -> crate::trc::Result<String> {
     match response.headers().get_all(header).iter().next_back() {
         Some(value) => Ok(value
             .to_str()
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_http_str_error(err))?
+            .map_err(|err| {
+                crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_http_str_error(err)
+            })?
             .to_string()),
-        None => Err(trc::EventType::Acme(trc::AcmeEvent::Error)
-            .caused_by(trc::location!())
+        None => Err(crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+            .caused_by(crate::trc::location!())
             .details("Missing header")
-            .ctx(trc::Key::Id, header)),
+            .ctx(crate::trc::Key::Id, header)),
     }
 }
 

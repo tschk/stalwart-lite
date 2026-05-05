@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::Value;
 use calcard::vcard::VCardVersion;
 use compact_str::{CompactString, ToCompactString};
-use trc::Value;
 
 pub mod parser;
 pub mod requests;

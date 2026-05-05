@@ -7,17 +7,17 @@
 pub mod analysis;
 pub mod modules;
 
+use crate::nlp::tokenizers::types::TokenType;
+use crate::store::ahash::AHashSet;
 use analysis::ElementLocation;
 use analysis::url::UrlParts;
 use mail_auth::{ArcOutput, DkimOutput, DmarcResult, IprevOutput, SpfOutput, dmarc::Policy};
 use mail_parser::Message;
 use modules::html::HtmlToken;
-use nlp::tokenizers::types::TokenType;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 use std::net::{IpAddr, Ipv4Addr};
-use store::ahash::AHashSet;
 
 pub struct SpamFilterInput<'x> {
     pub message: &'x Message<'x>,

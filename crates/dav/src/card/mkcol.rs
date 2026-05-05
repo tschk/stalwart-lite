@@ -5,7 +5,8 @@
  */
 
 use super::proppatch::CardPropPatchRequestHandler;
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod, PropStatBuilder,
     common::{
         ExtractETag,
@@ -13,20 +14,19 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{Namespace, request::MkCol, response::MkColResponse},
 };
-use groupware::{
+use crate::groupware::{
     cache::GroupwareCache,
     contact::{AddressBook, AddressBookPreferences},
 };
-use http_proto::HttpResponse;
+use crate::http_proto::HttpResponse;
+use crate::store::write::BatchBuilder;
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, SyncCollection};
 use hyper::StatusCode;
-use store::write::BatchBuilder;
-use trc::AddContext;
-use types::collection::{Collection, SyncCollection};
 
 pub(crate) trait CardMkColRequestHandler: Sync + Send {
     fn handle_card_mkcol_request(
@@ -34,7 +34,7 @@ pub(crate) trait CardMkColRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: Option<MkCol>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CardMkColRequestHandler for Server {
@@ -43,7 +43,7 @@ impl CardMkColRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: Option<MkCol>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -59,7 +59,7 @@ impl CardMkColRequestHandler for Server {
             || self
                 .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .by_path(name)
                 .is_some()
         {
@@ -121,11 +121,13 @@ impl CardMkColRequestHandler for Server {
             .store()
             .assign_document_ids(account_id, Collection::AddressBook, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         book.insert(access_token, account_id, document_id, &mut batch)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let etag = batch.etag();
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
 
         if let Some(prop_stat) = return_prop_stat {
             Ok(HttpResponse::new(StatusCode::CREATED)

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{DATABASE_SCHEMA_VERSION, Server, manager::boot::DEFAULT_SETTINGS};
+use crate::migration::{
     blob::migrate_blobs_v014,
     queue_v1::{migrate_queue_v011, migrate_queue_v012},
     queue_v2::migrate_queue_v014,
@@ -13,9 +14,7 @@ use crate::{
     v013::migrate_v0_13,
     v014::{SUBSPACE_BITMAP_ID, migrate_principal_v0_14, migrate_v0_14},
 };
-use common::{DATABASE_SCHEMA_VERSION, Server, manager::boot::DEFAULT_SETTINGS};
-use std::time::Duration;
-use store::{
+use crate::store::{
     Deserialize, IterateParams, SUBSPACE_PROPERTY, SUBSPACE_QUEUE_MESSAGE, SUBSPACE_REPORT_IN,
     SUBSPACE_REPORT_OUT, SUBSPACE_SETTINGS, SerializeInfallible, U32_LEN, Value, ValueKey,
     dispatch::DocumentSet,
@@ -25,8 +24,9 @@ use store::{
         key::{DeserializeBigEndian, KeySerializer},
     },
 };
-use trc::AddContext;
-use types::collection::Collection;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
+use std::time::Duration;
 
 pub mod addressbook_v2;
 pub mod blob;
@@ -64,7 +64,7 @@ const LOCK_WAIT_TIME_ACCOUNT: u64 = 3 * 60;
 const LOCK_WAIT_TIME_CORE: u64 = 5 * 60;
 const LOCK_RETRY_TIME: Duration = Duration::from_secs(30);
 
-pub async fn try_migrate(server: &Server) -> trc::Result<()> {
+pub async fn try_migrate(server: &Server) -> crate::trc::Result<()> {
     for var in [
         "FORCE_MIGRATE_QUEUE",
         "FORCE_MIGRATE_BLOBS",
@@ -79,17 +79,17 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
                 1 => {
                     migrate_queue_v011(server)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 2 => {
                     migrate_queue_v012(server)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 4 => {
                     migrate_queue_v014(server)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 _ => {
                     panic!("Unknown migration queue version: {version}");
@@ -98,29 +98,43 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
             "FORCE_MIGRATE_BLOBS" => {
                 migrate_blobs_v014(server)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             "FORCE_MIGRATE" => match version {
                 1 => {
                     migrate_v0_12(server, true)
                         .await
-                        .caused_by(trc::location!())?;
-                    migrate_v0_13(server).await.caused_by(trc::location!())?;
-                    migrate_v0_14(server).await.caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
+                    migrate_v0_13(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
+                    migrate_v0_14(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
                 }
                 2 => {
                     migrate_v0_12(server, false)
                         .await
-                        .caused_by(trc::location!())?;
-                    migrate_v0_13(server).await.caused_by(trc::location!())?;
-                    migrate_v0_14(server).await.caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
+                    migrate_v0_13(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
+                    migrate_v0_14(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
                 }
                 3 => {
-                    migrate_v0_13(server).await.caused_by(trc::location!())?;
-                    migrate_v0_14(server).await.caused_by(trc::location!())?;
+                    migrate_v0_13(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
+                    migrate_v0_14(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
                 }
                 4 => {
-                    migrate_v0_14(server).await.caused_by(trc::location!())?;
+                    migrate_v0_14(server)
+                        .await
+                        .caused_by(crate::trc::location!())?;
                 }
                 _ => {
                     panic!("Unknown migration version: {version}");
@@ -129,7 +143,7 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
             "FORCE_MIGRATE_ACCOUNT" => {
                 migrate_principal_v0_14(server, version)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             _ => unreachable!(),
         }
@@ -144,7 +158,7 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
             key: vec![0u8],
         })
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
     {
         Some(DATABASE_SCHEMA_VERSION) => {
             return Ok(());
@@ -152,26 +166,40 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
         Some(1) => {
             migrate_v0_12(server, true)
                 .await
-                .caused_by(trc::location!())?;
-            migrate_v0_13(server).await.caused_by(trc::location!())?;
-            migrate_v0_14(server).await.caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
+            migrate_v0_13(server)
+                .await
+                .caused_by(crate::trc::location!())?;
+            migrate_v0_14(server)
+                .await
+                .caused_by(crate::trc::location!())?;
             true
         }
         Some(2) => {
             migrate_v0_12(server, false)
                 .await
-                .caused_by(trc::location!())?;
-            migrate_v0_13(server).await.caused_by(trc::location!())?;
-            migrate_v0_14(server).await.caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
+            migrate_v0_13(server)
+                .await
+                .caused_by(crate::trc::location!())?;
+            migrate_v0_14(server)
+                .await
+                .caused_by(crate::trc::location!())?;
             true
         }
         Some(3) => {
-            migrate_v0_13(server).await.caused_by(trc::location!())?;
-            migrate_v0_14(server).await.caused_by(trc::location!())?;
+            migrate_v0_13(server)
+                .await
+                .caused_by(crate::trc::location!())?;
+            migrate_v0_14(server)
+                .await
+                .caused_by(crate::trc::location!())?;
             false
         }
         Some(4) => {
-            migrate_v0_14(server).await.caused_by(trc::location!())?;
+            migrate_v0_14(server)
+                .await
+                .caused_by(crate::trc::location!())?;
             false
         }
         Some(version) => {
@@ -181,8 +209,13 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
             );
         }
         _ => {
-            if !is_new_install(server).await.caused_by(trc::location!())? {
-                migrate_v0_11(server).await.caused_by(trc::location!())?;
+            if !is_new_install(server)
+                .await
+                .caused_by(crate::trc::location!())?
+            {
+                migrate_v0_11(server)
+                    .await
+                    .caused_by(crate::trc::location!())?;
                 true
             } else {
                 false
@@ -220,12 +253,12 @@ pub async fn try_migrate(server: &Server) -> trc::Result<()> {
         .store()
         .write(batch.build_all())
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(())
 }
 
-async fn is_new_install(server: &Server) -> trc::Result<bool> {
+async fn is_new_install(server: &Server) -> crate::trc::Result<bool> {
     for subspace in [
         SUBSPACE_QUEUE_MESSAGE,
         SUBSPACE_REPORT_IN,
@@ -255,7 +288,7 @@ async fn is_new_install(server: &Server) -> trc::Result<bool> {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if has_data {
             return Ok(false);
@@ -271,7 +304,7 @@ async fn get_properties<U, I>(
     collection: Collection,
     iterate: &I,
     property: u8,
-) -> trc::Result<Vec<(u32, U)>>
+) -> crate::trc::Result<Vec<(u32, U)>>
 where
     I: DocumentSet + Send + Sync,
     U: Deserialize + 'static,
@@ -311,7 +344,7 @@ where
         )
         .await
         .add_context(|err| {
-            err.caused_by(trc::location!())
+            err.caused_by(crate::trc::location!())
                 .account_id(account_id)
                 .collection(collection)
                 .id(property.to_string())
@@ -323,7 +356,7 @@ pub async fn get_document_ids(
     server: &Server,
     account_id: u32,
     collection: Collection,
-) -> trc::Result<Option<RoaringBitmap>> {
+) -> crate::trc::Result<Option<RoaringBitmap>> {
     let collection: u8 = collection.into();
     get_bitmap(
         server,
@@ -351,7 +384,7 @@ pub async fn get_bitmap(
     server: &Server,
     from_key: AnyKey<Vec<u8>>,
     to_key: AnyKey<Vec<u8>>,
-) -> trc::Result<Option<RoaringBitmap>> {
+) -> crate::trc::Result<Option<RoaringBitmap>> {
     let mut results = RoaringBitmap::new();
     server
         .core
@@ -365,7 +398,7 @@ pub async fn get_bitmap(
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| {
             if !results.is_empty() {
                 Some(results)
@@ -392,19 +425,19 @@ impl<T: serde::de::DeserializeOwned> From<Value<'static>> for LegacyBincode<T> {
 }
 
 impl<T: serde::de::DeserializeOwned + Sized + Sync + Send> Deserialize for LegacyBincode<T> {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         lz4_flex::decompress_size_prepended(bytes)
             .map_err(|err| {
-                trc::StoreEvent::DecompressError
-                    .ctx(trc::Key::Value, bytes)
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::DecompressError
+                    .ctx(crate::trc::Key::Value, bytes)
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
             .and_then(|result| {
-                bincode::deserialize(&result).map_err(|err| {
-                    trc::StoreEvent::DataCorruption
-                        .ctx(trc::Key::Value, bytes)
-                        .caused_by(trc::location!())
+                bincode_1::deserialize(&result).map_err(|err| {
+                    crate::trc::StoreEvent::DataCorruption
+                        .ctx(crate::trc::Key::Value, bytes)
+                        .caused_by(crate::trc::location!())
                         .reason(err)
                 })
             })

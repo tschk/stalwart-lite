@@ -5,7 +5,7 @@
  */
 
 use super::{DavParser, RawElement, Token, XmlValueParser, tokenizer::Tokenizer};
-use crate::schema::{
+use crate::dav_proto::schema::{
     Attribute, AttributeValue, Element, NamedElement, Namespace,
     property::{
         CalDavProperty, CalDavPropertyName, CalendarData, CardDavProperty, CardDavPropertyName,
@@ -14,6 +14,7 @@ use crate::schema::{
     request::{DavPropertyValue, VCardPropertyWithGroup},
     response::List,
 };
+use crate::types::{TimeRange, dead_property::DeadProperty};
 use calcard::{
     Entry, Parser,
     common::{IanaParse, PartialDateTime},
@@ -21,13 +22,12 @@ use calcard::{
     vcard::{VCardParameterName, VCardProperty},
 };
 use mail_parser::DateTime;
-use types::{TimeRange, dead_property::DeadProperty};
 
 impl Tokenizer<'_> {
     pub(crate) fn collect_properties(
         &mut self,
         mut elements: Vec<DavProperty>,
-    ) -> crate::parser::Result<Vec<DavProperty>> {
+    ) -> crate::dav_proto::parser::Result<Vec<DavProperty>> {
         loop {
             match self.token()? {
                 Token::ElementStart {
@@ -74,7 +74,9 @@ impl Tokenizer<'_> {
         Ok(elements)
     }
 
-    pub(crate) fn collect_calendar_data(&mut self) -> crate::parser::Result<CalendarData> {
+    pub(crate) fn collect_calendar_data(
+        &mut self,
+    ) -> crate::dav_proto::parser::Result<CalendarData> {
         let mut depth = 1;
         let mut data = CalendarData {
             properties: Vec::with_capacity(4),
@@ -223,7 +225,7 @@ impl Tokenizer<'_> {
 
     pub(crate) fn collect_address_data(
         &mut self,
-    ) -> crate::parser::Result<Vec<CardDavPropertyName>> {
+    ) -> crate::dav_proto::parser::Result<Vec<CardDavPropertyName>> {
         let mut items = Vec::with_capacity(4);
         loop {
             match self.token()? {
@@ -287,7 +289,7 @@ impl Tokenizer<'_> {
     pub(crate) fn collect_property_values(
         &mut self,
         elements: &mut Vec<DavPropertyValue>,
-    ) -> crate::parser::Result<()> {
+    ) -> crate::dav_proto::parser::Result<()> {
         loop {
             match self.token()? {
                 Token::ElementStart { name, .. } => {

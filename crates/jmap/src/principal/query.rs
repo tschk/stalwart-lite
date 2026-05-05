@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::query::QueryResponseBuilder;
-use common::{Server, auth::AccessToken};
-use directory::{Permission, QueryParams, Type, backend::internal::manage::ManageDirectory};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{Permission, QueryParams, Type, backend::internal::manage::ManageDirectory};
+use crate::http_proto::HttpSessionData;
+use crate::jmap::api::query::QueryResponseBuilder;
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::principal::{Principal, PrincipalFilter, PrincipalType},
     types::state::State,
 };
-use std::future::Future;
-use store::{
+use crate::store::{
     roaring::RoaringBitmap,
     search::{SearchFilter, SearchQuery},
     write::SearchIndex,
 };
-use trc::AddContext;
+use crate::trc::AddContext;
+use std::future::Future;
 
 pub trait PrincipalQuery: Sync + Send {
     fn principal_query(
@@ -27,7 +27,7 @@ pub trait PrincipalQuery: Sync + Send {
         request: QueryRequest<Principal>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl PrincipalQuery for Server {
@@ -36,11 +36,11 @@ impl PrincipalQuery for Server {
         mut request: QueryRequest<Principal>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         if !self.core.groupware.allow_directory_query
             && !access_token.has_permission(Permission::IndividualList)
         {
-            return Err(trc::JmapEvent::Forbidden
+            return Err(crate::trc::JmapEvent::Forbidden
                 .into_err()
                 .details("The administrator has disabled directory queries.".to_string()));
         }
@@ -61,7 +61,7 @@ impl PrincipalQuery for Server {
                 0,
             )
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .items
             .into_iter()
             .map(|p| p.id())
@@ -153,7 +153,7 @@ impl PrincipalQuery for Server {
                         ));
                     }
                     other => {
-                        return Err(trc::JmapEvent::UnsupportedFilter
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
                             .into_err()
                             .details(other.to_string()));
                     }

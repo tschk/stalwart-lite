@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::Permission;
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::store::ahash::AHashMap;
+use crate::utils::{config::ConfigKey, map::vec_map::VecMap, url_params::UrlParams};
 use hyper::Method;
 use serde_json::json;
-use store::ahash::AHashMap;
-use utils::{config::ConfigKey, map::vec_map::VecMap, url_params::UrlParams};
 
-use http_proto::{request::decode_path_element, *};
+use crate::http_proto::{request::decode_path_element, *};
 use std::future::Future;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -40,7 +40,7 @@ pub trait ManageSettings: Sync + Send {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl ManageSettings for Server {
@@ -50,7 +50,7 @@ impl ManageSettings for Server {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (path.get(1).copied(), req.method()) {
             (Some("group"), &Method::GET) => {
                 // Validate the access token
@@ -276,7 +276,8 @@ impl ManageSettings for Server {
                     body.as_deref().unwrap_or_default(),
                 )
                 .map_err(|err| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                        .from_json_error(err)
                 })?;
 
                 for change in changes {
@@ -316,12 +317,14 @@ impl ManageSettings for Server {
                                         .await?
                                         .is_empty()
                                     {
-                                        return Err(trc::ManageEvent::AssertFailed.into_err());
+                                        return Err(
+                                            crate::trc::ManageEvent::AssertFailed.into_err()
+                                        );
                                     }
                                 } else if let Some((key, _)) = values.first()
                                     && self.core.storage.config.get(key).await?.is_some()
                                 {
-                                    return Err(trc::ManageEvent::AssertFailed.into_err());
+                                    return Err(crate::trc::ManageEvent::AssertFailed.into_err());
                                 }
                             }
 
@@ -349,7 +352,7 @@ impl ManageSettings for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }

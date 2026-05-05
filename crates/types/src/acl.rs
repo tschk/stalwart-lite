@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::map::bitmap::{Bitmap, BitmapItem};
 use std::fmt::{self, Display};
-use utils::map::bitmap::{Bitmap, BitmapItem};
 
 #[derive(
     rkyv::Archive,

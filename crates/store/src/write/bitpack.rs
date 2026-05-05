@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::codec::leb128::Leb128Reader;
 use bitpacking::{BitPacker, BitPacker1x, BitPacker4x, BitPacker8x};
-use utils::codec::leb128::Leb128Reader;
 
 use super::key::KeySerializer;
 

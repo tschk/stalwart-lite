@@ -7,18 +7,18 @@
 use mail_send::Credentials;
 use smtp_proto::{AUTH_CRAM_MD5, AUTH_LOGIN, AUTH_OAUTHBEARER, AUTH_PLAIN, AUTH_XOAUTH2};
 
-use crate::{IntoError, Principal, QueryBy, Type, backend::RcptType};
+use crate::directory::{IntoError, Principal, QueryBy, Type, backend::RcptType};
 
 use super::{ImapDirectory, ImapError};
 
 impl ImapDirectory {
-    pub async fn query(&self, query: QueryBy<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, query: QueryBy<'_>) -> crate::trc::Result<Option<Principal>> {
         if let QueryBy::Credentials(credentials) = query {
             let mut client = self
                 .pool
                 .get()
                 .await
-                .map_err(|err| err.into_error().caused_by(trc::location!()))?;
+                .map_err(|err| err.into_error().caused_by(crate::trc::location!()))?;
             let mechanism = match credentials {
                 Credentials::Plain { .. }
                     if (client.mechanisms & (AUTH_PLAIN | AUTH_LOGIN | AUTH_CRAM_MD5)) != 0 =>
@@ -38,8 +38,8 @@ impl ImapDirectory {
                     AUTH_XOAUTH2
                 }
                 _ => {
-                    trc::bail!(trc::StoreEvent::NotSupported.ctx(
-                        trc::Key::Reason,
+                    crate::trc::bail!(crate::trc::StoreEvent::NotSupported.ctx(
+                        crate::trc::Key::Reason,
                         "IMAP server does not offer any supported auth mechanisms."
                     ));
                 }
@@ -56,27 +56,27 @@ impl ImapDirectory {
                 },
             }
         } else {
-            Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+            Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
         }
     }
 
-    pub async fn email_to_id(&self, _address: &str) -> trc::Result<Option<u32>> {
-        Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+    pub async fn email_to_id(&self, _address: &str) -> crate::trc::Result<Option<u32>> {
+        Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
     }
 
-    pub async fn rcpt(&self, _address: &str) -> trc::Result<RcptType> {
-        Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+    pub async fn rcpt(&self, _address: &str) -> crate::trc::Result<RcptType> {
+        Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
     }
 
-    pub async fn vrfy(&self, _address: &str) -> trc::Result<Vec<String>> {
-        Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+    pub async fn vrfy(&self, _address: &str) -> crate::trc::Result<Vec<String>> {
+        Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
     }
 
-    pub async fn expn(&self, _address: &str) -> trc::Result<Vec<String>> {
-        Err(trc::StoreEvent::NotSupported.caused_by(trc::location!()))
+    pub async fn expn(&self, _address: &str) -> crate::trc::Result<Vec<String>> {
+        Err(crate::trc::StoreEvent::NotSupported.caused_by(crate::trc::location!()))
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         Ok(self.domains.contains(domain))
     }
 }

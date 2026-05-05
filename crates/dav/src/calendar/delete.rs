@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ETag,
@@ -12,34 +13,33 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use dav_proto::RequestHeaders;
-use directory::Permission;
-use groupware::{
+use crate::dav_proto::RequestHeaders;
+use crate::directory::Permission;
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     calendar::{Calendar, CalendarEvent},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::{BatchBuilder, ValueClass};
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, ValueClass};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     field::PrincipalField,
 };
+use hyper::StatusCode;
 
 pub(crate) trait CalendarDeleteRequestHandler: Sync + Send {
     fn handle_calendar_delete_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarDeleteRequestHandler for Server {
@@ -47,7 +47,7 @@ impl CalendarDeleteRequestHandler for Server {
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -61,7 +61,7 @@ impl CalendarDeleteRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Check resource type
         let delete_resource = resources
@@ -99,12 +99,12 @@ impl CalendarDeleteRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
             let calendar = calendar_
                 .to_unarchived::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate ACL
             if !access_token.is_member(account_id)
@@ -151,7 +151,7 @@ impl CalendarDeleteRequestHandler for Server {
                     &mut batch,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Reset default calendar id
             let default_calendar_id = self
@@ -163,7 +163,7 @@ impl CalendarDeleteRequestHandler for Server {
                     class: ValueClass::Property(PrincipalField::DefaultCalendarId.into()),
                 })
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if default_calendar_id.is_some_and(|id| id == document_id) {
                 batch
                     .with_account_id(account_id)
@@ -188,7 +188,7 @@ impl CalendarDeleteRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
             // Validate headers
@@ -211,7 +211,7 @@ impl CalendarDeleteRequestHandler for Server {
             // Validate schedule tag
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if headers.if_schedule_tag.is_some()
                 && event.inner.schedule_tag.as_ref().map(|t| t.to_native())
                     != headers.if_schedule_tag
@@ -230,10 +230,12 @@ impl CalendarDeleteRequestHandler for Server {
                     send_itip,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
         self.notify_task_queue();
 
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))

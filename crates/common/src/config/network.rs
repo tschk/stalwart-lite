@@ -5,10 +5,10 @@
  */
 
 use super::*;
-use crate::expr::{if_block::IfBlock, tokenizer::TokenMap};
+use crate::common::expr::{if_block::IfBlock, tokenizer::TokenMap};
+use crate::utils::config::{Config, Rate, http::parse_http_headers, utils::ParseValue};
 use ahash::AHashSet;
 use std::{hash::Hasher, time::Duration};
-use utils::config::{Config, Rate, http::parse_http_headers, utils::ParseValue};
 use xxhash_rust::xxh3::Xxh3Builder;
 
 #[derive(Clone)]
@@ -303,7 +303,7 @@ impl Network {
 struct NodeList(AHashSet<u64>);
 
 impl ParseValue for NodeList {
-    fn parse_value(value: &str) -> utils::config::Result<Self> {
+    fn parse_value(value: &str) -> crate::utils::config::Result<Self> {
         value
             .split(',')
             .map(|s| s.trim().parse::<u64>().map_err(|e| e.to_string()))

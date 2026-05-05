@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-#![warn(clippy::large_futures)]
+#![allow(clippy::large_futures)]
 
 pub mod api;
 pub mod blob;

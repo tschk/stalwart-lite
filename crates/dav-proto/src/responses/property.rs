@@ -5,7 +5,7 @@
  */
 
 use super::{XmlCdataEscape, XmlEscape};
-use crate::{
+use crate::dav_proto::{
     responses::DeadPropertyFormat,
     schema::{
         Namespace, Namespaces,
@@ -18,13 +18,13 @@ use crate::{
         response::{Ace, AclRestrictions, Href, List, PropResponse, SupportedPrivilege},
     },
 };
+use crate::types::dead_property::DeadProperty;
 use calcard::icalendar::ICalendarComponentType;
 use mail_parser::{
     DateTime,
     parsers::fields::date::{DOW, MONTH},
 };
 use std::fmt::Display;
-use types::dead_property::DeadProperty;
 
 impl Display for PropResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

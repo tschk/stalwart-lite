@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use common::{
+use crate::common::{
     Server,
     auth::{AccessToken, oauth::GrantType},
     telemetry::{
@@ -21,9 +21,20 @@ use common::{
         tracers::store::TracingStore,
     },
 };
-use directory::{Permission, backend::internal::manage};
+use crate::directory::{Permission, backend::internal::manage};
+use crate::http_proto::*;
+use crate::store::{
+    ahash::{AHashMap, AHashSet},
+    search::{SearchComparator, SearchField, SearchFilter, SearchQuery, TracingSearchField},
+    write::{SearchIndex, now},
+};
+use crate::trc::{
+    Collector, DeliveryEvent, EventType, Key, MetricType, QueueEvent, Value,
+    ipc::{bitset::Bitset, subscriber::SubscriberBuilder},
+    serializers::json::JsonEventSerializer,
+};
+use crate::utils::{snowflake::SnowflakeIdGenerator, url_params::UrlParams};
 use http_body_util::{StreamBody, combinators::BoxBody};
-use http_proto::*;
 use hyper::{
     Method, StatusCode,
     body::{Bytes, Frame},
@@ -31,19 +42,8 @@ use hyper::{
 use mail_parser::DateTime;
 use serde_json::json;
 use std::future::Future;
-use store::{
-    ahash::{AHashMap, AHashSet},
-    search::{SearchComparator, SearchField, SearchFilter, SearchQuery, TracingSearchField},
-    write::{SearchIndex, now},
-};
-use trc::{
-    Collector, DeliveryEvent, EventType, Key, MetricType, QueueEvent, Value,
-    ipc::{bitset::Bitset, subscriber::SubscriberBuilder},
-    serializers::json::JsonEventSerializer,
-};
-use utils::{snowflake::SnowflakeIdGenerator, url_params::UrlParams};
 
-use crate::management::Timestamp;
+use crate::http::management::Timestamp;
 
 pub trait TelemetryApi: Sync + Send {
     fn handle_telemetry_api_request(
@@ -51,7 +51,7 @@ pub trait TelemetryApi: Sync + Send {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl TelemetryApi for Server {
@@ -60,7 +60,7 @@ impl TelemetryApi for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let params = UrlParams::new(req.uri().query());
         let account_id = access_token.primary_id();
 
@@ -580,7 +580,7 @@ impl TelemetryApi for Server {
                     },
                 ))))
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }

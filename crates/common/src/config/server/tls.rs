@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+use crate::utils::config::Config;
 use ahash::{AHashMap, AHashSet};
 use base64::{
     Engine,
@@ -26,14 +27,13 @@ use rustls::{
 };
 use rustls_pemfile::{Item, certs, read_one};
 use rustls_pki_types::PrivateKeyDer;
-use utils::config::Config;
 use x509_parser::{
     certificate::X509Certificate,
     der_parser::asn1_rs::FromDer,
     extensions::{GeneralName, ParsedExtension},
 };
 
-use crate::listener::{
+use crate::common::listener::{
     acme::{
         AcmeProvider, ChallengeSettings, EabSettings, directory::LETS_ENCRYPT_PRODUCTION_DIRECTORY,
     },

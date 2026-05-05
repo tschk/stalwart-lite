@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{DavName, Server};
-use groupware::contact::ContactCard;
-use store::{
+use crate::common::{DavName, Server};
+use crate::groupware::contact::ContactCard;
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, serialize::rkyv_deserialize},
 };
-use trc::AddContext;
-use types::{collection::Collection, dead_property::DeadProperty, field::Field};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, dead_property::DeadProperty, field::Field};
 
-use crate::get_document_ids;
+use crate::migration::get_document_ids;
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,
@@ -28,10 +28,13 @@ pub struct ContactCardV2 {
     pub size: u32,
 }
 
-pub(crate) async fn migrate_contacts_v013(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_contacts_v013(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     let document_ids = get_document_ids(server, account_id, Collection::ContactCard)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
 
     let mut num_migrated = 0;
@@ -45,7 +48,7 @@ pub(crate) async fn migrate_contacts_v013(server: &Server, account_id: u32) -> t
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         else {
             continue;
         };
@@ -60,7 +63,7 @@ pub(crate) async fn migrate_contacts_v013(server: &Server, account_id: u32) -> t
                     size: contact.size,
                     created: contact.created,
                     modified: contact.modified,
-                    card: calcard_latest::vcard::VCard::parse(contact.card.to_string())
+                    card: calcard::vcard::VCard::parse(contact.card.to_string())
                         .unwrap_or_default(),
                 };
 
@@ -73,19 +76,19 @@ pub(crate) async fn migrate_contacts_v013(server: &Server, account_id: u32) -> t
                         Field::ARCHIVE,
                         Archiver::new(new_contact)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 num_migrated += 1;
             }
             Err(err) => {
                 if let Err(err_) = archive.unarchive_untrusted::<ContactCard>() {
-                    trc::error!(err_.caused_by(trc::location!()));
-                    return Err(err.caused_by(trc::location!()));
+                    crate::trc::error!(err_.caused_by(crate::trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }

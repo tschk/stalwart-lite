@@ -4,34 +4,34 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken};
-use groupware::cache::GroupwareCache;
-use jmap_proto::{
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::cache::GroupwareCache;
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::contact::{ContactCard, ContactCardComparator, ContactCardFilter},
     request::MaybeInvalid,
 };
-use store::{
+use crate::store::{
     IterateParams, U32_LEN, U64_LEN, ValueKey,
     roaring::RoaringBitmap,
     search::{ContactSearchField, SearchComparator, SearchFilter, SearchQuery},
     write::{IndexPropertyClass, SearchIndex, ValueClass, key::DeserializeBigEndian},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     field::ContactField,
 };
-use utils::sanitize_email;
+use crate::utils::sanitize_email;
 
 pub trait ContactCardQuery: Sync + Send {
     fn contact_card_query(
         &self,
         request: QueryRequest<ContactCard>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 #[derive(Clone)]
@@ -46,7 +46,7 @@ impl ContactCardQuery for Server {
         &self,
         mut request: QueryRequest<ContactCard>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut filters = Vec::with_capacity(request.filter.len());
         let cache = self
@@ -106,7 +106,7 @@ impl ContactCardQuery for Server {
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         for cond in std::mem::take(&mut request.filter) {
@@ -240,7 +240,7 @@ impl ContactCardQuery for Server {
                         )));
                     }
                     unsupported => {
-                        return Err(trc::JmapEvent::UnsupportedFilter
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
                             .into_err()
                             .details(unsupported.into_string()));
                     }
@@ -286,7 +286,7 @@ impl ContactCardQuery for Server {
                         comparator.is_ascending,
                     ))
                 }
-                other => Err(trc::JmapEvent::UnsupportedSort
+                other => Err(crate::trc::JmapEvent::UnsupportedSort
                     .into_err()
                     .details(other.into_string())),
             })

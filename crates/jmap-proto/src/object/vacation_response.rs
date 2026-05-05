@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{AnyId, JmapObject, JmapObjectId},
     types::date::UTCDate,
 };
+use crate::types::id::Id;
 use jmap_tools::{Element, Key, Property};
 use std::{borrow::Cow, str::FromStr};
-use types::id::Id;
 
 #[derive(Debug, Clone, Default)]
 pub struct VacationResponse;

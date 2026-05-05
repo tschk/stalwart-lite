@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use utils::config::{Config, utils::AsKey};
+use crate::utils::config::{Config, utils::AsKey};
 pub mod pubsub;
 
 #[derive(Debug)]

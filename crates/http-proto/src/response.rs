@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::manager::webadmin::Resource;
+use crate::common::manager::webadmin::Resource;
 use http_body_util::{BodyExt, Full};
 use hyper::{
     StatusCode,
@@ -13,7 +13,7 @@ use hyper::{
 };
 use serde_json::json;
 
-use crate::{
+use crate::http_proto::{
     DownloadResponse, HtmlResponse, HttpResponse, HttpResponseBody, JsonProblemResponse,
     JsonResponse, ToHttpResponse,
 };

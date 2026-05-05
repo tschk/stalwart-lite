@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, Token, tokenizer::Tokenizer},
     schema::{Element, NamedElement, Namespace, request::PropFind},
 };
 
 impl DavParser for PropFind {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         if stream.expect_named_element_or_eof(NamedElement::dav(Element::Propfind))? {
             match stream.unwrap_named_element()? {
                 NamedElement {

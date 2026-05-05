@@ -11,7 +11,7 @@ use mail_auth::{Error, IpLookupStrategy};
 use crate::Server;
 
 impl Server {
-    pub async fn dns_exists_mx(&self, entry: &str) -> trc::Result<bool> {
+    pub async fn dns_exists_mx(&self, entry: &str) -> crate::trc::Result<bool> {
         match self
             .core
             .smtp
@@ -26,7 +26,7 @@ impl Server {
         }
     }
 
-    pub async fn dns_exists_ip(&self, entry: &str) -> trc::Result<bool> {
+    pub async fn dns_exists_ip(&self, entry: &str) -> crate::trc::Result<bool> {
         match self
             .core
             .smtp
@@ -47,7 +47,7 @@ impl Server {
         }
     }
 
-    pub async fn dns_exists_ptr(&self, entry: &str) -> trc::Result<bool> {
+    pub async fn dns_exists_ptr(&self, entry: &str) -> crate::trc::Result<bool> {
         if let Ok(addr) = entry.parse::<IpAddr>() {
             match self
                 .core
@@ -62,11 +62,14 @@ impl Server {
                 Err(err) => Err(err.into()),
             }
         } else {
-            Err(trc::EventType::Resource(trc::ResourceEvent::BadParameters).into_err())
+            Err(
+                crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                    .into_err(),
+            )
         }
     }
 
-    pub async fn dns_exists_ipv4(&self, entry: &str) -> trc::Result<bool> {
+    pub async fn dns_exists_ipv4(&self, entry: &str) -> crate::trc::Result<bool> {
         match self
             .core
             .smtp
@@ -81,7 +84,7 @@ impl Server {
         }
     }
 
-    pub async fn dns_exists_ipv6(&self, entry: &str) -> trc::Result<bool> {
+    pub async fn dns_exists_ipv6(&self, entry: &str) -> crate::trc::Result<bool> {
         match self
             .core
             .smtp

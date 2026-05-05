@@ -33,10 +33,10 @@
 
 */
 
-use types::acl::Acl;
+use crate::types::acl::Acl;
 
 use super::quoted_string;
-use crate::utf7::utf7_encode;
+use crate::imap_proto::utf7::utf7_encode;
 use std::fmt::Display;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -216,7 +216,9 @@ impl From<Rights> for Acl {
 #[cfg(test)]
 mod tests {
 
-    use crate::protocol::acl::{GetAclResponse, ListRightsResponse, MyRightsResponse, Rights};
+    use crate::imap_proto::protocol::acl::{
+        GetAclResponse, ListRightsResponse, MyRightsResponse, Rights,
+    };
 
     #[test]
     fn serialize_acl() {

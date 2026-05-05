@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{Command, ResponseCode, ResponseType, StatusResponse};
+use crate::imap_proto::{Command, ResponseCode, ResponseType, StatusResponse};
+use crate::types::keyword::{ArchivedKeyword, Keyword};
+use crate::utils::chained_bytes::SliceRange;
 use ahash::AHashSet;
 use chrono::{DateTime, Utc};
 use compact_str::CompactString;
 use std::{cmp::Ordering, fmt::Display};
-use types::keyword::{ArchivedKeyword, Keyword};
-use utils::chained_bytes::SliceRange;
 
 pub mod acl;
 pub mod append;
@@ -555,15 +555,15 @@ impl ResponseType {
     }
 }
 
-impl From<ResponseCode> for trc::Value {
+impl From<ResponseCode> for crate::trc::Value {
     fn from(value: ResponseCode) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }
 
-impl From<ResponseType> for trc::Value {
+impl From<ResponseType> for crate::trc::Value {
     fn from(value: ResponseType) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }
 
@@ -596,39 +596,47 @@ pub trait SerializeResponse {
     fn serialize(&self) -> Vec<u8>;
 }
 
-impl SerializeResponse for trc::Error {
+impl SerializeResponse for crate::trc::Error {
     fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(128);
-        if let Some(tag) = self.value_as_str(trc::Key::Id) {
+        if let Some(tag) = self.value_as_str(crate::trc::Key::Id) {
             buf.extend_from_slice(tag.as_bytes());
         } else {
             buf.push(b'*');
         }
         buf.push(b' ');
-        buf.extend_from_slice(self.value_as_str(trc::Key::Type).unwrap_or("NO").as_bytes());
+        buf.extend_from_slice(
+            self.value_as_str(crate::trc::Key::Type)
+                .unwrap_or("NO")
+                .as_bytes(),
+        );
         buf.push(b' ');
-        if let Some(code) = self
-            .value_as_str(trc::Key::Code)
-            .or_else(|| match self.as_ref() {
-                trc::EventType::Store(trc::StoreEvent::NotFound) => {
-                    Some(ResponseCode::NonExistent.as_str())
-                }
-                trc::EventType::Store(_) => Some(ResponseCode::ContactAdmin.as_str()),
-                trc::EventType::Limit(trc::LimitEvent::Quota) => {
-                    Some(ResponseCode::OverQuota.as_str())
-                }
-                trc::EventType::Limit(_) => Some(ResponseCode::Limit.as_str()),
-                trc::EventType::Auth(_) => Some(ResponseCode::AuthenticationFailed.as_str()),
-                trc::EventType::Security(_) => Some(ResponseCode::AuthorizationFailed.as_str()),
-                _ => None,
-            })
+        if let Some(code) =
+            self.value_as_str(crate::trc::Key::Code)
+                .or_else(|| match self.as_ref() {
+                    crate::trc::EventType::Store(crate::trc::StoreEvent::NotFound) => {
+                        Some(ResponseCode::NonExistent.as_str())
+                    }
+                    crate::trc::EventType::Store(_) => Some(ResponseCode::ContactAdmin.as_str()),
+                    crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota) => {
+                        Some(ResponseCode::OverQuota.as_str())
+                    }
+                    crate::trc::EventType::Limit(_) => Some(ResponseCode::Limit.as_str()),
+                    crate::trc::EventType::Auth(_) => {
+                        Some(ResponseCode::AuthenticationFailed.as_str())
+                    }
+                    crate::trc::EventType::Security(_) => {
+                        Some(ResponseCode::AuthorizationFailed.as_str())
+                    }
+                    _ => None,
+                })
         {
             buf.push(b'[');
             buf.extend_from_slice(code.as_bytes());
             buf.extend_from_slice(b"] ");
         }
         buf.extend_from_slice(
-            self.value_as_str(trc::Key::Details)
+            self.value_as_str(crate::trc::Key::Details)
                 .unwrap_or_else(|| self.as_ref().message())
                 .as_bytes(),
         );
@@ -732,7 +740,7 @@ impl Display for Command {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::parse_sequence_set;
+    use crate::imap_proto::parser::parse_sequence_set;
 
     #[test]
     fn sequence_set_contains() {

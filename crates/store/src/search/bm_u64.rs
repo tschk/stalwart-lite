@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     IterateParams, Store, U64_LEN, ValueKey,
     search::*,
     write::{
@@ -13,14 +13,14 @@ use crate::{
         key::{DeserializeBigEndian, KeySerializer},
     },
 };
+use crate::trc::AddContext;
+use crate::utils::cheeky_hash::CheekyHash;
 use ahash::AHashMap;
 use roaring::RoaringTreemap;
 use std::{
     collections::hash_map::Entry,
     ops::{BitAndAssign, BitOrAssign},
 };
-use trc::AddContext;
-use utils::cheeky_hash::CheekyHash;
 
 #[derive(Default)]
 pub(super) struct TreemapCache {
@@ -35,7 +35,7 @@ impl TreemapCache {
         hashes: impl Iterator<Item = CheekyHash>,
         field: u8,
         is_union: bool,
-    ) -> trc::Result<Option<RoaringTreemap>> {
+    ) -> crate::trc::Result<Option<RoaringTreemap>> {
         let mut result = RoaringTreemap::new();
         for (idx, hash) in hashes.enumerate() {
             match self.cache.entry((hash, field)) {
@@ -80,7 +80,7 @@ impl TreemapCache {
                             },
                         )
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     if !documents.is_empty() {
                         if is_union {
@@ -117,7 +117,7 @@ pub(crate) async fn range_to_treemap(
     field_id: u8,
     match_value: &[u8],
     op: SearchOperator,
-) -> trc::Result<Option<RoaringTreemap>> {
+) -> crate::trc::Result<Option<RoaringTreemap>> {
     let ((from_value, from_id, from_field), (end_value, end_id, end_field)) = match op {
         SearchOperator::LowerThan => ((&[][..], 0, field_id), (match_value, 0, field_id)),
         SearchOperator::LowerEqualThan => {
@@ -175,9 +175,9 @@ pub(crate) async fn range_to_treemap(
                 }
 
                 let id_pos = key.len() - U64_LEN;
-                let value = key
-                    .get(prefix_len..id_pos)
-                    .ok_or_else(|| trc::Error::corrupted_key(key, None, trc::location!()))?;
+                let value = key.get(prefix_len..id_pos).ok_or_else(|| {
+                    crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
+                })?;
 
                 let matches = match op {
                     SearchOperator::LowerThan => value < match_value,
@@ -195,7 +195,7 @@ pub(crate) async fn range_to_treemap(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if !bm.is_empty() {
         Ok(Some(bm))

@@ -5,14 +5,14 @@
  */
 
 use super::{ArchivedFileNode, FileNode};
-use crate::DestroyArchive;
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use store::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::groupware::DestroyArchive;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder, now},
 };
-use trc::AddContext;
-use types::collection::{Collection, VanishedCollection};
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, VanishedCollection};
 
 impl FileNode {
     pub fn insert<'x>(
@@ -21,7 +21,7 @@ impl FileNode {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build node
         let mut node = self;
         let now = now() as i64;
@@ -47,7 +47,7 @@ impl FileNode {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build node
         let mut new_node = self;
         new_node.modified = now() as i64;
@@ -73,7 +73,7 @@ impl DestroyArchive<Archive<&ArchivedFileNode>> {
         document_id: u32,
         batch: &mut BatchBuilder,
         path: String,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Prepare write batch
         batch
             .with_account_id(account_id)
@@ -97,7 +97,7 @@ impl DestroyArchive<Vec<u32>> {
         access_token: &AccessToken,
         account_id: u32,
         delete_path: Option<String>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Process deletions
         let mut batch = BatchBuilder::new();
         self.delete_batch(server, access_token, account_id, delete_path, &mut batch)
@@ -107,7 +107,7 @@ impl DestroyArchive<Vec<u32>> {
             server
                 .commit_batch(batch)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(())
@@ -120,7 +120,7 @@ impl DestroyArchive<Vec<u32>> {
         account_id: u32,
         delete_path: Option<String>,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Process deletions
         batch
             .with_account_id(account_id)
@@ -143,10 +143,10 @@ impl DestroyArchive<Vec<u32>> {
                             .with_access_token(access_token)
                             .with_current(
                                 node.to_unarchived::<FileNode>()
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                             ),
                     )
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .commit_point();
             }
         }

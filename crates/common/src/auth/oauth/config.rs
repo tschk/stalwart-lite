@@ -6,6 +6,8 @@
 
 use std::time::Duration;
 
+use crate::store::rand::{Rng, distr::Alphanumeric, rng};
+use crate::utils::config::Config;
 use biscuit::{
     jwa::{Algorithm, SignatureAlgorithm},
     jwk::{
@@ -17,11 +19,9 @@ use biscuit::{
 };
 use ring::signature::{self, KeyPair};
 use rsa::{RsaPublicKey, pkcs1::DecodeRsaPublicKey, traits::PublicKeyParts};
-use store::rand::{Rng, distr::Alphanumeric, rng};
-use utils::config::Config;
 use x509_parser::num_bigint::BigUint;
 
-use crate::{
+use crate::common::{
     config::{build_ecdsa_pem, build_rsa_keypair},
     manager::webadmin::Resource,
 };

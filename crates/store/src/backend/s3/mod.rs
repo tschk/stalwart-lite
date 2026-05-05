@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use s3::{Bucket, Region, creds::Credentials};
-use std::{fmt::Display, io::Write, ops::Range, time::Duration};
-use utils::{
+use crate::utils::{
     codec::base32_custom::Base32Writer,
     config::{Config, utils::AsKey},
 };
+use s3::{Bucket, Region, creds::Credentials};
+use std::{fmt::Display, io::Write, ops::Range, time::Duration};
 
 pub struct S3Store {
     bucket: Box<Bucket>,
@@ -83,7 +83,7 @@ impl S3Store {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let path = self.build_key(key);
         let mut retries_left = self.max_retries;
 
@@ -114,15 +114,15 @@ impl S3Store {
                     retries_left -= 1;
                 }
                 code => {
-                    return Err(trc::StoreEvent::S3Error
+                    return Err(crate::trc::StoreEvent::S3Error
                         .reason(String::from_utf8_lossy(response.as_slice()))
-                        .ctx(trc::Key::Code, code));
+                        .ctx(crate::trc::Key::Code, code));
                 }
             }
         }
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let mut retries_left = self.max_retries;
 
         loop {
@@ -144,15 +144,15 @@ impl S3Store {
                     retries_left -= 1;
                 }
                 code => {
-                    return Err(trc::StoreEvent::S3Error
+                    return Err(crate::trc::StoreEvent::S3Error
                         .reason(String::from_utf8_lossy(response.as_slice()))
-                        .ctx(trc::Key::Code, code));
+                        .ctx(crate::trc::Key::Code, code));
                 }
             }
         }
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let mut retries_left = self.max_retries;
 
         loop {
@@ -175,9 +175,9 @@ impl S3Store {
                     retries_left -= 1;
                 }
                 code => {
-                    return Err(trc::StoreEvent::S3Error
+                    return Err(crate::trc::StoreEvent::S3Error
                         .reason(String::from_utf8_lossy(response.as_slice()))
-                        .ctx(trc::Key::Code, code));
+                        .ctx(crate::trc::Key::Code, code));
                 }
             }
         }
@@ -197,6 +197,6 @@ impl S3Store {
 }
 
 #[inline(always)]
-fn into_error(err: impl Display) -> trc::Error {
-    trc::StoreEvent::S3Error.reason(err)
+fn into_error(err: impl Display) -> crate::trc::Error {
+    crate::trc::StoreEvent::S3Error.reason(err)
 }

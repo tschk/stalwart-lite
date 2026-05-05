@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     error::set::SetError,
     method::{
         copy::CopyRequest,
@@ -24,13 +24,13 @@ use crate::{
     },
     response::Response,
 };
+use crate::types::id::Id;
 use compact_str::format_compact;
 use jmap_tools::{Element, Key, Property, Value};
 use std::collections::HashMap;
-use types::id::Id;
 
 impl Response<'_> {
-    pub fn resolve_references(&self, request: &mut RequestMethod) -> trc::Result<()> {
+    pub fn resolve_references(&self, request: &mut RequestMethod) -> crate::trc::Result<()> {
         match request {
             RequestMethod::Get(request) => match request {
                 GetRequestMethod::Email(request) => request.resolve_references(self)?,
@@ -135,11 +135,11 @@ where
 }
 
 pub(crate) trait ResolveReference {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()>;
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()>;
 }
 
 impl<T: JmapObject> ResolveReference for GetRequest<T> {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve id references
         match &mut self.ids {
             Some(MaybeResultReference::Reference(reference)) => {
@@ -162,11 +162,11 @@ impl<T: JmapObject> ResolveReference for GetRequest<T> {
                         {
                             *id = MaybeIdReference::Id(resolved_id);
                         } else {
-                            return Err(trc::JmapEvent::InvalidResultReference.into_err().details(
-                                format_compact!(
+                            return Err(crate::trc::JmapEvent::InvalidResultReference
+                                .into_err()
+                                .details(format_compact!(
                                     "Id reference {reference:?} does not exist or is invalid."
-                                ),
-                            ));
+                                )));
                         }
                     }
                 }
@@ -190,7 +190,7 @@ impl<T: JmapObject> ResolveReference for GetRequest<T> {
 }
 
 impl<'x, T: JmapObject> ResolveReference for SetRequest<'x, T> {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve create references
         if let Some(create) = &mut self.create {
             let mut graph = HashMap::with_capacity(create.len());
@@ -234,7 +234,7 @@ impl<'x, T: JmapObject> ResolveReference for SetRequest<'x, T> {
 }
 
 impl<'x, T: JmapObject> ResolveReference for CopyRequest<'x, T> {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve create references
         for (id, obj) in self.create.iter_mut() {
             obj.eval_object_references(response, &mut Graph::None, 0)?;
@@ -249,7 +249,7 @@ impl<'x, T: JmapObject> ResolveReference for CopyRequest<'x, T> {
 }
 
 impl<T: JmapObject> ResolveReference for ParseRequest<T> {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve blobId references
         for id in self.blob_ids.iter_mut() {
             if let MaybeIdReference::Reference(ir) = id {
@@ -262,7 +262,7 @@ impl<T: JmapObject> ResolveReference for ParseRequest<T> {
 }
 
 impl ResolveReference for ImportEmailRequest {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve email mailbox references
         for email in self.emails.values_mut() {
             match &mut email.mailbox_ids {
@@ -290,7 +290,7 @@ impl ResolveReference for ImportEmailRequest {
 }
 
 impl ResolveReference for GetSearchSnippetRequest {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         // Resolve emailIds references
         if let MaybeResultReference::Reference(reference) = &self.email_ids {
             self.email_ids = MaybeResultReference::Value(
@@ -307,7 +307,7 @@ impl ResolveReference for GetSearchSnippetRequest {
 }
 
 impl ResolveReference for BlobUploadRequest {
-    fn resolve_references(&mut self, response: &Response<'_>) -> trc::Result<()> {
+    fn resolve_references(&mut self, response: &Response<'_>) -> crate::trc::Result<()> {
         let mut graph = HashMap::with_capacity(self.create.len());
         for (create_id, object) in self.create.iter_mut() {
             for data in &mut object.data {
@@ -319,11 +319,11 @@ impl ResolveReference for BlobUploadRequest {
                             *id = MaybeIdReference::Id(blob_id.clone());
                         }
                         Some(_) => {
-                            return Err(trc::JmapEvent::InvalidResultReference.into_err().details(
-                                format_compact!(
+                            return Err(crate::trc::JmapEvent::InvalidResultReference
+                                .into_err()
+                                .details(format_compact!(
                                     "Id reference {parent_id:?} points to invalid type."
-                                ),
-                            ));
+                                )));
                         }
                         None => {
                             graph

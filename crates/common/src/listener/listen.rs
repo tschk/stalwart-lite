@@ -10,15 +10,15 @@ use std::{
     time::Duration,
 };
 
+use crate::trc::{EventType, HttpEvent, ImapEvent, ManageSieveEvent, Pop3Event, SmtpEvent};
+use crate::utils::{UnwrapFailure, config::Config};
 use proxy_header::io::ProxiedStream;
 use rustls::crypto::ring::cipher_suite::TLS13_AES_128_GCM_SHA256;
 use socket2::SockRef;
 use tokio::{net::TcpStream, sync::watch};
 use tokio_rustls::server::TlsStream;
-use trc::{EventType, HttpEvent, ImapEvent, ManageSieveEvent, Pop3Event, SmtpEvent};
-use utils::{UnwrapFailure, config::Config};
 
-use crate::{
+use crate::common::{
     Inner, Server,
     config::server::{Listener, Listeners, ServerProtocol, TcpListener},
     core::BuildServer,
@@ -65,8 +65,8 @@ impl Listener {
             // Bind socket
             let listener = match listener.listen() {
                 Ok(listener) => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::ListenStart),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::ListenStart),
                         ListenerId = instance.id.clone(),
                         LocalIp = local_addr.ip(),
                         LocalPort = local_addr.port(),
@@ -76,8 +76,8 @@ impl Listener {
                     listener
                 }
                 Err(err) => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::ListenError),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::ListenError),
                         ListenerId = instance.id.clone(),
                         LocalIp = local_addr.ip(),
                         LocalPort = local_addr.port(),
@@ -146,8 +146,8 @@ impl Listener {
                                                     }
                                                 }
                                                 Err(err) => {
-                                                    trc::event!(
-                                                        Network(trc::NetworkEvent::ProxyError),
+                                                    crate::trc::event!(
+                                                        Network(crate::trc::NetworkEvent::ProxyError),
                                                         ListenerId = instance.id.clone(),
                                                         LocalIp = local_addr.ip(),
                                                         LocalPort = local_addr.port(),
@@ -166,8 +166,8 @@ impl Listener {
                                     }
                                 }
                                 Err(err) => {
-                                    trc::event!(
-                                        Network(trc::NetworkEvent::AcceptError),
+                                    crate::trc::event!(
+                                        Network(crate::trc::NetworkEvent::AcceptError),
                                         ListenerId = instance.id.clone(),
                                         LocalIp = local_addr.ip(),
                                         LocalPort = local_addr.port(),
@@ -179,8 +179,8 @@ impl Listener {
                         },
                         _ = shutdown_rx.changed() => {
 
-                            trc::event!(
-                                Network(trc::NetworkEvent::ListenStop),
+                            crate::trc::event!(
+                                Network(crate::trc::NetworkEvent::ListenStop),
                                 ListenerId = instance.id.clone(),
                                 LocalIp = local_addr.ip(),
                                 Tls = is_tls,
@@ -227,8 +227,8 @@ impl BuildSession for Arc<ServerInstance> {
 
         // Check if blocked
         if server.is_ip_blocked(&remote_ip) {
-            trc::event!(
-                Security(trc::SecurityEvent::IpBlocked),
+            crate::trc::event!(
+                Security(crate::trc::SecurityEvent::IpBlocked),
                 ListenerId = self.id.clone(),
                 LocalPort = local_addr.port(),
                 RemoteIp = remote_ip,
@@ -250,8 +250,8 @@ impl BuildSession for Arc<ServerInstance> {
             }
             .into()
         } else {
-            trc::event!(
-                Limit(trc::LimitEvent::ConcurrentConnection),
+            crate::trc::event!(
+                Limit(crate::trc::LimitEvent::ConcurrentConnection),
                 ListenerId = self.id.clone(),
                 LocalPort = local_addr.port(),
                 RemoteIp = remote_ip,
@@ -274,8 +274,8 @@ impl SocketOpts {
     pub fn apply(&self, stream: &TcpStream) {
         // Set TCP options
         if let Err(err) = stream.set_nodelay(self.nodelay) {
-            trc::event!(
-                Network(trc::NetworkEvent::SetOptError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::SetOptError),
                 Reason = err.to_string(),
                 Details = "Failed to set TCP_NODELAY",
             );
@@ -283,8 +283,8 @@ impl SocketOpts {
         if let Some(ttl) = self.ttl
             && let Err(err) = stream.set_ttl(ttl)
         {
-            trc::event!(
-                Network(trc::NetworkEvent::SetOptError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::SetOptError),
                 Reason = err.to_string(),
                 Details = "Failed to set TTL",
             );
@@ -292,8 +292,8 @@ impl SocketOpts {
         if self.linger.is_some()
             && let Err(err) = SockRef::from(&stream).set_linger(self.linger)
         {
-            trc::event!(
-                Network(trc::NetworkEvent::SetOptError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::SetOptError),
                 Reason = err.to_string(),
                 Details = "Failed to set LINGER",
             );
@@ -367,8 +367,8 @@ impl ServerInstance {
         match &self.acceptor {
             TcpAcceptor::Tls { acceptor, .. } => match acceptor.accept(stream).await {
                 Ok(stream) => {
-                    trc::event!(
-                        Tls(trc::TlsEvent::Handshake),
+                    crate::trc::event!(
+                        Tls(crate::trc::TlsEvent::Handshake),
                         ListenerId = self.id.clone(),
                         SpanId = session_id,
                         Version = format!(
@@ -391,8 +391,8 @@ impl ServerInstance {
                     Ok(stream)
                 }
                 Err(err) => {
-                    trc::event!(
-                        Tls(trc::TlsEvent::HandshakeError),
+                    crate::trc::event!(
+                        Tls(crate::trc::TlsEvent::HandshakeError),
                         ListenerId = self.id.clone(),
                         SpanId = session_id,
                         Reason = err.to_string(),
@@ -401,8 +401,8 @@ impl ServerInstance {
                 }
             },
             TcpAcceptor::Plain => {
-                trc::event!(
-                    Tls(trc::TlsEvent::NotConfigured),
+                crate::trc::event!(
+                    Tls(crate::trc::TlsEvent::NotConfigured),
                     ListenerId = self.id.clone(),
                     SpanId = session_id,
                 );

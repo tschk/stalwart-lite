@@ -4,39 +4,42 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::backend::internal::manage;
-use email::message::crypto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::backend::internal::manage;
+use crate::email::message::crypto::{
     ENCRYPT_TRAIN_SPAM_FILTER, EncryptMessage, EncryptMessageError, EncryptionMethod,
     EncryptionParams, EncryptionType, try_parse_certs,
 };
-use http_proto::*;
+use crate::http_proto::*;
+use crate::store::{
+    Deserialize, Serialize, ValueKey,
+    write::{AlignedBytes, Archive, Archiver, BatchBuilder},
+};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::PrincipalField};
 use mail_builder::encoders::base64::base64_encode_mime;
 use mail_parser::MessageParser;
 use serde_json::json;
 use std::{future::Future, sync::Arc};
-use store::{
-    Deserialize, Serialize, ValueKey,
-    write::{AlignedBytes, Archive, Archiver, BatchBuilder},
-};
-use trc::AddContext;
-use types::{collection::Collection, field::PrincipalField};
 
 pub trait CryptoHandler: Sync + Send {
     fn handle_crypto_get(
         &self,
         access_token: Arc<AccessToken>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_crypto_post(
         &self,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl CryptoHandler for Server {
-    async fn handle_crypto_get(&self, access_token: Arc<AccessToken>) -> trc::Result<HttpResponse> {
+    async fn handle_crypto_get(
+        &self,
+        access_token: Arc<AccessToken>,
+    ) -> crate::trc::Result<HttpResponse> {
         let ec = if let Some(params_) = self
             .store()
             .get_value::<Archive<AlignedBytes>>(ValueKey::property(
@@ -49,7 +52,7 @@ impl CryptoHandler for Server {
         {
             let params = params_
                 .unarchive::<EncryptionParams>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let algo = params.algo();
             let method = params.method();
             let allow_spam_training = params.can_train_spam_filter();
@@ -85,9 +88,13 @@ impl CryptoHandler for Server {
         &self,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let request = serde_json::from_slice::<EncryptionType>(body.as_deref().unwrap_or_default())
-            .map_err(|err| trc::ResourceEvent::BadParameters.into_err().reason(err))?;
+            .map_err(|err| {
+                crate::trc::ResourceEvent::BadParameters
+                    .into_err()
+                    .reason(err)
+            })?;
 
         let (method, algo, mut certs, allow_spam_training) = match request {
             EncryptionType::PGP {
@@ -141,7 +148,7 @@ impl CryptoHandler for Server {
             certs,
         })
         .serialize()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Try a test encryption
         if let Err(EncryptMessageError::Error(message)) = MessageParser::new()

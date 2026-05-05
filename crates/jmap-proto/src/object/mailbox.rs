@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{
         AnyId, JmapObject, JmapObjectId, JmapRight, JmapSharedObject, MaybeReference, parse_ref,
     },
     request::{deserialize::DeserializeArguments, reference::MaybeIdReference},
 };
+use crate::types::{acl::Acl, id::Id, special_use::SpecialUse};
 use jmap_tools::{Element, JsonPointer, JsonPointerItem, Key, Property};
 use std::{borrow::Cow, str::FromStr};
-use types::{acl::Acl, id::Id, special_use::SpecialUse};
 
 #[derive(Debug, Clone, Default)]
 pub struct Mailbox;

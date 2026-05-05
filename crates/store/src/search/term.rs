@@ -4,7 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::{
+    language::stemmer::Stemmer,
+    tokenizers::{space::SpaceTokenizer, word::WordTokenizer},
+};
+use crate::store::{
     Serialize,
     backend::MAX_TOKEN_LENGTH,
     search::*,
@@ -13,15 +17,11 @@ use crate::{
         SearchIndexId, SearchIndexType, ValueClass,
     },
 };
-use ahash::AHashSet;
-use nlp::{
-    language::stemmer::Stemmer,
-    tokenizers::{space::SpaceTokenizer, word::WordTokenizer},
-};
-use utils::{
+use crate::utils::{
     cheeky_hash::{CheekyBTreeMap, CheekyHash},
     map::bitmap::BitPop,
 };
+use ahash::AHashSet;
 
 #[derive(Debug, PartialEq, Eq, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
 pub(crate) struct TermIndex {
@@ -200,7 +200,7 @@ impl TermIndex {
         batch: &mut BatchBuilder,
         index: SearchIndex,
         id: SearchIndexId,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let archive = Archiver::new(self);
         batch
             .set(
@@ -254,7 +254,7 @@ impl TermIndex {
         index: SearchIndex,
         id: SearchIndexId,
         old_term: &ArchivedTermIndex,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let archive = Archiver::new(self);
         batch
             .set(

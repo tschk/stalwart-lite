@@ -5,21 +5,21 @@
  */
 
 use super::metadata::MessageData;
-use common::{KV_LOCK_PURGE_ACCOUNT, Server, storage::index::ObjectIndexBuilder};
-use directory::backend::internal::manage::ManageDirectory;
-use groupware::calendar::storage::ItipAutoExpunge;
-use std::future::Future;
-use store::rand::prelude::SliceRandom;
-use store::write::key::DeserializeBigEndian;
-use store::write::{IndexPropertyClass, SearchIndex, TaskEpoch, TaskQueueClass, now};
-use store::{IterateParams, SerializeInfallible, U32_LEN, U64_LEN, ValueKey};
-use store::{
+use crate::common::{KV_LOCK_PURGE_ACCOUNT, Server, storage::index::ObjectIndexBuilder};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::groupware::calendar::storage::ItipAutoExpunge;
+use crate::store::rand::prelude::SliceRandom;
+use crate::store::write::key::DeserializeBigEndian;
+use crate::store::write::{IndexPropertyClass, SearchIndex, TaskEpoch, TaskQueueClass, now};
+use crate::store::{IterateParams, SerializeInfallible, U32_LEN, U64_LEN, ValueKey};
+use crate::store::{
     roaring::RoaringBitmap,
     write::{BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::collection::{Collection, VanishedCollection};
-use types::field::{EmailField, EmailSubmissionField};
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, VanishedCollection};
+use crate::types::field::{EmailField, EmailSubmissionField};
+use std::future::Future;
 
 pub trait EmailDeletion: Sync + Send {
     fn emails_delete(
@@ -28,7 +28,7 @@ pub trait EmailDeletion: Sync + Send {
         tenant_id: Option<u32>,
         batch: &mut BatchBuilder,
         document_ids: RoaringBitmap,
-    ) -> impl Future<Output = trc::Result<RoaringBitmap>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<RoaringBitmap>> + Send;
 
     fn purge_accounts(&self, use_roles: bool) -> impl Future<Output = ()> + Send;
 
@@ -38,13 +38,13 @@ pub trait EmailDeletion: Sync + Send {
         &self,
         account_id: u32,
         hold_period: u64,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 
     fn emails_auto_expunge(
         &self,
         account_id: u32,
         hold_period: u64,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 }
 
 impl EmailDeletion for Server {
@@ -54,7 +54,7 @@ impl EmailDeletion for Server {
         tenant_id: Option<u32>,
         batch: &mut BatchBuilder,
         document_ids: RoaringBitmap,
-    ) -> trc::Result<RoaringBitmap> {
+    ) -> crate::trc::Result<RoaringBitmap> {
         let mut deleted_ids = RoaringBitmap::new();
         batch
             .with_account_id(account_id)
@@ -67,7 +67,7 @@ impl EmailDeletion for Server {
                 // Add changes to batch
                 let metadata = data_
                     .to_unarchived::<MessageData>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 for mailbox in metadata.inner.mailboxes.iter() {
                     batch.log_vanished_item(
                         VanishedCollection::Email,
@@ -81,7 +81,7 @@ impl EmailDeletion for Server {
                             .with_tenant_id(tenant_id)
                             .with_current(metadata),
                     )
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .set(
                         ValueClass::TaskQueue(TaskQueueClass::UpdateIndex {
                             index: SearchIndex::Email,
@@ -125,7 +125,7 @@ impl EmailDeletion for Server {
                 .collect();
 
             // Shuffle account ids
-            account_ids.shuffle(&mut store::rand::rng());
+            account_ids.shuffle(&mut crate::store::rand::rng());
 
             for account_id in account_ids {
                 self.purge_account(account_id).await;
@@ -144,11 +144,14 @@ impl EmailDeletion for Server {
         {
             Ok(true) => (),
             Ok(false) => {
-                trc::event!(Purge(trc::PurgeEvent::InProgress), AccountId = account_id,);
+                crate::trc::event!(
+                    Purge(crate::trc::PurgeEvent::InProgress),
+                    AccountId = account_id,
+                );
                 return;
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.details("Failed to lock account.")
                         .account_id(account_id)
                 );
@@ -160,7 +163,7 @@ impl EmailDeletion for Server {
         if let Some(hold_period) = self.core.jmap.mail_autoexpunge_after
             && let Err(err) = self.emails_auto_expunge(account_id, hold_period).await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to auto-expunge e-mail messages.")
                     .account_id(account_id)
             );
@@ -170,7 +173,7 @@ impl EmailDeletion for Server {
         if let Some(hold_period) = self.core.groupware.itip_inbox_auto_expunge
             && let Err(err) = self.itip_auto_expunge(account_id, hold_period).await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to auto-expunge iTIP messages.")
                     .account_id(account_id)
             );
@@ -180,7 +183,7 @@ impl EmailDeletion for Server {
         if let Some(hold_period) = self.core.jmap.email_submission_autoexpunge_after
             && let Err(err) = self.purge_email_submissions(account_id, hold_period).await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to auto-expunge e-mail submissions.")
                     .account_id(account_id)
             );
@@ -195,7 +198,7 @@ impl EmailDeletion for Server {
             )
             .await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to purge changes.")
                     .account_id(account_id)
             );
@@ -207,11 +210,15 @@ impl EmailDeletion for Server {
             .remove_lock(KV_LOCK_PURGE_ACCOUNT, &account_id.to_be_bytes())
             .await
         {
-            trc::error!(err.details("Failed to delete lock.").account_id(account_id));
+            crate::trc::error!(err.details("Failed to delete lock.").account_id(account_id));
         }
     }
 
-    async fn emails_auto_expunge(&self, account_id: u32, hold_period: u64) -> trc::Result<()> {
+    async fn emails_auto_expunge(
+        &self,
+        account_id: u32,
+        hold_period: u64,
+    ) -> crate::trc::Result<()> {
         // Filter messages by received date
         let mut destroy_ids = RoaringBitmap::new();
         let cutoff = now().saturating_sub(hold_period);
@@ -242,14 +249,14 @@ impl EmailDeletion for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if destroy_ids.is_empty() {
             return Ok(());
         }
 
-        trc::event!(
-            Purge(trc::PurgeEvent::AutoExpunge),
+        crate::trc::event!(
+            Purge(crate::trc::PurgeEvent::AutoExpunge),
             Collection = Collection::Email.as_str(),
             AccountId = account_id,
             Total = destroy_ids.len(),
@@ -261,7 +268,7 @@ impl EmailDeletion for Server {
             .store()
             .get_principal(account_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .and_then(|p| p.tenant());
         self.emails_delete(account_id, tenant_id, &mut batch, destroy_ids)
             .await?;
@@ -271,7 +278,11 @@ impl EmailDeletion for Server {
         Ok(())
     }
 
-    async fn purge_email_submissions(&self, account_id: u32, hold_period: u64) -> trc::Result<()> {
+    async fn purge_email_submissions(
+        &self,
+        account_id: u32,
+        hold_period: u64,
+    ) -> crate::trc::Result<()> {
         // Filter messages by received date
         let mut destroy_ids = Vec::new();
         self.store()
@@ -308,14 +319,14 @@ impl EmailDeletion for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if destroy_ids.is_empty() {
             return Ok(());
         }
 
-        trc::event!(
-            Purge(trc::PurgeEvent::AutoExpunge),
+        crate::trc::event!(
+            Purge(crate::trc::PurgeEvent::AutoExpunge),
             Collection = Collection::EmailSubmission.as_str(),
             AccountId = account_id,
             Total = destroy_ids.len(),

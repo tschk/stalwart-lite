@@ -9,7 +9,7 @@ use std::io::Read;
 use ahash::AHashSet;
 use mail_auth::flate2::read::GzDecoder;
 
-use crate::config::Config;
+use crate::utils::config::Config;
 
 #[derive(Debug, Clone, Default)]
 pub struct PublicSuffix {

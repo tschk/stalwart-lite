@@ -5,9 +5,9 @@
  */
 
 use super::PluginContext;
-use crate::scripts::into_sieve_value;
+use crate::common::scripts::into_sieve_value;
+use crate::store::{Deserialize, Value, dispatch::lookup::KeyValue};
 use sieve::{FunctionMap, runtime::Variable};
-use store::{Deserialize, Value, dispatch::lookup::KeyValue};
 
 pub fn register(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("key_exists", plugin_id, 2);
@@ -25,14 +25,17 @@ pub fn register_local_domain(plugin_id: u32, fnc_map: &mut FunctionMap) {
     fnc_map.set_external_function("is_local_domain", plugin_id, 2);
 }
 
-pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let store = match &ctx.arguments[0] {
         Variable::String(v) if !v.is_empty() => ctx.server.core.storage.lookups.get(v.as_ref()),
         _ => Some(&ctx.server.core.storage.lookup),
     }
     .ok_or_else(|| {
-        trc::SieveEvent::RuntimeError
-            .ctx(trc::Key::Id, ctx.arguments[0].to_string().into_owned())
+        crate::trc::SieveEvent::RuntimeError
+            .ctx(
+                crate::trc::Key::Id,
+                ctx.arguments[0].to_string().into_owned(),
+            )
             .details("Unknown store")
     })?;
 
@@ -51,14 +54,17 @@ pub async fn exec(ctx: PluginContext<'_>) -> trc::Result<Variable> {
     .into())
 }
 
-pub async fn exec_get(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec_get(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     match &ctx.arguments[0] {
         Variable::String(v) if !v.is_empty() => ctx.server.core.storage.lookups.get(v.as_ref()),
         _ => Some(&ctx.server.core.storage.lookup),
     }
     .ok_or_else(|| {
-        trc::SieveEvent::RuntimeError
-            .ctx(trc::Key::Id, ctx.arguments[0].to_string().into_owned())
+        crate::trc::SieveEvent::RuntimeError
+            .ctx(
+                crate::trc::Key::Id,
+                ctx.arguments[0].to_string().into_owned(),
+            )
             .details("Unknown store")
     })?
     .key_get::<VariableWrapper>(ctx.arguments[1].to_string())
@@ -66,7 +72,7 @@ pub async fn exec_get(ctx: PluginContext<'_>) -> trc::Result<Variable> {
     .map(|v| v.map(|v| v.into_inner()).unwrap_or_default())
 }
 
-pub async fn exec_set(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec_set(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let expires = match &ctx.arguments[3] {
         Variable::Integer(v) => Some(*v as u64),
         Variable::Float(v) => Some(*v as u64),
@@ -78,8 +84,11 @@ pub async fn exec_set(ctx: PluginContext<'_>) -> trc::Result<Variable> {
         _ => Some(&ctx.server.core.storage.lookup),
     }
     .ok_or_else(|| {
-        trc::SieveEvent::RuntimeError
-            .ctx(trc::Key::Id, ctx.arguments[0].to_string().into_owned())
+        crate::trc::SieveEvent::RuntimeError
+            .ctx(
+                crate::trc::Key::Id,
+                ctx.arguments[0].to_string().into_owned(),
+            )
             .details("Unknown store")
     })?
     .key_set(
@@ -98,7 +107,7 @@ pub async fn exec_set(ctx: PluginContext<'_>) -> trc::Result<Variable> {
     .map(|_| true.into())
 }
 
-pub async fn exec_local_domain(ctx: PluginContext<'_>) -> trc::Result<Variable> {
+pub async fn exec_local_domain(ctx: PluginContext<'_>) -> crate::trc::Result<Variable> {
     let domain = ctx.arguments[1].to_string();
 
     if !domain.is_empty() {
@@ -109,8 +118,11 @@ pub async fn exec_local_domain(ctx: PluginContext<'_>) -> trc::Result<Variable> 
             _ => Some(&ctx.server.core.storage.directory),
         }
         .ok_or_else(|| {
-            trc::SieveEvent::RuntimeError
-                .ctx(trc::Key::Id, ctx.arguments[0].to_string().into_owned())
+            crate::trc::SieveEvent::RuntimeError
+                .ctx(
+                    crate::trc::Key::Id,
+                    ctx.arguments[0].to_string().into_owned(),
+                )
                 .details("Unknown directory")
         })?
         .is_local_domain(domain.as_ref())
@@ -125,7 +137,7 @@ pub async fn exec_local_domain(ctx: PluginContext<'_>) -> trc::Result<Variable> 
 pub struct VariableWrapper(Variable);
 
 impl Deserialize for VariableWrapper {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(VariableWrapper(
             bincode::serde::decode_from_slice::<Variable, _>(bytes, bincode::config::standard())
                 .map(|v| v.0)

@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    changes::state::JmapCacheState,
-    email::{PatchResult, handle_email_patch, ingested_into_object},
-};
-use common::{Server, auth::AccessToken};
-use email::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess},
     message::copy::{CopyMessageError, EmailCopy},
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap::{
+    changes::state::JmapCacheState,
+    email::{PatchResult, handle_email_patch, ingested_into_object},
+};
+use crate::jmap_proto::{
     error::set::SetError,
     method::{
         copy::{CopyRequest, CopyResponse},
@@ -27,11 +27,11 @@ use jmap_proto::{
         reference::MaybeResultReference,
     },
 };
+use crate::trc::AddContext;
+use crate::types::acl::Acl;
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::{Key, Value};
 use std::future::Future;
-use trc::AddContext;
-use types::acl::Acl;
-use utils::map::vec_map::VecMap;
 
 pub trait JmapEmailCopy: Sync + Send {
     fn email_copy<'x>(
@@ -40,7 +40,7 @@ pub trait JmapEmailCopy: Sync + Send {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<CopyResponse<Email>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<CopyResponse<Email>>> + Send;
 }
 
 impl JmapEmailCopy for Server {
@@ -50,12 +50,12 @@ impl JmapEmailCopy for Server {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         session: &HttpSessionData,
-    ) -> trc::Result<CopyResponse<Email>> {
+    ) -> crate::trc::Result<CopyResponse<Email>> {
         let account_id = request.account_id.document_id();
         let from_account_id = request.from_account_id.document_id();
 
         if account_id == from_account_id {
-            return Err(trc::JmapEvent::InvalidArguments
+            return Err(crate::trc::JmapEvent::InvalidArguments
                 .into_err()
                 .details("From accountId is equal to fromAccountId"));
         }
@@ -73,7 +73,7 @@ impl JmapEmailCopy for Server {
         let from_cache = self
             .get_cached_messages(from_account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let from_message_ids = if access_token.is_member(from_account_id) {
             from_cache.email_document_ids()
         } else {

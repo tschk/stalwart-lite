@@ -6,26 +6,26 @@
 
 use super::ETag;
 use super::uri::{DavUriResource, OwnedUri, UriResource, Urn};
-use crate::{DavError, DavErrorCondition, DavMethod};
-use common::KV_LOCK_DAV;
-use common::{Server, auth::AccessToken};
-use dav_proto::schema::property::{ActiveLock, LockScope, WebDavProperty};
-use dav_proto::schema::request::DavPropertyValue;
-use dav_proto::schema::response::{BaseCondition, List, PropResponse};
-use dav_proto::{Condition, Depth, Timeout};
-use dav_proto::{RequestHeaders, schema::request::LockInfo};
-use groupware::cache::GroupwareCache;
-use http_proto::HttpResponse;
+use crate::common::KV_LOCK_DAV;
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{DavError, DavErrorCondition, DavMethod};
+use crate::dav_proto::schema::property::{ActiveLock, LockScope, WebDavProperty};
+use crate::dav_proto::schema::request::DavPropertyValue;
+use crate::dav_proto::schema::response::{BaseCondition, List, PropResponse};
+use crate::dav_proto::{Condition, Depth, Timeout};
+use crate::dav_proto::{RequestHeaders, schema::request::LockInfo};
+use crate::groupware::cache::GroupwareCache;
+use crate::http_proto::HttpResponse;
+use crate::store::ValueKey;
+use crate::store::dispatch::lookup::KeyValue;
+use crate::store::write::serialize::rkyv_deserialize;
+use crate::store::write::{AlignedBytes, Archive, Archiver, now};
+use crate::store::{Serialize, U32_LEN};
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
+use crate::types::dead_property::DeadProperty;
 use hyper::StatusCode;
 use std::collections::HashMap;
-use store::ValueKey;
-use store::dispatch::lookup::KeyValue;
-use store::write::serialize::rkyv_deserialize;
-use store::write::{AlignedBytes, Archive, Archiver, now};
-use store::{Serialize, U32_LEN};
-use trc::AddContext;
-use types::collection::Collection;
-use types::dead_property::DeadProperty;
 
 #[derive(Debug, Default, Clone)]
 pub struct ResourceState<'x> {
@@ -79,7 +79,7 @@ pub(crate) trait LockRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         lock_info: LockRequest,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn validate_headers(
         &self,
@@ -88,7 +88,7 @@ pub(crate) trait LockRequestHandler: Sync + Send {
         resources: Vec<ResourceState<'_>>,
         locks: LockCaches<'_>,
         method: DavMethod,
-    ) -> impl Future<Output = crate::Result<()>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<()>> + Send;
 }
 
 pub(crate) enum LockRequest {
@@ -103,7 +103,7 @@ impl LockRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         lock_info: LockRequest,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         let resource = self
             .validate_uri(access_token, headers.uri)
             .await?
@@ -142,11 +142,11 @@ impl LockRequestHandler for Server {
             .in_memory_store()
             .key_get::<Archive<AlignedBytes>>(resource_hash.as_slice())
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             let lock_data = lock_data
                 .unarchive::<LockData>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             self.validate_headers(
                 access_token,
@@ -211,7 +211,7 @@ impl LockRequestHandler for Server {
                 }
             }
 
-            rkyv_deserialize(lock_data).caused_by(trc::location!())?
+            rkyv_deserialize(lock_data).caused_by(crate::trc::location!())?
         } else if is_lock_request {
             self.validate_headers(
                 access_token,
@@ -269,7 +269,7 @@ impl LockRequestHandler for Server {
                     return Err(DavError::Code(StatusCode::PAYLOAD_TOO_LARGE));
                 }
 
-                lock_item.lock_id = store::rand::random::<u64>() ^ expires;
+                lock_item.lock_id = crate::store::rand::random::<u64>() ^ expires;
                 lock_item.owner = access_token.primary_id;
                 lock_item.depth_infinity = matches!(headers.depth, Depth::Infinity);
                 lock_item.owner_dav = lock_info.owner;
@@ -320,17 +320,17 @@ impl LockRequestHandler for Server {
                         Archiver::new(lock_data)
                             .untrusted()
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     )
                     .expires(max_expire),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         } else {
             self.in_memory_store()
                 .key_delete(resource_hash)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(response)
@@ -343,7 +343,7 @@ impl LockRequestHandler for Server {
         mut resources: Vec<ResourceState<'_>>,
         mut locks_: LockCaches<'_>,
         method: DavMethod,
-    ) -> crate::Result<()> {
+    ) -> crate::dav::Result<()> {
         let no_if_headers = headers.if_.is_empty();
         match method {
             DavMethod::GET | DavMethod::HEAD => {
@@ -376,7 +376,7 @@ impl LockRequestHandler for Server {
         }
 
         // Unarchive lock data
-        let mut locks = locks_.to_unarchived().caused_by(trc::location!())?;
+        let mut locks = locks_.to_unarchived().caused_by(crate::trc::location!())?;
 
         // Validate locks for write operations
         let mut lock_response = Ok(());
@@ -518,7 +518,7 @@ impl LockRequestHandler for Server {
                                 },
                             )
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .map(|uri| uri.resource)
                             .unwrap_or(u32::MAX)
                             .into();
@@ -534,7 +534,7 @@ impl LockRequestHandler for Server {
                                 document_id,
                             ))
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                     {
                         resource_state.etag = archive.etag().into();
                     }
@@ -562,7 +562,7 @@ impl LockRequestHandler for Server {
                             resource_state.collection.into(),
                         )
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .highest_change_id;
                     resource_state.sync_token = Some(Urn::Sync { id, seq: 0 }.to_string());
                 }
@@ -660,12 +660,12 @@ impl LockData {
 }
 
 impl<'x> LockArchive<'x> {
-    fn unarchive(&'x self) -> trc::Result<&'x ArchivedLockData> {
+    fn unarchive(&'x self) -> crate::trc::Result<&'x ArchivedLockData> {
         match self {
             LockArchive::Unarchived(archived_lock_data) => Ok(archived_lock_data),
-            LockArchive::Archived(archive) => {
-                archive.unarchive::<LockData>().caused_by(trc::location!())
-            }
+            LockArchive::Archived(archive) => archive
+                .unarchive::<LockData>()
+                .caused_by(crate::trc::location!()),
         }
     }
 }
@@ -685,7 +685,7 @@ impl<'x> LockCaches<'x> {
         }
     }
 
-    pub fn to_unarchived(&'x self) -> trc::Result<LockCaches<'x>> {
+    pub fn to_unarchived(&'x self) -> crate::trc::Result<LockCaches<'x>> {
         let caches = self
             .caches
             .iter()
@@ -694,11 +694,14 @@ impl<'x> LockCaches<'x> {
                     account_id: cache.account_id,
                     collection: cache.collection,
                     lock_archive: LockArchive::Unarchived(
-                        cache.lock_archive.unarchive().caused_by(trc::location!())?,
+                        cache
+                            .lock_archive
+                            .unarchive()
+                            .caused_by(crate::trc::location!())?,
                     ),
                 })
             })
-            .collect::<trc::Result<Vec<_>>>()?;
+            .collect::<crate::trc::Result<Vec<_>>>()?;
 
         Ok(LockCaches { caches })
     }
@@ -715,7 +718,7 @@ impl<'x> LockCaches<'x> {
         &mut self,
         server: &Server,
         resource_state: &ResourceState<'_>,
-    ) -> trc::Result<Option<usize>> {
+    ) -> crate::trc::Result<Option<usize>> {
         if let Some(idx) = self.is_cached(resource_state) {
             Ok(Some(idx))
         } else if resource_state.collection != Collection::None {
@@ -734,7 +737,7 @@ impl<'x> LockCaches<'x> {
         pos: usize,
         resource_state: &'x ResourceState<'_>,
         include_children: bool,
-    ) -> trc::Result<Vec<(&'x str, &'x ArchivedLockItem)>> {
+    ) -> crate::trc::Result<Vec<(&'x str, &'x ArchivedLockItem)>> {
         self.caches[pos]
             .lock_archive
             .unarchive()
@@ -745,12 +748,12 @@ impl<'x> LockCaches<'x> {
         &mut self,
         server: &Server,
         resource_state: &ResourceState<'_>,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         if let Some(lock_archive) = server
             .in_memory_store()
             .key_get::<Archive<AlignedBytes>>(resource_state.lock_key().as_slice())
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             self.caches.push(LockCache {
                 account_id: resource_state.account_id,

@@ -8,13 +8,13 @@ pub mod metrics;
 pub mod tracers;
 pub mod webhooks;
 
+use crate::trc::{Collector, ipc::subscriber::SubscriberBuilder};
 use tracers::log::spawn_log_tracer;
 use tracers::otel::spawn_otel_tracer;
 use tracers::stdout::spawn_console_tracer;
-use trc::{Collector, ipc::subscriber::SubscriberBuilder};
 use webhooks::spawn_webhook_tracer;
 
-use crate::config::telemetry::{Telemetry, TelemetrySubscriberType};
+use crate::common::config::telemetry::{Telemetry, TelemetrySubscriberType};
 
 impl Telemetry {
     pub fn enable(self, is_enterprise: bool) {
@@ -71,9 +71,9 @@ impl Telemetry {
     }
 
     #[cfg(feature = "test_mode")]
-    pub fn test_tracer(level: trc::Level) {
-        let mut interests = trc::ipc::subscriber::Interests::default();
-        for event in trc::EventType::variants() {
+    pub fn test_tracer(level: crate::trc::Level) {
+        let mut interests = crate::trc::ipc::subscriber::Interests::default();
+        for event in crate::trc::EventType::variants() {
             if level.is_contained(event.level()) {
                 interests.set(event);
             }
@@ -83,7 +83,7 @@ impl Telemetry {
             SubscriberBuilder::new("stderr".to_string())
                 .with_interests(interests.clone())
                 .with_lossy(false),
-            crate::config::telemetry::ConsoleTracer {
+            crate::common::config::telemetry::ConsoleTracer {
                 ansi: true,
                 multiline: false,
                 buffered: false,

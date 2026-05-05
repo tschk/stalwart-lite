@@ -5,13 +5,11 @@
  */
 
 use super::ImapContext;
-use crate::{
-    core::{MailboxId, SelectedMailbox, Session, SessionData},
-    spawn_op,
+use crate::common::{
+    ipc::PushNotification, listener::SessionStream, storage::index::ObjectIndexBuilder,
 };
-use common::{ipc::PushNotification, listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use email::{
+use crate::directory::Permission;
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     mailbox::{JUNK_ID, TRASH_ID, UidMailbox},
     message::{
@@ -20,22 +18,26 @@ use email::{
         metadata::MessageData,
     },
 };
-use imap_proto::{
+use crate::imap::{
+    core::{MailboxId, SelectedMailbox, Session, SessionData},
+    spawn_op,
+};
+use crate::imap_proto::{
     Command, ResponseCode, ResponseType, StatusResponse, protocol::copy_move::Arguments,
     receiver::Request,
 };
-use std::{sync::Arc, time::Instant};
-use store::{
+use crate::store::{
     ValueKey,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, VanishedCollection},
     type_state::{DataType, StateChange},
 };
+use std::{sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_copy_move(
@@ -43,7 +45,7 @@ impl<T: SessionStream> Session<T> {
         request: Request<Command>,
         is_move: bool,
         is_uid: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(if is_move {
             Permission::ImapMove
@@ -60,14 +62,14 @@ impl<T: SessionStream> Session<T> {
             // Refresh mailboxes
             data.synchronize_mailboxes(false)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             // Make sure the mailbox exists.
             let dest_mailbox =
                 if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
                     mailbox
                 } else {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Destination mailbox does not exist.")
                         .code(ResponseCode::TryCreate)
@@ -78,7 +80,7 @@ impl<T: SessionStream> Session<T> {
             if src_mailbox.id.account_id == dest_mailbox.account_id
                 && src_mailbox.id.mailbox_id == dest_mailbox.mailbox_id
             {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Source and destination mailboxes are the same.")
                     .code(ResponseCode::Cannot)
@@ -110,28 +112,28 @@ impl<T: SessionStream> SessionData<T> {
         is_uid: bool,
         is_qresync: bool,
         op_start: Instant,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         self.synchronize_messages(&src_mailbox)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Convert IMAP ids to JMAP ids.
         let ids = src_mailbox
             .sequence_to_ids(&arguments.sequence_set, is_uid)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         if ids.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Imap(if is_move {
-                    trc::ImapEvent::Move
+                    crate::trc::ImapEvent::Move
                 } else {
-                    trc::ImapEvent::Copy
+                    crate::trc::ImapEvent::Copy
                 }),
                 SpanId = self.session_id,
                 Source = src_mailbox.id.account_id,
-                Details = trc::Value::None,
-                Uid = trc::Value::None,
+                Details = crate::trc::Value::None,
+                Uid = crate::trc::Value::None,
                 AccountId = dest_mailbox.account_id,
                 MailboxId = dest_mailbox.mailbox_id,
                 Elapsed = op_start.elapsed()
@@ -159,9 +161,9 @@ impl<T: SessionStream> SessionData<T> {
                     Acl::RemoveItems,
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(concat!(
                     "You do not have the required permissions to ",
@@ -176,9 +178,9 @@ impl<T: SessionStream> SessionData<T> {
         if !self
             .check_mailbox_acl(dest_mailbox.account_id, dest_mailbox_id, Acl::AddItems)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?
+            .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(concat!(
                     "You do not have the required permissions to ",
@@ -199,7 +201,7 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_access_token(dest_mailbox.account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         if src_mailbox.id.account_id == dest_mailbox.account_id {
             // Mailboxes are in the same account
@@ -212,7 +214,7 @@ impl<T: SessionStream> SessionData<T> {
                 let data_ = if let Some(result) = self
                     .get_message_data(account_id, id)
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
                 {
                     result
                 } else {
@@ -222,7 +224,7 @@ impl<T: SessionStream> SessionData<T> {
                 // Deserialize
                 let data = data_
                     .to_unarchived::<MessageData>()
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
                 // Make sure the message still belongs to this mailbox
                 if !data
@@ -255,7 +257,7 @@ impl<T: SessionStream> SessionData<T> {
                                     .with_current(data)
                                     .with_changes(new_data.seal()),
                             )
-                            .imap_ctx(&arguments.tag, trc::location!())?
+                            .imap_ctx(&arguments.tag, crate::trc::location!())?
                             .log_vanished_item(
                                 VanishedCollection::Email,
                                 (src_mailbox.id.mailbox_id, imap_id.uid),
@@ -289,7 +291,7 @@ impl<T: SessionStream> SessionData<T> {
                         false,
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 for (uid_mailbox, uid) in new_data
                     .mailboxes
@@ -311,7 +313,7 @@ impl<T: SessionStream> SessionData<T> {
                             .with_current(data)
                             .with_changes(new_data.seal()),
                     )
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
                 if is_move {
                     batch.log_vanished_item(
                         VanishedCollection::Email,
@@ -324,14 +326,14 @@ impl<T: SessionStream> SessionData<T> {
                     self.server
                         .add_account_spam_sample(&mut batch, account_id, id, true, self.session_id)
                         .await
-                        .imap_ctx(&arguments.tag, trc::location!())?;
+                        .imap_ctx(&arguments.tag, crate::trc::location!())?;
                 } else if src_mailbox.id.mailbox_id == JUNK_ID
                     && dest_mailbox_id.mailbox_id != TRASH_ID
                 {
                     self.server
                         .add_account_spam_sample(&mut batch, account_id, id, false, self.session_id)
                         .await
-                        .imap_ctx(&arguments.tag, trc::location!())?;
+                        .imap_ctx(&arguments.tag, crate::trc::location!())?;
                 }
 
                 batch.commit_point();
@@ -346,7 +348,7 @@ impl<T: SessionStream> SessionData<T> {
             self.server
                 .commit_batch(batch)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
         } else {
             // Obtain quota for target account
             let src_account_id = src_mailbox.id.account_id;
@@ -358,7 +360,7 @@ impl<T: SessionStream> SessionData<T> {
                 .server
                 .get_cached_messages(src_account_id)
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             for (id, imap_id) in ids {
                 match self
                     .server
@@ -375,7 +377,7 @@ impl<T: SessionStream> SessionData<T> {
                         self.session_id,
                     )
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
                 {
                     Ok(email) => {
                         dest_change_id = email.change_id.into();
@@ -412,12 +414,12 @@ impl<T: SessionStream> SessionData<T> {
                     &mut batch,
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
                 self.server
                     .commit_batch(batch)
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
                 did_move = true;
             }
@@ -439,22 +441,22 @@ impl<T: SessionStream> SessionData<T> {
         // Map copied JMAP Ids to IMAP UIDs in the destination folder.
         if copied_ids.is_empty() {
             return if response.rtype != ResponseType::Ok {
-                Err(trc::ImapEvent::Error
+                Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details(response.message)
-                    .ctx_opt(trc::Key::Code, response.code)
+                    .ctx_opt(crate::trc::Key::Code, response.code)
                     .id(arguments.tag))
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Imap(if is_move {
-                        trc::ImapEvent::Move
+                        crate::trc::ImapEvent::Move
                     } else {
-                        trc::ImapEvent::Copy
+                        crate::trc::ImapEvent::Copy
                     }),
                     SpanId = self.session_id,
                     Source = src_mailbox.id.account_id,
-                    Details = trc::Value::None,
-                    Uid = trc::Value::None,
+                    Details = crate::trc::Value::None,
+                    Uid = crate::trc::Value::None,
                     AccountId = dest_mailbox.account_id,
                     MailboxId = dest_mailbox.mailbox_id,
                     Elapsed = op_start.elapsed()
@@ -488,23 +490,23 @@ impl<T: SessionStream> SessionData<T> {
         src_uids.sort_unstable();
         dest_uids.sort_unstable();
 
-        trc::event!(
+        crate::trc::event!(
             Imap(if is_move {
-                trc::ImapEvent::Move
+                crate::trc::ImapEvent::Move
             } else {
-                trc::ImapEvent::Copy
+                crate::trc::ImapEvent::Copy
             }),
             SpanId = self.session_id,
             Source = src_mailbox.id.account_id,
             Details = src_uids
                 .iter()
-                .map(|r| trc::Value::from(*r))
+                .map(|r| crate::trc::Value::from(*r))
                 .collect::<Vec<_>>(),
             AccountId = dest_mailbox.account_id,
             MailboxId = dest_mailbox.mailbox_id,
             Uid = dest_uids
                 .iter()
-                .map(|r| trc::Value::from(*r))
+                .map(|r| crate::trc::Value::from(*r))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );
@@ -525,7 +527,7 @@ impl<T: SessionStream> SessionData<T> {
                 // Resynchronize source mailbox on a successful move
                 self.write_mailbox_changes(&src_mailbox, is_qresync)
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
             }
 
             response.with_tag(arguments.tag).into_bytes()
@@ -547,7 +549,7 @@ impl<T: SessionStream> SessionData<T> {
         &self,
         account_id: u32,
         id: u32,
-    ) -> trc::Result<Option<Archive<AlignedBytes>>> {
+    ) -> crate::trc::Result<Option<Archive<AlignedBytes>>> {
         if let Some(data) = self
             .server
             .store()
@@ -560,8 +562,8 @@ impl<T: SessionStream> SessionData<T> {
         {
             Ok(Some(data))
         } else {
-            trc::event!(
-                Store(trc::StoreEvent::NotFound),
+            crate::trc::event!(
+                Store(crate::trc::StoreEvent::NotFound),
                 AccountId = account_id,
                 Collection = Collection::Email,
                 MessageId = id,

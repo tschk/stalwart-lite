@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     auth::{
         AuthRequest,
         sasl::{sasl_decode_challenge_oauth, sasl_decode_challenge_plain},
@@ -12,8 +12,8 @@ use common::{
     listener::{SessionStream, limiter::LimiterResult},
 };
 
-use directory::Permission;
-use imap_proto::{
+use crate::directory::Permission;
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::{authenticate::Mechanism, capability::Capability},
     receiver::{self, Request},
@@ -22,10 +22,13 @@ use mail_parser::decoders::base64::base64_decode;
 use mail_send::Credentials;
 use std::sync::Arc;
 
-use crate::core::{Session, SessionData, State};
+use crate::imap::core::{Session, SessionData, State};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_authenticate(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_authenticate(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<()> {
         let mut args = request.parse_authenticate()?;
 
         match args.mechanism {
@@ -33,7 +36,7 @@ impl<T: SessionStream> Session<T> {
                 if !args.params.is_empty() {
                     let challenge = base64_decode(args.params.pop().unwrap().as_bytes())
                         .ok_or_else(|| {
-                            trc::AuthEvent::Error
+                            crate::trc::AuthEvent::Error
                                 .into_err()
                                 .details("Failed to decode challenge.")
                                 .id(args.tag.clone())
@@ -46,7 +49,7 @@ impl<T: SessionStream> Session<T> {
                         sasl_decode_challenge_oauth(&challenge)
                     }
                     .ok_or_else(|| {
-                        trc::AuthEvent::Error
+                        crate::trc::AuthEvent::Error
                             .into_err()
                             .details("Invalid SASL challenge.")
                             .id(args.tag.clone())
@@ -63,7 +66,7 @@ impl<T: SessionStream> Session<T> {
                     self.write_bytes(b"+ \r\n".to_vec()).await
                 }
             }
-            _ => Err(trc::AuthEvent::Error
+            _ => Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Authentication mechanism not supported.")
                 .id(args.tag)
@@ -75,7 +78,7 @@ impl<T: SessionStream> Session<T> {
         &mut self,
         credentials: Credentials<String>,
         tag: String,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Authenticate
         let access_token = self
             .server
@@ -86,14 +89,16 @@ impl<T: SessionStream> Session<T> {
             ))
             .await
             .map_err(|err| {
-                if err.matches(trc::EventType::Auth(trc::AuthEvent::Failed)) {
+                if err.matches(crate::trc::EventType::Auth(crate::trc::AuthEvent::Failed)) {
                     let auth_failures = self.state.auth_failures();
                     if auth_failures < self.server.core.imap.max_auth_failures {
                         self.state = State::NotAuthenticated {
                             auth_failures: auth_failures + 1,
                         };
                     } else {
-                        return trc::AuthEvent::TooManyAttempts.into_err().caused_by(err);
+                        return crate::trc::AuthEvent::TooManyAttempts
+                            .into_err()
+                            .caused_by(err);
                     }
                 }
 
@@ -109,7 +114,7 @@ impl<T: SessionStream> Session<T> {
         let in_flight = match access_token.is_imap_request_allowed() {
             LimiterResult::Allowed(in_flight) => Some(in_flight),
             LimiterResult::Forbidden => {
-                return Err(trc::LimitEvent::ConcurrentRequest
+                return Err(crate::trc::LimitEvent::ConcurrentRequest
                     .into_err()
                     .id(tag.clone()));
             }
@@ -138,7 +143,10 @@ impl<T: SessionStream> Session<T> {
         .await
     }
 
-    pub async fn handle_unauthenticate(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_unauthenticate(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<()> {
         self.state = State::NotAuthenticated { auth_failures: 0 };
 
         self.write_bytes(

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{LONG_1Y_SLUMBER, config::telemetry::OtelTracer};
+use crate::common::{LONG_1Y_SLUMBER, config::telemetry::OtelTracer};
+use crate::trc::{Event, EventDetails, Level, TelemetryEvent, ipc::subscriber::SubscriberBuilder};
 use ahash::AHashMap;
 use mail_parser::DateTime;
 use opentelemetry::{
@@ -19,7 +20,6 @@ use opentelemetry_sdk::{
 };
 use opentelemetry_semantic_conventions::resource::SERVICE_VERSION;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use trc::{Event, EventDetails, Level, TelemetryEvent, ipc::subscriber::SubscriberBuilder};
 
 const MAX_EVENTS: usize = 2048;
 
@@ -96,7 +96,7 @@ pub(crate) fn spawn_otel_tracer(builder: SubscriberBuilder, mut otel: OtelTracer
                             .export(std::mem::take(&mut pending_spans))
                             .await
                     {
-                        trc::event!(
+                        crate::trc::event!(
                             Telemetry(TelemetryEvent::OtelExporterError),
                             Details = "Failed to export spans",
                             Reason = err.to_string()
@@ -110,7 +110,7 @@ pub(crate) fn spawn_otel_tracer(builder: SubscriberBuilder, mut otel: OtelTracer
                             .collect::<Vec<_>>();
 
                         if let Err(err) = otel.log_exporter.export(LogBatch::new(&logs)).await {
-                            trc::event!(
+                            crate::trc::event!(
                                 Telemetry(TelemetryEvent::OtelExporterError),
                                 Details = "Failed to export logs",
                                 Reason = err.to_string()
@@ -209,50 +209,50 @@ impl OtelTracer {
     }
 }
 
-fn build_key_value(key_value: &(trc::Key, trc::Value)) -> Option<KeyValue> {
-    (key_value.0 != trc::Key::SpanId).then(|| {
+fn build_key_value(key_value: &(crate::trc::Key, crate::trc::Value)) -> Option<KeyValue> {
+    (key_value.0 != crate::trc::Key::SpanId).then(|| {
         KeyValue::new(
             build_key(&key_value.0),
             match &key_value.1 {
-                trc::Value::String(v) => Value::String(v.to_string().into()),
-                trc::Value::UInt(v) => Value::I64(*v as i64),
-                trc::Value::Int(v) => Value::I64(*v),
-                trc::Value::Float(v) => Value::F64(*v),
-                trc::Value::Timestamp(v) => {
+                crate::trc::Value::String(v) => Value::String(v.to_string().into()),
+                crate::trc::Value::UInt(v) => Value::I64(*v as i64),
+                crate::trc::Value::Int(v) => Value::I64(*v),
+                crate::trc::Value::Float(v) => Value::F64(*v),
+                crate::trc::Value::Timestamp(v) => {
                     Value::String(DateTime::from_timestamp(*v as i64).to_rfc3339().into())
                 }
-                trc::Value::Duration(v) => Value::I64(*v as i64),
-                trc::Value::Bytes(_) => Value::String("[binary data]".into()),
-                trc::Value::Bool(v) => Value::Bool(*v),
-                trc::Value::Ipv4(v) => Value::String(v.to_string().into()),
-                trc::Value::Ipv6(v) => Value::String(v.to_string().into()),
-                trc::Value::Event(_) => Value::String("[event data]".into()),
-                trc::Value::Array(_) => Value::String("[array]".into()),
-                trc::Value::None => Value::Bool(false),
+                crate::trc::Value::Duration(v) => Value::I64(*v as i64),
+                crate::trc::Value::Bytes(_) => Value::String("[binary data]".into()),
+                crate::trc::Value::Bool(v) => Value::Bool(*v),
+                crate::trc::Value::Ipv4(v) => Value::String(v.to_string().into()),
+                crate::trc::Value::Ipv6(v) => Value::String(v.to_string().into()),
+                crate::trc::Value::Event(_) => Value::String("[event data]".into()),
+                crate::trc::Value::Array(_) => Value::String("[array]".into()),
+                crate::trc::Value::None => Value::Bool(false),
             },
         )
     })
 }
 
-fn build_key(key: &trc::Key) -> Key {
+fn build_key(key: &crate::trc::Key) -> Key {
     Key::from_static_str(key.name())
 }
 
-fn build_any_value(value: &trc::Value) -> AnyValue {
+fn build_any_value(value: &crate::trc::Value) -> AnyValue {
     match value {
-        trc::Value::String(v) => AnyValue::String(v.to_string().into()),
-        trc::Value::UInt(v) => AnyValue::Int(*v as i64),
-        trc::Value::Int(v) => AnyValue::Int(*v),
-        trc::Value::Float(v) => AnyValue::Double(*v),
-        trc::Value::Timestamp(v) => {
+        crate::trc::Value::String(v) => AnyValue::String(v.to_string().into()),
+        crate::trc::Value::UInt(v) => AnyValue::Int(*v as i64),
+        crate::trc::Value::Int(v) => AnyValue::Int(*v),
+        crate::trc::Value::Float(v) => AnyValue::Double(*v),
+        crate::trc::Value::Timestamp(v) => {
             AnyValue::String(DateTime::from_timestamp(*v as i64).to_rfc3339().into())
         }
-        trc::Value::Duration(v) => AnyValue::Int(*v as i64),
-        trc::Value::Bytes(v) => AnyValue::Bytes(Box::new(v.clone())),
-        trc::Value::Bool(v) => AnyValue::Boolean(*v),
-        trc::Value::Ipv4(v) => AnyValue::String(v.to_string().into()),
-        trc::Value::Ipv6(v) => AnyValue::String(v.to_string().into()),
-        trc::Value::Event(v) => AnyValue::Map(Box::new(
+        crate::trc::Value::Duration(v) => AnyValue::Int(*v as i64),
+        crate::trc::Value::Bytes(v) => AnyValue::Bytes(Box::new(v.clone())),
+        crate::trc::Value::Bool(v) => AnyValue::Boolean(*v),
+        crate::trc::Value::Ipv4(v) => AnyValue::String(v.to_string().into()),
+        crate::trc::Value::Ipv6(v) => AnyValue::String(v.to_string().into()),
+        crate::trc::Value::Event(v) => AnyValue::Map(Box::new(
             [(
                 Key::from_static_str("eventName"),
                 AnyValue::String(v.event_type().name().into()),
@@ -265,9 +265,9 @@ fn build_any_value(value: &trc::Value) -> AnyValue {
             )
             .collect(),
         )),
-        trc::Value::Array(v) => {
+        crate::trc::Value::Array(v) => {
             AnyValue::ListAny(Box::new(v.iter().map(build_any_value).collect()))
         }
-        trc::Value::None => AnyValue::Boolean(false),
+        crate::trc::Value::None => AnyValue::Boolean(false),
     }
 }

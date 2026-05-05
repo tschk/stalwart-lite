@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::Session;
-use common::listener::SessionStream;
+use crate::common::listener::SessionStream;
+use crate::smtp::core::Session;
+use crate::trc::SmtpEvent;
 use std::{borrow::Cow, fmt::Write};
-use trc::SmtpEvent;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_vrfy(&mut self, address: Cow<'_, str>) -> Result<(), ()> {
@@ -38,7 +38,7 @@ impl<T: SessionStream> Session<T> {
                             );
                         }
 
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::Vrfy),
                             SpanId = self.data.session_id,
                             To = address.as_ref().to_string(),
@@ -48,7 +48,7 @@ impl<T: SessionStream> Session<T> {
                         self.write(result.as_bytes()).await
                     }
                     Ok(_) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::VrfyNotFound),
                             SpanId = self.data.session_id,
                             To = address.as_ref().to_string(),
@@ -57,10 +57,13 @@ impl<T: SessionStream> Session<T> {
                         self.write(b"550 5.1.2 Address not found.\r\n").await
                     }
                     Err(err) => {
-                        let is_not_supported =
-                            err.matches(trc::EventType::Store(trc::StoreEvent::NotSupported));
+                        let is_not_supported = err.matches(crate::trc::EventType::Store(
+                            crate::trc::StoreEvent::NotSupported,
+                        ));
 
-                        trc::error!(err.span_id(self.data.session_id).details("VRFY failed"));
+                        crate::trc::error!(
+                            err.span_id(self.data.session_id).details("VRFY failed")
+                        );
 
                         if !is_not_supported {
                             self.write(b"252 2.4.3 Unable to verify address at this time.\r\n")
@@ -72,7 +75,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
             _ => {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::VrfyDisabled),
                     SpanId = self.data.session_id,
                     To = address.as_ref().to_string(),
@@ -111,7 +114,7 @@ impl<T: SessionStream> Session<T> {
                             );
                         }
 
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::Expn),
                             SpanId = self.data.session_id,
                             To = address.as_ref().to_string(),
@@ -121,7 +124,7 @@ impl<T: SessionStream> Session<T> {
                         self.write(result.as_bytes()).await
                     }
                     Ok(_) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::ExpnNotFound),
                             SpanId = self.data.session_id,
                             To = address.as_ref().to_string(),
@@ -130,10 +133,13 @@ impl<T: SessionStream> Session<T> {
                         self.write(b"550 5.1.2 Mailing list not found.\r\n").await
                     }
                     Err(err) => {
-                        let is_not_supported =
-                            err.matches(trc::EventType::Store(trc::StoreEvent::NotSupported));
+                        let is_not_supported = err.matches(crate::trc::EventType::Store(
+                            crate::trc::StoreEvent::NotSupported,
+                        ));
 
-                        trc::error!(err.span_id(self.data.session_id).details("VRFY failed"));
+                        crate::trc::error!(
+                            err.span_id(self.data.session_id).details("VRFY failed")
+                        );
 
                         if !is_not_supported {
                             self.write(b"252 2.4.3 Unable to expand mailing list at this time.\r\n")
@@ -145,7 +151,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
             _ => {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::ExpnDisabled),
                     SpanId = self.data.session_id,
                     To = address.as_ref().to_string(),

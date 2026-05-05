@@ -4,17 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::{Command, ResponseCode, Session, StatusResponse};
-use common::listener::SessionStream;
-use directory::Permission;
-use email::sieve::{delete::SieveScriptDelete, ingest::SieveScriptIngest};
-use imap_proto::receiver::Request;
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::sieve::{delete::SieveScriptDelete, ingest::SieveScriptIngest};
+use crate::imap_proto::receiver::Request;
+use crate::managesieve::core::{Command, ResponseCode, Session, StatusResponse};
+use crate::store::write::BatchBuilder;
+use crate::trc::AddContext;
 use std::time::Instant;
-use store::write::BatchBuilder;
-use trc::AddContext;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_deletescript(&mut self, request: Request<Command>) -> trc::Result<Vec<u8>> {
+    pub async fn handle_deletescript(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<Vec<u8>> {
         // Validate access
         self.assert_has_permission(Permission::SieveDeleteScript)?;
 
@@ -26,7 +29,7 @@ impl<T: SessionStream> Session<T> {
             .next()
             .and_then(|s| s.unwrap_string().ok())
             .ok_or_else(|| {
-                trc::ManageSieveEvent::Error
+                crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Expected script name as a parameter.")
             })?;
@@ -42,17 +45,17 @@ impl<T: SessionStream> Session<T> {
                 .server
                 .sieve_script_delete(account_id, document_id, access_token, &mut batch)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 if !batch.is_empty() {
                     self.server
                         .commit_batch(batch)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
 
-                trc::event!(
-                    ManageSieve(trc::ManageSieveEvent::DeleteScript),
+                crate::trc::event!(
+                    ManageSieve(crate::trc::ManageSieveEvent::DeleteScript),
                     SpanId = self.session_id,
                     Id = name,
                     DocumentId = document_id,
@@ -61,12 +64,12 @@ impl<T: SessionStream> Session<T> {
 
                 Ok(StatusResponse::ok("Deleted.").into_bytes())
             } else {
-                Err(trc::ManageSieveEvent::Error
+                Err(crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Script not found"))
             }
         } else {
-            Err(trc::ManageSieveEvent::Error
+            Err(crate::trc::ManageSieveEvent::Error
                 .into_err()
                 .details("You may not delete an active script")
                 .code(ResponseCode::Active))

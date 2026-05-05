@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{ipc::PushNotification, listener::SessionStream};
+use crate::directory::Permission;
+use crate::imap::{
     core::{SelectedMailbox, Session, SessionData, State},
     op::ImapContext,
 };
-use ahash::AHashSet;
-use common::{ipc::PushNotification, listener::SessionStream};
-use directory::Permission;
-use imap_proto::{
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{
         Sequence, fetch,
@@ -20,15 +19,16 @@ use imap_proto::{
     },
     receiver::Request,
 };
+use crate::store::query::log::Query;
+use crate::trc::AddContext;
+use crate::types::{collection::SyncCollection, type_state::DataType};
+use crate::utils::map::bitmap::Bitmap;
+use ahash::AHashSet;
 use std::{sync::Arc, time::Instant};
-use store::query::log::Query;
 use tokio::io::AsyncReadExt;
-use trc::AddContext;
-use types::{collection::SyncCollection, type_state::DataType};
-use utils::map::bitmap::Bitmap;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_idle(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_idle(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapIdle)?;
 
@@ -53,14 +53,14 @@ impl<T: SessionStream> Session<T> {
             .server
             .subscribe_push_manager(&data.access_token, types)
             .await
-            .imap_ctx(&request.tag, trc::location!())?;
+            .imap_ctx(&request.tag, crate::trc::location!())?;
 
         // Send continuation response
         self.write_bytes(b"+ Idling, send 'DONE' to stop.\r\n".to_vec())
             .await?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::IdleStart),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::IdleStart),
             SpanId = self.session_id,
             Elapsed = op_start.elapsed()
         );
@@ -74,21 +74,21 @@ impl<T: SessionStream> Session<T> {
                         Ok(Ok(bytes_read)) => {
                             if bytes_read > 0 {
                                 if (buf[..bytes_read]).windows(4).any(|w| w == b"DONE") {
-                                    trc::event!(Imap(trc::ImapEvent::IdleStop), SpanId = self.session_id, Elapsed = op_start.elapsed());
+                                    crate::trc::event!(Imap(crate::trc::ImapEvent::IdleStop), SpanId = self.session_id, Elapsed = op_start.elapsed());
                                     return self.write_bytes(StatusResponse::completed(Command::Idle)
                                                                     .with_tag(request.tag)
                                                                     .into_bytes()).await;
                                 }
                             } else {
-                                return Err(trc::NetworkEvent::Closed.into_err().details("IMAP connection closed by client.").id(request.tag));
+                                return Err(crate::trc::NetworkEvent::Closed.into_err().details("IMAP connection closed by client.").id(request.tag));
                             }
                         },
                         Ok(Err(err)) => {
-                            return Err(trc::NetworkEvent::ReadError.into_err().reason(err).details("IMAP connection error.").id(request.tag));
+                            return Err(crate::trc::NetworkEvent::ReadError.into_err().reason(err).details("IMAP connection error.").id(request.tag));
                         },
                         Err(_) => {
                             self.write_bytes(&b"* BYE IDLE timed out.\r\n"[..]).await.ok();
-                            return Err(trc::NetworkEvent::Timeout.into_err().details("IMAP IDLE timed out.").id(request.tag));
+                            return Err(crate::trc::NetworkEvent::Timeout.into_err().details("IMAP IDLE timed out.").id(request.tag));
                         }
                     }
                 }
@@ -123,7 +123,7 @@ impl<T: SessionStream> Session<T> {
                         }
                     } else {
                         self.write_bytes(&b"* BYE Server shutting down.\r\n"[..]).await.ok();
-                        return Err(trc::NetworkEvent::Closed.into_err().details("IDLE channel closed.").id(request.tag));
+                        return Err(crate::trc::NetworkEvent::Closed.into_err().details("IDLE channel closed.").id(request.tag));
                     }
                 }
             }
@@ -140,13 +140,13 @@ impl<T: SessionStream> SessionData<T> {
         is_qresync: bool,
         is_rev2: bool,
         is_utf8: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Fetch all changed mailboxes
         if check_mailboxes {
             let changes = self
                 .synchronize_mailboxes(true)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .unwrap();
 
             let mut buf = Vec::with_capacity(64);
@@ -202,7 +202,7 @@ impl<T: SessionStream> SessionData<T> {
                 let new_state = self
                     .write_mailbox_changes(mailbox, is_qresync)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 if new_state == modseq {
                     return Ok(());
                 }
@@ -217,7 +217,7 @@ impl<T: SessionStream> SessionData<T> {
                         Query::Since(modseq),
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let changed_ids = {
                     let state = mailbox.state.lock();
                     changelog
@@ -257,7 +257,7 @@ impl<T: SessionStream> SessionData<T> {
                             op_start,
                         )
                         .await
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                         .map(|_| ());
                 }
             }

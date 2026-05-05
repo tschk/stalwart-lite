@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, Token, tokenizer::Tokenizer},
     schema::{Element, NamedElement, Namespace, request::MkCol},
 };
 
 impl DavParser for MkCol {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut mkcol = MkCol {
             is_mkcalendar: false,
             props: Vec::new(),

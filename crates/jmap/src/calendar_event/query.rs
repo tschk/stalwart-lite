@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
 use calcard::{common::timezone::Tz, jscalendar::JSCalendarDateTime};
 use chrono::offset::TimeZone;
-use common::{Server, auth::AccessToken};
-use groupware::{cache::GroupwareCache, calendar::CalendarEvent};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{cache::GroupwareCache, calendar::CalendarEvent};
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::calendar_event::{self, CalendarEventComparator, CalendarEventFilter},
     request::MaybeInvalid,
 };
-use nlp::language::Language;
+use crate::nlp::language::Language;
 use std::{cmp::Ordering, sync::Arc};
-use store::{
+use crate::store::{
     ValueKey, roaring::RoaringBitmap, search::{CalendarSearchField, SearchComparator, SearchFilter, SearchQuery}, write::{AlignedBytes, Archive, SearchIndex}
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     TimeRange,
     acl::Acl,
     collection::{Collection, SyncCollection},
@@ -31,7 +31,7 @@ pub trait CalendarEventQuery: Sync + Send {
         &self,
         request: QueryRequest<calendar_event::CalendarEvent>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl CalendarEventQuery for Server {
@@ -39,7 +39,7 @@ impl CalendarEventQuery for Server {
         &self,
         mut request: QueryRequest<calendar_event::CalendarEvent>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut filters = Vec::with_capacity(request.filter.len());
         let cache = self
@@ -169,7 +169,7 @@ impl CalendarEventQuery for Server {
                         }
                     }
                     unsupported => {
-                        return Err(trc::JmapEvent::UnsupportedFilter
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
                             .into_err()
                             .details(unsupported.into_string()));
                     }
@@ -208,11 +208,11 @@ impl CalendarEventQuery for Server {
                         comparator.is_ascending,
                     )),
                     CalendarEventComparator::Created | CalendarEventComparator::Updated => {
-                        Err(trc::JmapEvent::UnsupportedSort
+                        Err(crate::trc::JmapEvent::UnsupportedSort
                             .into_err()
                             .details(comparator.property.into_string().into_owned()))
                     }
-                    CalendarEventComparator::_T(other) => Err(trc::JmapEvent::UnsupportedSort
+                    CalendarEventComparator::_T(other) => Err(crate::trc::JmapEvent::UnsupportedSort
                         .into_err()
                         .details(other.to_string())),
                 })
@@ -246,7 +246,7 @@ impl CalendarEventQuery for Server {
         if expand_recurrences && !results.is_empty() {
             let Some(time_range) = filter.filter(|f| f.start != i64::MIN && f.end != i64::MAX)
             else {
-                return Err(trc::JmapEvent::InvalidArguments.into_err().details(
+                return Err(crate::trc::JmapEvent::InvalidArguments.into_err().details(
                     "Both 'after' and 'before' filters are required when expanding recurrences",
                 ));
             };
@@ -270,7 +270,7 @@ impl CalendarEventQuery for Server {
                 };
                 let calendar_event = _calendar_event
                     .unarchive::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 // Expand recurrences
                 let uid = if has_uid_comparator {
@@ -301,7 +301,7 @@ impl CalendarEventQuery for Server {
                             expansion_id: expansion.expansion_id.into(),
                         });
                     } else {
-                        return Err(trc::JmapEvent::InvalidArguments.into_err().details(
+                        return Err(crate::trc::JmapEvent::InvalidArguments.into_err().details(
                             "The number of expanded recurrences exceeds the server limit",
                         ));
                     }

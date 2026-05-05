@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::classifier::model::FhClassifier;
+use crate::nlp::classifier::model::FhClassifier;
 
 pub mod adam;
 pub mod feature;

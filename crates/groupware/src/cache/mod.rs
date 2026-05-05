@@ -4,32 +4,32 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{CacheSwap, DavResource, DavResources, Server, auth::AccessToken};
+use crate::groupware::{
     cache::calcard::{build_scheduling_resources, path_from_scheduling, resource_from_scheduling},
     calendar::{Calendar, CalendarEvent, CalendarPreferences},
     contact::{AddressBook, AddressBookPreferences, ContactCard},
     file::FileNode,
+};
+use crate::store::{
+    SerializeInfallible, ValueKey,
+    ahash::AHashMap,
+    query::log::{Change, Query},
+    write::{AlignedBytes, Archive, BatchBuilder, ValueClass},
+};
+use crate::trc::{AddContext, StoreEvent};
+use crate::types::{
+    collection::{Collection, SyncCollection},
+    field::PrincipalField,
 };
 use ahash::AHashSet;
 use calcard::{
     build_calcard_resources, build_simple_hierarchy, resource_from_addressbook,
     resource_from_calendar, resource_from_card, resource_from_event,
 };
-use common::{CacheSwap, DavResource, DavResources, Server, auth::AccessToken};
 use file::{build_file_resources, build_nested_hierarchy, resource_from_file};
 use std::{sync::Arc, time::Instant};
-use store::{
-    SerializeInfallible, ValueKey,
-    ahash::AHashMap,
-    query::log::{Change, Query},
-    write::{AlignedBytes, Archive, BatchBuilder, ValueClass},
-};
 use tokio::sync::Semaphore;
-use trc::{AddContext, StoreEvent};
-use types::{
-    collection::{Collection, SyncCollection},
-    field::PrincipalField,
-};
 
 pub mod calcard;
 pub mod file;
@@ -40,27 +40,27 @@ pub trait GroupwareCache: Sync + Send {
         access_token: &AccessToken,
         account_id: u32,
         collection: SyncCollection,
-    ) -> impl Future<Output = trc::Result<Arc<DavResources>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Arc<DavResources>>> + Send;
 
     fn create_default_addressbook(
         &self,
         access_token: &AccessToken,
         account_id: u32,
         account_name: &str,
-    ) -> impl Future<Output = trc::Result<Option<u32>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<u32>>> + Send;
 
     fn create_default_calendar(
         &self,
         access_token: &AccessToken,
         account_id: u32,
         account_name: &str,
-    ) -> impl Future<Output = trc::Result<Option<u32>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<u32>>> + Send;
 
     fn get_or_create_default_calendar(
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Option<u32>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<u32>>> + Send;
 
     fn cached_dav_resources(
         &self,
@@ -75,7 +75,7 @@ impl GroupwareCache for Server {
         access_token: &AccessToken,
         account_id: u32,
         collection: SyncCollection,
-    ) -> trc::Result<Arc<DavResources>> {
+    ) -> crate::trc::Result<Arc<DavResources>> {
         let cache_store = match collection {
             SyncCollection::Calendar => &self.inner.cache.events,
             SyncCollection::AddressBook => &self.inner.cache.contacts,
@@ -100,7 +100,7 @@ impl GroupwareCache for Server {
                     cache_store.insert(account_id, CacheSwap::new(cache.clone()));
                 }
 
-                trc::event!(
+                crate::trc::event!(
                     Store(StoreEvent::CacheMiss),
                     AccountId = account_id,
                     Collection = collection.as_str(),
@@ -126,7 +126,7 @@ impl GroupwareCache for Server {
                 Query::Since(cache.highest_change_id),
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Regenerate cache if the change log has been truncated
         if changes.is_truncated {
@@ -140,7 +140,7 @@ impl GroupwareCache for Server {
             .await?;
             cache_.update(cache.clone());
 
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheStale),
                 AccountId = account_id,
                 Collection = collection.as_str(),
@@ -154,7 +154,7 @@ impl GroupwareCache for Server {
 
         // Verify changes
         if changes.changes.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheHit),
                 AccountId = account_id,
                 Collection = collection.as_str(),
@@ -169,7 +169,7 @@ impl GroupwareCache for Server {
         let _permit = cache.update_lock.acquire().await;
         let cache = cache_.load_full();
         if cache.highest_change_id >= changes.to_change_id {
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheHit),
                 AccountId = account_id,
                 Collection = collection.as_str(),
@@ -303,7 +303,7 @@ impl GroupwareCache for Server {
         let cache = Arc::new(cache);
         cache_.update(cache.clone());
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::CacheUpdate),
             AccountId = account_id,
             Collection = collection.as_str(),
@@ -321,7 +321,7 @@ impl GroupwareCache for Server {
         access_token: &AccessToken,
         account_id: u32,
         account_name: &str,
-    ) -> trc::Result<Option<u32>> {
+    ) -> crate::trc::Result<Option<u32>> {
         if let Some(name) = &self.core.groupware.default_addressbook_name {
             let mut batch = BatchBuilder::new();
             let document_id = self
@@ -358,7 +358,7 @@ impl GroupwareCache for Server {
         access_token: &AccessToken,
         account_id: u32,
         account_name: &str,
-    ) -> trc::Result<Option<u32>> {
+    ) -> crate::trc::Result<Option<u32>> {
         if let Some(name) = &self.core.groupware.default_calendar_name {
             let mut batch = BatchBuilder::new();
             let document_id = self
@@ -401,7 +401,7 @@ impl GroupwareCache for Server {
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> trc::Result<Option<u32>> {
+    ) -> crate::trc::Result<Option<u32>> {
         let default_calendar_id = self
             .store()
             .get_value::<u32>(ValueKey {
@@ -411,7 +411,7 @@ impl GroupwareCache for Server {
                 class: ValueClass::Property(PrincipalField::DefaultCalendarId.into()),
             })
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if default_calendar_id.is_some() {
             Ok(default_calendar_id)
         } else {
@@ -444,7 +444,7 @@ async fn process_changes(
     has_no_children: bool,
     updated_resources: &mut AHashMap<(bool, u32), Option<DavResource>>,
     changes: Vec<Change>,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     for change in changes {
         match change {
             Change::InsertItem(id) | Change::UpdateItem(id) => {
@@ -457,7 +457,7 @@ async fn process_changes(
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 {
                     updated_resources.insert(
                         (has_no_children, document_id),
@@ -485,7 +485,7 @@ async fn process_changes(
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 {
                     updated_resources.insert(
                         (true, document_id),
@@ -515,7 +515,7 @@ async fn full_cache_build(
     collection: SyncCollection,
     update_lock: Arc<Semaphore>,
     access_token: &AccessToken,
-) -> trc::Result<Arc<DavResources>> {
+) -> crate::trc::Result<Arc<DavResources>> {
     match collection {
         SyncCollection::Calendar => {
             build_calcard_resources(
@@ -555,21 +555,21 @@ fn resource_from_archive(
     document_id: u32,
     collection: SyncCollection,
     is_container: bool,
-) -> trc::Result<DavResource> {
+) -> crate::trc::Result<DavResource> {
     Ok(match collection {
         SyncCollection::Calendar => {
             if is_container {
                 resource_from_calendar(
                     archive
                         .unarchive::<Calendar>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                     document_id,
                 )
             } else {
                 resource_from_event(
                     archive
                         .unarchive::<CalendarEvent>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                     document_id,
                 )
             }
@@ -579,14 +579,14 @@ fn resource_from_archive(
                 resource_from_addressbook(
                     archive
                         .unarchive::<AddressBook>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                     document_id,
                 )
             } else {
                 resource_from_card(
                     archive
                         .unarchive::<ContactCard>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                     document_id,
                 )
             }
@@ -594,7 +594,7 @@ fn resource_from_archive(
         SyncCollection::FileNode => resource_from_file(
             archive
                 .unarchive::<FileNode>()
-                .caused_by(trc::location!())?,
+                .caused_by(crate::trc::location!())?,
             document_id,
         ),
         _ => unreachable!(),

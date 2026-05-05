@@ -5,7 +5,7 @@
  */
 
 use super::{RedisPool, RedisStore, into_error};
-use crate::dispatch::pubsub::{Msg, PubSubStream};
+use crate::store::dispatch::pubsub::{Msg, PubSubStream};
 use futures::StreamExt;
 use redis::{AsyncCommands, PushInfo, cluster::ClusterConfig, cluster_async::ClusterConnection};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -20,7 +20,7 @@ pub struct RedisClusterPubSubStream {
 }
 
 impl RedisStore {
-    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> trc::Result<()> {
+    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> crate::trc::Result<()> {
         match &self.pool {
             RedisPool::Single(pool) => pool
                 .get()
@@ -41,7 +41,7 @@ impl RedisStore {
         }
     }
 
-    pub async fn subscribe(&self, topic: &'static str) -> trc::Result<PubSubStream> {
+    pub async fn subscribe(&self, topic: &'static str) -> crate::trc::Result<PubSubStream> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 let mut pubsub = pool

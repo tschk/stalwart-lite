@@ -5,14 +5,9 @@
  */
 
 use super::{FromModSeq, ImapContext};
-use crate::{
-    core::{SelectedMailbox, Session, SessionData},
-    spawn_op,
-};
-use ahash::AHashMap;
-use common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use email::{
+use crate::common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
+use crate::directory::Permission;
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     message::metadata::{
         ArchivedMessageMetadata, ArchivedMessageMetadataContents, ArchivedMetadataHeaderValue,
@@ -20,7 +15,11 @@ use email::{
         MessageMetadata, MetadataHeaderName, PART_ENCODING_PROBLEM,
     },
 };
-use imap_proto::{
+use crate::imap::{
+    core::{SelectedMailbox, Session, SessionData},
+    spawn_op,
+};
+use crate::imap_proto::{
     Command, ResponseCode, ResponseType, StatusResponse,
     parser::PushUnique,
     protocol::{
@@ -33,27 +32,31 @@ use imap_proto::{
     },
     receiver::Request,
 };
-use std::{borrow::Cow, sync::Arc, time::Instant};
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{
+use crate::store::{
     query::log::{Change, Query},
     rkyv::rend::u16_le,
     write::BatchBuilder,
 };
-use types::{
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection, VanishedCollection},
     field::EmailField,
     id::Id,
     keyword::Keyword,
 };
-use utils::chained_bytes::{ChainedBytes, SliceRange};
+use crate::utils::chained_bytes::{ChainedBytes, SliceRange};
+use ahash::AHashMap;
+use std::{borrow::Cow, sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_fetch(&mut self, requests: Vec<Request<Command>>) -> trc::Result<()> {
+    pub async fn handle_fetch(
+        &mut self,
+        requests: Vec<Request<Command>>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapFetch)?;
 
@@ -120,20 +123,20 @@ impl<T: SessionStream> SessionData<T> {
         is_qresync: bool,
         enabled_condstore: bool,
         op_start: Instant,
-    ) -> trc::Result<StatusResponse> {
+    ) -> crate::trc::Result<StatusResponse> {
         // Validate VANISHED parameter
         if arguments.include_vanished {
             if !is_qresync {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Enable QRESYNC first to use the VANISHED parameter.")
-                    .ctx(trc::Key::Type, ResponseType::Bad)
+                    .ctx(crate::trc::Key::Type, ResponseType::Bad)
                     .id(arguments.tag));
             } else if !is_uid {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("VANISHED parameter is only available for UID FETCH.")
-                    .ctx(trc::Key::Type, ResponseType::Bad)
+                    .ctx(crate::trc::Key::Type, ResponseType::Bad)
                     .id(arguments.tag));
             }
         }
@@ -143,13 +146,13 @@ impl<T: SessionStream> SessionData<T> {
         let mut modseq = self
             .synchronize_messages(&mailbox)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Convert IMAP ids to JMAP ids.
         let mut ids = mailbox
             .sequence_to_ids(&arguments.sequence_set, is_uid)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Convert state to modseq
         if let Some(changed_since) = arguments.changed_since {
@@ -163,7 +166,7 @@ impl<T: SessionStream> SessionData<T> {
                     Query::from_modseq(changed_since),
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             // Process changes
             let mut changed_ids = AHashMap::new();
@@ -199,7 +202,7 @@ impl<T: SessionStream> SessionData<T> {
                         Query::from_modseq(changed_since),
                     )
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
                     .into_iter()
                     .filter_map(|(mailbox_id, uid)| {
                         if mailbox.id.mailbox_id == mailbox_id {
@@ -233,8 +236,8 @@ impl<T: SessionStream> SessionData<T> {
                     .await?;
                 }
 
-                trc::event!(
-                    Imap(trc::ImapEvent::Fetch),
+                crate::trc::event!(
+                    Imap(crate::trc::ImapEvent::Fetch),
                     SpanId = self.session_id,
                     AccountId = account_id,
                     MailboxId = mailbox.id.mailbox_id,
@@ -293,7 +296,7 @@ impl<T: SessionStream> SessionData<T> {
                     Acl::ModifyItems,
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
             set_seen_flags = false;
         }
@@ -315,13 +318,13 @@ impl<T: SessionStream> SessionData<T> {
         ids.sort_unstable_by_key(|(seqnum, _, _)| *seqnum);
         let fetched_ids = ids
             .iter()
-            .map(|id| trc::Value::from(id.2))
+            .map(|id| crate::trc::Value::from(id.2))
             .collect::<Vec<_>>();
         let message_cache = self
             .server
             .get_cached_messages(account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         for (seqnum, uid, id) in ids {
             // Obtain attributes and keywords
@@ -335,24 +338,24 @@ impl<T: SessionStream> SessionData<T> {
                         EmailField::Metadata,
                     ))
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?,
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?,
                 message_cache.email_by_id(&id),
             ) {
                 (email, data)
             } else {
-                trc::event!(
-                    Store(trc::StoreEvent::NotFound),
+                crate::trc::event!(
+                    Store(crate::trc::StoreEvent::NotFound),
                     AccountId = account_id,
                     DocumentId = id,
                     Collection = Collection::Email,
                     Details = "Message metadata not found.",
-                    CausedBy = trc::location!(),
+                    CausedBy = crate::trc::location!(),
                 );
                 continue;
             };
             let metadata = metadata_
                 .unarchive::<MessageMetadata>()
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
             let raw_body;
 
             // Fetch and parse blob
@@ -364,7 +367,7 @@ impl<T: SessionStream> SessionData<T> {
                     .blob_store()
                     .get_blob(metadata.blob_hash.0.as_slice(), 0..usize::MAX)
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
                 if let Some(raw_body) = &raw_body {
                     raw_message.append(
@@ -373,14 +376,14 @@ impl<T: SessionStream> SessionData<T> {
                             .unwrap_or_default(),
                     );
                 } else {
-                    trc::event!(
-                        Store(trc::StoreEvent::NotFound),
+                    crate::trc::event!(
+                        Store(crate::trc::StoreEvent::NotFound),
                         AccountId = account_id,
                         DocumentId = id,
                         Collection = Collection::Email,
                         BlobId = metadata.blob_hash.0.as_slice(),
                         Details = "Blob not found.",
-                        CausedBy = trc::location!(),
+                        CausedBy = crate::trc::location!(),
                     );
 
                     continue;
@@ -487,7 +490,7 @@ impl<T: SessionStream> SessionData<T> {
                         }
                         Err(_) => {
                             self.write_error(
-                                trc::ImapEvent::Error
+                                crate::trc::ImapEvent::Error
                                     .into_err()
                                     .details(format!(
                                         "Failed to decode part {} of message {}.",
@@ -557,11 +560,11 @@ impl<T: SessionStream> SessionData<T> {
                         id,
                     ))
                     .await
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
             {
                 let data = data_
                     .to_unarchived::<MessageData>()
-                    .imap_ctx(&arguments.tag, trc::location!())?;
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?;
                 let mut new_data = data.inner.to_builder();
                 new_data.keywords.push(Keyword::Seen);
 
@@ -574,7 +577,7 @@ impl<T: SessionStream> SessionData<T> {
                             .with_current(data)
                             .with_changes(new_data.seal()),
                     )
-                    .imap_ctx(&arguments.tag, trc::location!())?
+                    .imap_ctx(&arguments.tag, crate::trc::location!())?
                     .commit_point();
             }
         }
@@ -586,7 +589,7 @@ impl<T: SessionStream> SessionData<T> {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .imap_ctx(&arguments.tag, trc::location!())
+                .imap_ctx(&arguments.tag, crate::trc::location!())
             {
                 Ok(change_id) => {
                     modseq = change_id;
@@ -599,8 +602,8 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
 
-        trc::event!(
-            Imap(trc::ImapEvent::Fetch),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Fetch),
             SpanId = self.session_id,
             AccountId = account_id,
             MailboxId = mailbox.id.mailbox_id,
@@ -608,7 +611,7 @@ impl<T: SessionStream> SessionData<T> {
             Details = arguments
                 .attributes
                 .iter()
-                .map(|c| trc::Value::from(format!("{c:?}")))
+                .map(|c| crate::trc::Value::from(format!("{c:?}")))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );

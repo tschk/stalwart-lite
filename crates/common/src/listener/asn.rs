@@ -10,13 +10,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+use crate::store::write::now;
 use ahash::AHashMap;
 use arc_swap::ArcSwap;
 use mail_auth::common::resolver::ToReverseName;
-use store::write::now;
 use tokio::sync::Semaphore;
 
-use crate::{Server, config::network::AsnGeoLookupConfig, manager::fetch_resource};
+use crate::common::{Server, config::network::AsnGeoLookupConfig, manager::fetch_resource};
 
 pub struct AsnGeoLookupData {
     pub lock: Semaphore,
@@ -113,15 +113,15 @@ impl Server {
                         }
                     }
                     Ok(Err(_)) => {
-                        trc::event!(
-                            Resource(trc::ResourceEvent::Error),
+                        crate::trc::event!(
+                            Resource(crate::trc::ResourceEvent::Error),
                             Details = "Failed to UTF-8 decode ASN/Geo data",
                             Hostname = format!("{}.{}.", ip.to_reverse_name(), zone),
                         );
                     }
                     Err(err) => {
-                        trc::event!(
-                            Resource(trc::ResourceEvent::Error),
+                        crate::trc::event!(
+                            Resource(crate::trc::ResourceEvent::Error),
                             Details = "Failed to lookup ASN/Geo data",
                             Hostname = format!("{}.{}.", ip.to_reverse_name(), zone),
                             CausedBy = err.to_string()
@@ -238,8 +238,8 @@ impl Server {
                                             };
 
                                             if !is_success && !has_errors {
-                                                trc::event!(
-                                                    Resource(trc::ResourceEvent::Error),
+                                                crate::trc::event!(
+                                                    Resource(crate::trc::ResourceEvent::Error),
                                                     Details = "Invalid ASN/Geo data",
                                                     Url = url.clone(),
                                                     Details = data
@@ -265,23 +265,23 @@ impl Server {
                                 }
                             }
 
-                            trc::event!(
-                                Resource(trc::ResourceEvent::DownloadExternal),
+                            crate::trc::event!(
+                                Resource(crate::trc::ResourceEvent::DownloadExternal),
                                 Details = "Downloaded ASN/Geo data",
                                 Url = url.clone(),
                                 Elapsed = time.elapsed()
                             );
                         }
                         Ok(Err(_)) => {
-                            trc::event!(
-                                Resource(trc::ResourceEvent::Error),
+                            crate::trc::event!(
+                                Resource(crate::trc::ResourceEvent::Error),
                                 Details = "Failed to UTF-8 decode ASN/Geo data",
                                 Url = url.clone(),
                             );
                         }
                         Err(err) => {
-                            trc::event!(
-                                Resource(trc::ResourceEvent::Error),
+                            crate::trc::event!(
+                                Resource(crate::trc::ResourceEvent::Error),
                                 Details = "Failed to download ASN/Geo data",
                                 Url = url.clone(),
                                 CausedBy = err

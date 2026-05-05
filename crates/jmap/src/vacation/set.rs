@@ -5,12 +5,12 @@
  */
 
 use super::get::VacationResponseGet;
-use crate::changes::state::StateManager;
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use email::sieve::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::email::sieve::{
     SieveScript, VacationResponse, delete::SieveScriptDelete, ingest::SieveScriptIngest,
 };
-use jmap_proto::{
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::vacation_response::{self, VacationResponseProperty, VacationResponseValue},
@@ -18,30 +18,30 @@ use jmap_proto::{
     request::IntoValid,
     types::date::UTCDate,
 };
+use crate::store::{
+    Serialize, SerializeInfallible, ValueKey,
+    write::{AlignedBytes, Archive, Archiver, BatchBuilder},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    collection::{Collection, SyncCollection},
+    field::PrincipalField,
+    id::Id,
+};
 use jmap_tools::{Key, Map, Value};
 use mail_builder::MessageBuilder;
 use mail_parser::decoders::html::html_to_text;
 use std::borrow::Cow;
 use std::future::Future;
-use store::{
-    Serialize, SerializeInfallible, ValueKey,
-    write::{AlignedBytes, Archive, Archiver, BatchBuilder},
-};
-use trc::AddContext;
-use types::{
-    collection::{Collection, SyncCollection},
-    field::PrincipalField,
-    id::Id,
-};
 
 pub trait VacationResponseSet: Sync + Send {
     fn vacation_response_set(
         &self,
         request: SetRequest<'_, vacation_response::VacationResponse>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<SetResponse<vacation_response::VacationResponse>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<vacation_response::VacationResponse>>> + Send;
 
-    fn build_script(&self, obj: &mut SieveScript) -> trc::Result<Vec<u8>>;
+    fn build_script(&self, obj: &mut SieveScript) -> crate::trc::Result<Vec<u8>>;
 }
 
 impl VacationResponseSet for Server {
@@ -49,7 +49,7 @@ impl VacationResponseSet for Server {
         &self,
         mut request: SetRequest<'_, vacation_response::VacationResponse>,
         access_token: &AccessToken,
-    ) -> trc::Result<SetResponse<vacation_response::VacationResponse>> {
+    ) -> crate::trc::Result<SetResponse<vacation_response::VacationResponse>> {
         let account_id = request.account_id.document_id();
         let mut response = SetResponse::from_request(&request, self.core.jmap.set_max_objects)?
             .with_state(
@@ -67,7 +67,7 @@ impl VacationResponseSet for Server {
         let mut changes = None;
         match (request.create, request.update) {
             (Some(create), Some(update)) if !create.is_empty() && !update.is_empty() => {
-                return Err(trc::JmapEvent::InvalidArguments
+                return Err(crate::trc::JmapEvent::InvalidArguments
                     .into_err()
                     .details("Creating and updating on the same request is not allowed."));
             }
@@ -140,12 +140,12 @@ impl VacationResponseSet for Server {
                     ))
                     .await?
                     .ok_or_else(|| {
-                        trc::StoreEvent::NotFound
+                        crate::trc::StoreEvent::NotFound
                             .into_err()
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                     })?
                     .into_deserialized::<SieveScript>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let mut sieve = prev_sieve.inner.clone();
                 if sieve.vacation_response.is_none() {
                     sieve.vacation_response = VacationResponse::default().into();
@@ -271,7 +271,7 @@ impl VacationResponseSet for Server {
                     .store()
                     .assign_document_ids(account_id, Collection::SieveScript, 1)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 batch.with_document(document_id);
                 document_id
             };
@@ -289,7 +289,7 @@ impl VacationResponseSet for Server {
                 obj.changes_mut().unwrap().blob_hash = blob_hash;
                 batch.clear(blob_hold);
             };
-            batch.custom(obj).caused_by(trc::location!())?;
+            batch.custom(obj).caused_by(crate::trc::location!())?;
 
             // Deactivate other sieve scripts
             let was_active = active_script_id == Some(document_id);
@@ -313,7 +313,7 @@ impl VacationResponseSet for Server {
                     self.commit_batch(batch)
                         .await
                         .and_then(|ids| ids.last_change_id(account_id))
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .into(),
                 );
             }
@@ -356,7 +356,7 @@ impl VacationResponseSet for Server {
                     self.commit_batch(batch)
                         .await
                         .and_then(|ids| ids.last_change_id(account_id))
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .into(),
                 );
             }
@@ -365,7 +365,7 @@ impl VacationResponseSet for Server {
         Ok(response)
     }
 
-    fn build_script(&self, obj: &mut SieveScript) -> trc::Result<Vec<u8>> {
+    fn build_script(&self, obj: &mut SieveScript) -> crate::trc::Result<Vec<u8>> {
         // Build Sieve script
         let mut script = Vec::with_capacity(1024);
         script.extend_from_slice(b"require [\"vacation\", \"relational\", \"date\"];\r\n\r\n");
@@ -474,13 +474,13 @@ impl VacationResponseSet for Server {
                     Archiver::new(compiled_script)
                         .untrusted()
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
 
                 Ok(script)
             }
-            Err(err) => Err(trc::StoreEvent::UnexpectedError
-                .caused_by(trc::location!())
+            Err(err) => Err(crate::trc::StoreEvent::UnexpectedError
+                .caused_by(crate::trc::location!())
                 .reason(err)
                 .details("Vacation Sieve Script failed to compile.")),
         }

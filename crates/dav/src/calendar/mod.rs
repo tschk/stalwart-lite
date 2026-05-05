@@ -14,16 +14,16 @@ pub mod query;
 pub mod scheduling;
 pub mod update;
 
-use crate::{DavError, DavErrorCondition};
-use common::{DavResources, Server};
-use dav_proto::schema::{
+use crate::common::{DavResources, Server};
+use crate::dav::{DavError, DavErrorCondition};
+use crate::dav_proto::schema::{
     property::{CalDavProperty, CalendarData, DavProperty, WebDavProperty},
     response::CalCondition,
 };
-use groupware::scheduling::ItipError;
+use crate::groupware::scheduling::ItipError;
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::CalendarEventField};
 use hyper::StatusCode;
-use trc::AddContext;
-use types::{collection::Collection, field::CalendarEventField};
 
 pub(crate) static CALENDAR_CONTAINER_PROPS: [DavProperty; 31] = [
     DavProperty::WebDav(WebDavProperty::CreationDate),
@@ -93,7 +93,7 @@ pub(crate) async fn assert_is_unique_uid(
     account_id: u32,
     calendar_id: u32,
     uid: Option<&str>,
-) -> crate::Result<()> {
+) -> crate::dav::Result<()> {
     if let Some(uid) = uid {
         let hits = server
             .document_ids_matching(
@@ -103,7 +103,7 @@ pub(crate) async fn assert_is_unique_uid(
                 uid.as_bytes(),
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if !hits.is_empty() {
             for path in resources.children(calendar_id) {

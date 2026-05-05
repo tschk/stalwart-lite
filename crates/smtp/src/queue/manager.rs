@@ -5,21 +5,21 @@
  */
 
 use super::{Message, QueueId, Status, spool::SmtpSpool};
-use crate::queue::{Recipient, spool::LOCK_EXPIRY};
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     Inner,
     config::smtp::queue::{QueueExpiry, QueueName},
     core::BuildServer,
     ipc::{QueueEvent, QueueEventStatus},
 };
+use crate::smtp::queue::{Recipient, spool::LOCK_EXPIRY};
+use crate::store::write::now;
+use ahash::AHashMap;
 use rand::{Rng, seq::SliceRandom};
 use std::{
     collections::hash_map::Entry,
     sync::{Arc, atomic::Ordering},
     time::{Duration, Instant},
 };
-use store::write::now;
 use tokio::sync::mpsc;
 
 pub struct Queue {
@@ -127,8 +127,8 @@ impl Queue {
                         } else {
                             if stats.last_warning.elapsed() >= BACK_PRESSURE_WARN_INTERVAL {
                                 stats.last_warning = Instant::now();
-                                trc::event!(
-                                    Queue(trc::QueueEvent::BackPressure),
+                                crate::trc::event!(
+                                    Queue(crate::trc::QueueEvent::BackPressure),
                                     Reason = "Processing capacity for this queue exceeded.",
                                     QueueName = queue_event.queue_name.to_string(),
                                     Limit = stats.max_in_flight,

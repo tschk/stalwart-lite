@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use utils::config::{Config, Rate};
+use crate::utils::config::{Config, Rate};
 
 pub mod auth;
 pub mod queue;
@@ -13,7 +13,7 @@ pub mod resolver;
 pub mod session;
 pub mod throttle;
 
-use crate::expr::{Expression, tokenizer::TokenMap};
+use crate::common::expr::{Expression, tokenizer::TokenMap};
 
 use self::{
     auth::MailAuthConfig, queue::QueueConfig, report::ReportConfig, resolver::Resolvers,

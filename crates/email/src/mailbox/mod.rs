@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use types::{acl::AclGrant, special_use::SpecialUse};
+use crate::types::{acl::AclGrant, special_use::SpecialUse};
 
 pub mod destroy;
 pub mod index;

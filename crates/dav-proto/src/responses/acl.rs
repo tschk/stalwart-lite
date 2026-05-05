@@ -6,7 +6,7 @@
 
 use std::fmt::Display;
 
-use crate::{
+use crate::dav_proto::{
     responses::XmlEscape,
     schema::{
         Namespace, Namespaces,

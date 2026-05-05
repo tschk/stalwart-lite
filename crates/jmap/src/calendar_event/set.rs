@@ -15,9 +15,9 @@ use calcard::{
     jscalendar::{JSCalendar, JSCalendarDateTime, JSCalendarProperty, JSCalendarValue},
 };
 use chrono::DateTime;
-use common::{DavName, DavResources, Server, auth::AccessToken};
-use directory::Permission;
-use groupware::{
+use crate::common::{DavName, DavResources, Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     calendar::{
@@ -27,8 +27,8 @@ use groupware::{
     },
     scheduling::{ItipMessages, event_create::itip_create, event_update::itip_update},
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::calendar_event,
@@ -37,14 +37,14 @@ use jmap_proto::{
 };
 use jmap_tools::{JsonPointerHandler, JsonPointerItem, Key, Map, Value};
 use std::{borrow::Cow, str::FromStr};
-use store::{
+use crate::store::{
     ValueKey,
     ahash::AHashSet,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, BatchBuilder, now, serialize::rkyv_deserialize},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     blob::BlobId,
     collection::{Collection, SyncCollection},
@@ -57,7 +57,7 @@ pub trait CalendarEventSet: Sync + Send {
         request: SetRequest<'_, calendar_event::CalendarEvent>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<calendar_event::CalendarEvent>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<calendar_event::CalendarEvent>>> + Send;
 
     #[allow(clippy::too_many_arguments)]
     fn create_calendar_event(
@@ -70,7 +70,7 @@ pub trait CalendarEventSet: Sync + Send {
         can_add_calendars: &Option<RoaringBitmap>,
         js_calendar_event: JSCalendar<'_, Id, BlobId>,
         updates: Value<'_, JSCalendarProperty<Id>, JSCalendarValue<Id, BlobId>>,
-    ) -> impl Future<Output = trc::Result<Result<u32, SetError<JSCalendarProperty<Id>>>>>;
+    ) -> impl Future<Output = crate::trc::Result<Result<u32, SetError<JSCalendarProperty<Id>>>>>;
 }
 
 impl CalendarEventSet for Server {
@@ -79,7 +79,7 @@ impl CalendarEventSet for Server {
         mut request: SetRequest<'_, calendar_event::CalendarEvent>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<calendar_event::CalendarEvent>> {
+    ) -> crate::trc::Result<SetResponse<calendar_event::CalendarEvent>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
@@ -166,10 +166,10 @@ impl CalendarEventSet for Server {
             };
             let calendar_event = calendar_event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_calendar_event = calendar_event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut js_calendar_group =
                 std::mem::take(&mut new_calendar_event.data.event).into_jscalendar::<Id, BlobId>();
 
@@ -309,7 +309,7 @@ impl CalendarEventSet for Server {
             {
                 let result = if new_calendar_event.schedule_tag.is_some() {
                     let old_ical = rkyv_deserialize(&calendar_event.inner.data.event)
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     itip_update(
                         &mut new_calendar_event.data.event,
@@ -389,11 +389,11 @@ impl CalendarEventSet for Server {
                     .await
                 {
                     Ok(_) => {}
-                    Err(err) if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) => {
+                    Err(err) if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota)) => {
                         response.not_updated.append(id, SetError::over_quota());
                         continue 'update;
                     }
-                    Err(err) => return Err(err.caused_by(trc::location!())),
+                    Err(err) => return Err(err.caused_by(crate::trc::location!())),
                 }
             }
 
@@ -406,7 +406,7 @@ impl CalendarEventSet for Server {
                     document_id,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if prev_email_alarm != next_email_alarm {
                 if let Some(prev_alarm) = prev_email_alarm {
                     prev_alarm.delete_task(&mut batch);
@@ -418,7 +418,7 @@ impl CalendarEventSet for Server {
             if let Some(itip_messages) = itip_messages {
                 itip_messages
                     .queue(&mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
 
             response.updated.append(id, None);
@@ -449,7 +449,7 @@ impl CalendarEventSet for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             else {
                 response.not_destroyed.append(id, SetError::not_found());
                 continue;
@@ -457,7 +457,7 @@ impl CalendarEventSet for Server {
 
             let calendar_event = calendar_event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate ACLs
             if let Some(can_delete_calendars) = &can_delete_calendars {
@@ -485,7 +485,7 @@ impl CalendarEventSet for Server {
                     send_scheduling_messages,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.destroyed.push(id);
         }
@@ -496,7 +496,7 @@ impl CalendarEventSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             response.new_state = State::Exact(change_id).into();
@@ -515,7 +515,7 @@ impl CalendarEventSet for Server {
         can_add_calendars: &Option<RoaringBitmap>,
         mut js_calendar_group: JSCalendar<'_, Id, BlobId>,
         updates: Value<'_, JSCalendarProperty<Id>, JSCalendarValue<Id, BlobId>>,
-    ) -> trc::Result<Result<u32, SetError<JSCalendarProperty<Id>>>> {
+    ) -> crate::trc::Result<Result<u32, SetError<JSCalendarProperty<Id>>>> {
         // Process changes
         let mut event = CalendarEvent::default();
         let use_default_alerts = match update_calendar_event(
@@ -568,7 +568,7 @@ impl CalendarEventSet for Server {
                 ical.components.extend(
                     _calendar
                         .unarchive::<Calendar>()
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .default_alerts(access_token, !show_without_time)
                         .map(default_alert_to_ical),
                 );
@@ -656,10 +656,10 @@ impl CalendarEventSet for Server {
             .await
         {
             Ok(_) => {}
-            Err(err) if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) => {
+            Err(err) if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota)) => {
                 return Ok(Err(SetError::over_quota()));
             }
-            Err(err) => return Err(err.caused_by(trc::location!())),
+            Err(err) => return Err(err.caused_by(crate::trc::location!())),
         }
 
         // Insert record
@@ -667,7 +667,7 @@ impl CalendarEventSet for Server {
             .store()
             .assign_document_ids(account_id, Collection::CalendarEvent, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         event
             .insert(
                 access_token,
@@ -676,10 +676,10 @@ impl CalendarEventSet for Server {
                 next_email_alarm,
                 batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if let Some(itip_messages) = itip_messages {
-            itip_messages.queue(batch).caused_by(trc::location!())?;
+            itip_messages.queue(batch).caused_by(crate::trc::location!())?;
         }
 
         Ok(Ok(document_id))

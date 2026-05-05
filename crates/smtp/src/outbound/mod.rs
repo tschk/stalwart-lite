@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    outbound::client::BoxResponse,
-    queue::{Error, ErrorDetails, HostResponse, Status, UnexpectedResponse},
-};
-use common::config::{
+use crate::common::config::{
     server::ServerProtocol,
     smtp::queue::{MxConfig, RelayConfig},
+};
+use crate::smtp::{
+    outbound::client::BoxResponse,
+    queue::{Error, ErrorDetails, HostResponse, Status, UnexpectedResponse},
 };
 use mail_auth::IpLookupStrategy;
 use mail_send::Credentials;

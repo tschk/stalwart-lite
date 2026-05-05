@@ -8,6 +8,7 @@ use std::{borrow::Cow, collections::BTreeSet, fmt::Display, io::Cursor};
 
 use aes::cipher::{BlockEncryptMut, KeyIvInit, block_padding::Pkcs7};
 
+use crate::store::{Deserialize, write::Archive};
 use mail_builder::{encoders::base64::base64_encode_mime, mime::make_boundary};
 use mail_parser::{Message, MimeHeaders, PartType, decoders::base64::base64_decode};
 use openpgp::{
@@ -15,7 +16,7 @@ use openpgp::{
     serialize::stream,
     types::{KeyFlags, SymmetricAlgorithm},
 };
-use rand::{RngCore, SeedableRng, rngs::StdRng};
+use rand_08::{RngCore, SeedableRng, rngs::StdRng};
 use rasn::types::{ObjectIdentifier, OctetString};
 use rasn_cms::{
     AlgorithmIdentifier, CONTENT_DATA, CONTENT_ENVELOPED_DATA, EncryptedContent,
@@ -26,7 +27,6 @@ use rasn_cms::{
 };
 use rsa::{Pkcs1v15Encrypt, RsaPublicKey, pkcs1::DecodeRsaPublicKey};
 use sequoia_openpgp as openpgp;
-use store::{Deserialize, write::Archive};
 
 const P: openpgp::policy::StandardPolicy<'static> = openpgp::policy::StandardPolicy::new();
 

@@ -14,16 +14,16 @@ pub mod query;
 pub mod split;
 pub mod term;
 
-use crate::write::SearchIndex;
+use crate::nlp::language::Language;
+use crate::store::write::SearchIndex;
+use crate::utils::config::utils::ParseValue;
+use crate::utils::map::vec_map::VecMap;
 use ahash::AHashMap;
-use nlp::language::Language;
 use roaring::RoaringBitmap;
 use std::cmp::Ordering;
 use std::collections::hash_map::Entry;
 use std::fmt::Display;
 use std::ops::{BitAndAssign, BitOrAssign, BitXorAssign};
-use utils::config::utils::ParseValue;
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchOperator {
@@ -271,7 +271,7 @@ pub trait SearchableField: Sized {
 }
 
 impl ParseValue for SearchField {
-    fn parse_value(value: &str) -> utils::config::Result<Self> {
+    fn parse_value(value: &str) -> crate::utils::config::Result<Self> {
         Ok(match value {
             // Email
             "email-from" => Self::Email(EmailSearchField::From),

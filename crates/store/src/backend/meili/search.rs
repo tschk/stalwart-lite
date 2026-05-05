@@ -7,7 +7,7 @@
 use ahash::AHashSet;
 use serde_json::{Map, Value, json};
 
-use crate::{
+use crate::store::{
     backend::meili::{MeiliSearchResponse, MeiliSearchStore, main::assert_success},
     search::*,
     write::SearchIndex,
@@ -15,7 +15,7 @@ use crate::{
 use std::fmt::{Display, Write};
 
 impl MeiliSearchStore {
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         let mut index_documents: [String; 5] = [
             String::new(),
             String::new(),
@@ -72,7 +72,7 @@ impl MeiliSearchStore {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<R>> {
+    ) -> crate::trc::Result<Vec<R>> {
         let filter_group = build_query(filters);
 
         let mut body = Map::new();
@@ -124,7 +124,7 @@ impl MeiliSearchStore {
         let text = resp
             .text()
             .await
-            .map_err(|err| trc::StoreEvent::MeilisearchError.reason(err))?;
+            .map_err(|err| crate::trc::StoreEvent::MeilisearchError.reason(err))?;
 
         serde_json::from_str::<MeiliSearchResponse>(&text)
             .map(|results| {
@@ -134,14 +134,18 @@ impl MeiliSearchStore {
                     .map(|hit| R::from_u64(hit.id))
                     .collect()
             })
-            .map_err(|err| trc::StoreEvent::MeilisearchError.reason(err).details(text))
+            .map_err(|err| {
+                crate::trc::StoreEvent::MeilisearchError
+                    .reason(err)
+                    .details(text)
+            })
     }
 
-    pub async fn unindex(&self, filter: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, filter: SearchQuery) -> crate::trc::Result<u64> {
         let filter_group = build_query(&filter.filters);
 
         if filter_group.filter.is_empty() {
-            return Err(trc::StoreEvent::MeilisearchError.reason(
+            return Err(crate::trc::StoreEvent::MeilisearchError.reason(
                 "Meilisearch delete-by-filter requires structured (non-text) filters only",
             ));
         }

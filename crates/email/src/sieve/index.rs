@@ -5,8 +5,8 @@
  */
 
 use super::{ArchivedSieveScript, SieveScript};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use types::{collection::SyncCollection, field::SieveField};
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::types::{collection::SyncCollection, field::SieveField};
 
 impl IndexableObject for SieveScript {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

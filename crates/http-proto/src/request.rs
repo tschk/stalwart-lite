@@ -9,7 +9,7 @@ use std::borrow::Cow;
 use compact_str::ToCompactString;
 use http_body_util::BodyExt;
 
-use crate::HttpRequest;
+use crate::http_proto::HttpRequest;
 
 #[inline]
 pub fn decode_path_element(item: &str) -> Cow<'_, str> {
@@ -29,13 +29,13 @@ pub async fn fetch_body(
             if bytes.len() + data.len() <= max_size || max_size == 0 {
                 bytes.extend_from_slice(data);
             } else {
-                trc::event!(
-                    Http(trc::HttpEvent::RequestBody),
+                crate::trc::event!(
+                    Http(crate::trc::HttpEvent::RequestBody),
                     SpanId = session_id,
                     Details = req
                         .headers()
                         .iter()
-                        .map(|(k, v)| trc::Value::Array(vec![
+                        .map(|(k, v)| crate::trc::Value::Array(vec![
                             k.as_str().to_compact_string().into(),
                             v.to_str().unwrap_or_default().to_compact_string().into()
                         ]))
@@ -52,13 +52,13 @@ pub async fn fetch_body(
         }
     }
 
-    trc::event!(
-        Http(trc::HttpEvent::RequestBody),
+    crate::trc::event!(
+        Http(crate::trc::HttpEvent::RequestBody),
         SpanId = session_id,
         Details = req
             .headers()
             .iter()
-            .map(|(k, v)| trc::Value::Array(vec![
+            .map(|(k, v)| crate::trc::Value::Array(vec![
                 k.as_str().to_compact_string().into(),
                 v.to_str().unwrap_or_default().to_compact_string().into()
             ]))

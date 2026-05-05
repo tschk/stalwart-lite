@@ -5,7 +5,7 @@
  */
 
 use super::ahash_is_empty;
-use crate::{
+use crate::jmap_proto::{
     error::set::{InvalidProperty, SetError},
     object::{JmapObject, JmapObjectId},
     request::{
@@ -16,11 +16,11 @@ use crate::{
     response::Response,
     types::state::State,
 };
+use crate::types::id::Id;
+use crate::utils::map::vec_map::VecMap;
 use ahash::AHashMap;
 use jmap_tools::{Key, Map, Value};
 use serde::{Deserialize, Deserializer};
-use types::id::Id;
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone)]
 #[allow(clippy::type_complexity)]
@@ -129,7 +129,7 @@ impl<'x, T: JmapObject> Default for SetRequest<'x, T> {
 }
 
 impl<'x, T: JmapObject> SetRequest<'x, T> {
-    pub fn validate(&self, max_objects_in_set: usize) -> trc::Result<()> {
+    pub fn validate(&self, max_objects_in_set: usize) -> crate::trc::Result<()> {
         if self.create.as_ref().map_or(0, |objs| objs.len())
             + self.update.as_ref().map_or(0, |objs| objs.len())
             + self.destroy.as_ref().map_or(0, |objs| {
@@ -141,7 +141,7 @@ impl<'x, T: JmapObject> SetRequest<'x, T> {
             })
             > max_objects_in_set
         {
-            Err(trc::JmapEvent::RequestTooLarge.into_err())
+            Err(crate::trc::JmapEvent::RequestTooLarge.into_err())
         } else {
             Ok(())
         }
@@ -174,7 +174,7 @@ impl<'x, T: JmapObject> SetRequest<'x, T> {
 }
 
 impl<T: JmapObject> SetResponse<T> {
-    pub fn from_request(request: &SetRequest<T>, max_objects: usize) -> trc::Result<Self> {
+    pub fn from_request(request: &SetRequest<T>, max_objects: usize) -> crate::trc::Result<Self> {
         let n_create = request.create.as_ref().map_or(0, |objs| objs.len());
         let n_update = request.update.as_ref().map_or(0, |objs| objs.len());
         let n_destroy = request.destroy.as_ref().map_or(0, |objs| {
@@ -201,7 +201,7 @@ impl<T: JmapObject> SetResponse<T> {
                 not_destroyed: VecMap::new(),
             })
         } else {
-            Err(trc::JmapEvent::RequestTooLarge.into_err())
+            Err(crate::trc::JmapEvent::RequestTooLarge.into_err())
         }
     }
 

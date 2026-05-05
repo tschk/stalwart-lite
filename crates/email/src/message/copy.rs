@@ -8,7 +8,8 @@ use super::{
     ingest::{EmailIngest, IngestedEmail},
     metadata::{MessageData, MessageMetadata},
 };
-use crate::{
+use crate::common::{Server, auth::ResourceToken, storage::index::ObjectIndexBuilder};
+use crate::email::{
     mailbox::UidMailbox,
     message::{
         index::extractors::VisitTextArchived,
@@ -18,23 +19,22 @@ use crate::{
         },
     },
 };
-use common::{Server, auth::ResourceToken, storage::index::ObjectIndexBuilder};
-use mail_parser::parsers::fields::thread::thread_name;
-use store::write::{
+use crate::store::write::{
     BatchBuilder, IndexPropertyClass, SearchIndex, TaskEpoch, TaskQueueClass, ValueClass,
 };
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     blob::{BlobClass, BlobId},
     collection::{Collection, SyncCollection},
     field::EmailField,
     keyword::Keyword,
 };
-use utils::cheeky_hash::CheekyHash;
+use crate::utils::cheeky_hash::CheekyHash;
+use mail_parser::parsers::fields::thread::thread_name;
 
 pub enum CopyMessageError {
     NotFound,
@@ -52,7 +52,7 @@ pub trait EmailCopy: Sync + Send {
         keywords: Vec<Keyword>,
         received_at: Option<u64>,
         session_id: u64,
-    ) -> impl Future<Output = trc::Result<Result<IngestedEmail, CopyMessageError>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Result<IngestedEmail, CopyMessageError>>> + Send;
 }
 
 impl EmailCopy for Server {
@@ -66,7 +66,7 @@ impl EmailCopy for Server {
         keywords: Vec<Keyword>,
         received_at: Option<u64>,
         session_id: u64,
-    ) -> trc::Result<Result<IngestedEmail, CopyMessageError>> {
+    ) -> crate::trc::Result<Result<IngestedEmail, CopyMessageError>> {
         // Obtain metadata
         let account_id = resource_token.account_id;
         let mut metadata = if let Some(metadata) = self
@@ -81,7 +81,7 @@ impl EmailCopy for Server {
         {
             metadata
                 .deserialize::<MessageMetadata>()
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         } else {
             return Ok(Err(CopyMessageError::NotFound));
         };
@@ -91,10 +91,12 @@ impl EmailCopy for Server {
         match self.has_available_quota(resource_token, size as u64).await {
             Ok(_) => (),
             Err(err) => {
-                if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota))
-                    || err.matches(trc::EventType::Limit(trc::LimitEvent::TenantQuota))
+                if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota))
+                    || err.matches(crate::trc::EventType::Limit(
+                        crate::trc::LimitEvent::TenantQuota,
+                    ))
                 {
-                    trc::error!(err.account_id(account_id).span_id(session_id));
+                    crate::trc::error!(err.account_id(account_id).span_id(session_id));
                     return Ok(Err(CopyMessageError::OverQuota));
                 } else {
                     return Err(err);
@@ -146,7 +148,7 @@ impl EmailCopy for Server {
         let thread_result = self
             .find_thread_id(account_id, subject, &message_ids)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Assign id
         let mut email = IngestedEmail {
@@ -161,7 +163,7 @@ impl EmailCopy for Server {
         let mut ids = self
             .assign_email_ids(account_id, mailboxes.iter().copied(), true)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let document_id = ids.next().unwrap();
         for (uid, mailbox_id) in ids.zip(mailboxes.iter().copied()) {
             mailbox_ids.push(UidMailbox::new(mailbox_id, uid));
@@ -195,7 +197,7 @@ impl EmailCopy for Server {
                         size,
                     }),
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .set(
                 ValueClass::IndexProperty(IndexPropertyClass::Hash {
                     property: EmailField::Threading.into(),
@@ -224,14 +226,14 @@ impl EmailCopy for Server {
 
         metadata
             .index(&mut batch, true)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Insert and obtain ids
         let change_id = self
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .last_change_id(account_id)?;
 
         // Request indexing

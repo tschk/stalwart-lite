@@ -4,32 +4,32 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use email::cache::MessageCacheFetch;
-use email::cache::email::MessageCacheAccess;
-use email::message::metadata::MessageMetadata;
+use crate::common::{Server, auth::AccessToken};
+use crate::email::cache::MessageCacheFetch;
+use crate::email::cache::email::MessageCacheAccess;
+use crate::email::message::metadata::MessageMetadata;
+use crate::store::ValueKey;
+use crate::store::write::{AlignedBytes, Archive};
+use crate::trc::AddContext;
+use crate::types::acl::Acl;
+use crate::types::blob::{BlobClass, BlobId};
+use crate::types::collection::Collection;
+use crate::types::field::EmailField;
+use crate::utils::chained_bytes::ChainedBytes;
 use std::future::Future;
-use store::ValueKey;
-use store::write::{AlignedBytes, Archive};
-use trc::AddContext;
-use types::acl::Acl;
-use types::blob::{BlobClass, BlobId};
-use types::collection::Collection;
-use types::field::EmailField;
-use utils::chained_bytes::ChainedBytes;
 
 pub trait BlobDownload: Sync + Send {
     fn blob_download(
         &self,
         blob_id: &BlobId,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<Option<Vec<u8>>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<Vec<u8>>>> + Send;
 
     fn has_access_blob(
         &self,
         blob_id: &BlobId,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<bool>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<bool>> + Send;
 }
 
 impl BlobDownload for Server {
@@ -38,18 +38,18 @@ impl BlobDownload for Server {
         &self,
         blob_id: &BlobId,
         access_token: &AccessToken,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         if self.has_access_blob(blob_id, access_token).await? {
             if let Some(section) = &blob_id.section {
                 self.get_blob_section(&blob_id.hash, section)
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             } else {
                 let blob = self
                     .blob_store()
                     .get_blob(blob_id.hash.as_slice(), 0..usize::MAX)
                     .await
-                    .caused_by(trc::location!());
+                    .caused_by(crate::trc::location!());
                 match (&blob_id.class, blob) {
                     (
                         BlobClass::Linked {
@@ -68,13 +68,13 @@ impl BlobDownload for Server {
                                 EmailField::Metadata,
                             ))
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                         else {
                             return Ok(Some(data));
                         };
                         let metadata = archive
                             .to_unarchived::<MessageMetadata>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         let body_offset = metadata.inner.blob_body_offset.to_native();
                         if metadata.inner.root_part().offset_body.to_native() != body_offset {
                             let raw_message = ChainedBytes::new(
@@ -98,12 +98,12 @@ impl BlobDownload for Server {
         &self,
         blob_id: &BlobId,
         access_token: &AccessToken,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         Ok(self
             .store()
             .blob_has_access(&blob_id.hash, &blob_id.class)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             && match &blob_id.class {
                 BlobClass::Linked {
                     account_id,
@@ -117,7 +117,7 @@ impl BlobDownload for Server {
                             Collection::Email => self
                                 .get_cached_messages(*account_id)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .shared_messages(access_token, Acl::ReadItems)
                                 .contains(*document_id),
                             _ => false,

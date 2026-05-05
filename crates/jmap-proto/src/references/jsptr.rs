@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     method::{
         PropertyWrapper,
         availability::{BusyPeriod, GetAvailabilityResponse},
@@ -21,10 +21,10 @@ use crate::{
     },
     request::reference::ResultReference,
 };
+use crate::types::{blob::BlobId, id::Id};
 use compact_str::format_compact;
 use jmap_tools::{Element, JsonPointerItem, JsonPointerIter, Key, Null, Property, Value};
 use std::{borrow::Cow, str::FromStr};
-use types::{blob::BlobId, id::Id};
 
 pub(crate) trait ResponsePtr {
     fn eval_jptr(&self, pointer: JsonPointerIter<'_, Null>, results: &mut EvalResults) -> bool;
@@ -290,18 +290,18 @@ impl EvalResults {
     pub fn into_ids<T: TryFrom<AnyId>>(
         self,
         rr: &ResultReference,
-    ) -> impl Iterator<Item = trc::Result<T>> {
+    ) -> impl Iterator<Item = crate::trc::Result<T>> {
         self.0.into_iter().map(move |id| {
             if let EvalResult::Id(any_id) = id {
                 T::try_from(any_id).map_err(|_| {
-                    trc::JmapEvent::InvalidResultReference
+                    crate::trc::JmapEvent::InvalidResultReference
                         .into_err()
                         .details(format_compact!(
                             "Failed to evaluate {rr} result reference: Invalid Id type."
                         ))
                 })
             } else {
-                Err(trc::JmapEvent::InvalidResultReference
+                Err(crate::trc::JmapEvent::InvalidResultReference
                     .into_err()
                     .details(format_compact!(
                         "Failed to evaluate {rr} result reference: Invalid Id type."
@@ -313,18 +313,18 @@ impl EvalResults {
     pub fn into_properties<T: Property + FromStr>(
         self,
         rr: &ResultReference,
-    ) -> impl Iterator<Item = trc::Result<T>> {
+    ) -> impl Iterator<Item = crate::trc::Result<T>> {
         self.0.into_iter().map(move |prop| {
             if let EvalResult::Property(prop) = prop {
                 T::from_str(&prop).map_err(|_| {
-                    trc::JmapEvent::InvalidResultReference
+                    crate::trc::JmapEvent::InvalidResultReference
                         .into_err()
                         .details(format_compact!(
                             "Failed to evaluate {rr} result reference: Invalid property."
                         ))
                 })
             } else {
-                Err(trc::JmapEvent::InvalidResultReference
+                Err(crate::trc::JmapEvent::InvalidResultReference
                     .into_err()
                     .details(format_compact!(
                         "Failed to evaluate {rr} result reference: Invalid property."

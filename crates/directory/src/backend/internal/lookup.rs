@@ -5,28 +5,28 @@
  */
 
 use super::{PrincipalInfo, manage::ManageDirectory};
-use crate::{Principal, PrincipalData, QueryBy, QueryParams, Type, backend::RcptType};
-use mail_send::Credentials;
-use store::{
+use crate::directory::{Principal, PrincipalData, QueryBy, QueryParams, Type, backend::RcptType};
+use crate::store::{
     Deserialize, IterateParams, Store, ValueKey,
     write::{DirectoryClass, ValueClass},
 };
-use trc::AddContext;
-use utils::DomainPart;
+use crate::trc::AddContext;
+use crate::utils::DomainPart;
+use mail_send::Credentials;
 
 #[allow(async_fn_in_trait)]
 pub trait DirectoryStore: Sync + Send {
-    async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>>;
-    async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>>;
-    async fn is_local_domain(&self, domain: &str) -> trc::Result<bool>;
-    async fn rcpt(&self, address: &str) -> trc::Result<RcptType>;
-    async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>>;
-    async fn expn(&self, address: &str) -> trc::Result<Vec<String>>;
-    async fn expn_by_id(&self, id: u32) -> trc::Result<Vec<String>>;
+    async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>>;
+    async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>>;
+    async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool>;
+    async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType>;
+    async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>>;
+    async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>>;
+    async fn expn_by_id(&self, id: u32) -> crate::trc::Result<Vec<String>>;
 }
 
 impl DirectoryStore for Store {
-    async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         let (account_id, secret) = match by.by {
             QueryBy::Name(name) => (self.get_principal_id(name).await?, None),
             QueryBy::Id(account_id) => (account_id.into(), None),
@@ -76,7 +76,7 @@ impl DirectoryStore for Store {
         Ok(None)
     }
 
-    async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         self.get_value::<PrincipalInfo>(ValueKey::from(ValueClass::Directory(
             DirectoryClass::EmailToId(address.as_bytes().to_vec()),
         )))
@@ -84,7 +84,7 @@ impl DirectoryStore for Store {
         .map(|ptype| ptype.map(|ptype| ptype.id))
     }
 
-    async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         self.get_value::<PrincipalInfo>(ValueKey::from(ValueClass::Directory(
             DirectoryClass::NameToId(domain.as_bytes().to_vec()),
         )))
@@ -92,7 +92,7 @@ impl DirectoryStore for Store {
         .map(|p| p.is_some_and(|p| p.typ == Type::Domain))
     }
 
-    async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         if let Some(pinfo) = self
             .get_value::<PrincipalInfo>(ValueKey::from(ValueClass::Directory(
                 DirectoryClass::EmailToId(address.as_bytes().to_vec()),
@@ -109,7 +109,7 @@ impl DirectoryStore for Store {
         }
     }
 
-    async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         let mut results = Vec::new();
         let address = address.try_local_part().unwrap_or(address);
         if address.len() > 3 {
@@ -125,7 +125,7 @@ impl DirectoryStore for Store {
                         std::str::from_utf8(key.get(1..).unwrap_or_default()).unwrap_or_default();
                     if key.try_local_part().unwrap_or(key).contains(address)
                         && PrincipalInfo::deserialize(value)
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .typ
                             != Type::List
                     {
@@ -135,13 +135,13 @@ impl DirectoryStore for Store {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         }
 
         Ok(results)
     }
 
-    async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         if let Some(ptype) = self
             .get_value::<PrincipalInfo>(ValueKey::from(ValueClass::Directory(
                 DirectoryClass::EmailToId(address.as_bytes().to_vec()),
@@ -155,7 +155,7 @@ impl DirectoryStore for Store {
         }
     }
 
-    async fn expn_by_id(&self, list_id: u32) -> trc::Result<Vec<String>> {
+    async fn expn_by_id(&self, list_id: u32) -> crate::trc::Result<Vec<String>> {
         let mut results = Vec::new();
         for account_id in self.get_members(list_id).await? {
             if let Some(email) = self.get_principal(account_id).await?.and_then(|p| {

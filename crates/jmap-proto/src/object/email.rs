@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     method::query::{Comparator, Filter},
     object::{AnyId, JmapObject, JmapObjectId, MaybeReference, parse_ref},
     request::{MaybeInvalid, deserialize::DeserializeArguments},
     types::date::UTCDate,
 };
+use crate::types::{blob::BlobId, id::Id, keyword::Keyword};
 use jmap_tools::{Element, JsonPointer, JsonPointerItem, Key, Property};
 use mail_parser::HeaderName;
 use serde::Serialize;
 use std::{borrow::Cow, fmt::Display, str::FromStr};
-use types::{blob::BlobId, id::Id, keyword::Keyword};
 
 #[derive(Debug, Clone, Default)]
 pub struct Email;

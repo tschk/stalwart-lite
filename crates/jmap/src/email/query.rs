@@ -4,17 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
-use common::{MessageStoreCache, Server, auth::AccessToken};
-use email::cache::{MessageCacheFetch, email::MessageCacheAccess};
-use jmap_proto::{
+use crate::common::{MessageStoreCache, Server, auth::AccessToken};
+use crate::email::cache::{MessageCacheFetch, email::MessageCacheAccess};
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::email::{Email, EmailComparator, EmailFilter},
 };
-use mail_parser::HeaderName;
-use nlp::language::Language;
-use std::future::Future;
-use store::{
+use crate::nlp::language::Language;
+use crate::store::{
     ahash::{AHashMap, AHashSet},
     roaring::RoaringBitmap,
     search::{
@@ -22,16 +20,18 @@ use store::{
     },
     write::SearchIndex,
 };
-use trc::AddContext;
-use types::{acl::Acl, keyword::Keyword};
-use utils::map::vec_map::VecMap;
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, keyword::Keyword};
+use crate::utils::map::vec_map::VecMap;
+use mail_parser::HeaderName;
+use std::future::Future;
 
 pub trait EmailQuery: Sync + Send {
     fn email_query(
         &self,
         request: QueryRequest<Email>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl EmailQuery for Server {
@@ -39,13 +39,13 @@ impl EmailQuery for Server {
         &self,
         mut request: QueryRequest<Email>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut filters = Vec::with_capacity(request.filter.len());
         let cached_messages = self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for filter in std::mem::take(&mut request.filter) {
             match filter {
@@ -125,7 +125,7 @@ impl EmailQuery for Server {
                     EmailFilter::Header(header) => {
                         let mut header = header.into_iter();
                         let header_name = header.next().ok_or_else(|| {
-                            trc::JmapEvent::InvalidArguments
+                            crate::trc::JmapEvent::InvalidArguments
                                 .into_err()
                                 .details("Header name is missing.".to_string())
                         })?;
@@ -253,7 +253,7 @@ impl EmailQuery for Server {
                         )))
                     }
                     other => {
-                        return Err(trc::JmapEvent::UnsupportedFilter
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
                             .into_err()
                             .details(other.to_string()));
                     }
@@ -322,7 +322,7 @@ impl EmailQuery for Server {
                 }
 
                 other => {
-                    return Err(trc::JmapEvent::UnsupportedSort
+                    return Err(crate::trc::JmapEvent::UnsupportedSort
                         .into_err()
                         .details(other.to_string()));
                 }

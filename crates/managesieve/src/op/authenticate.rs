@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     auth::{
         AuthRequest,
         sasl::{sasl_decode_challenge_oauth, sasl_decode_challenge_plain},
@@ -12,26 +12,29 @@ use common::{
     listener::{SessionStream, limiter::LimiterResult},
 };
 
-use directory::Permission;
-use imap_proto::{
+use crate::directory::Permission;
+use crate::imap_proto::{
     protocol::authenticate::Mechanism,
     receiver::{self, Request},
 };
 use mail_parser::decoders::base64::base64_decode;
 
-use crate::core::{Command, Session, State, StatusResponse};
+use crate::managesieve::core::{Command, Session, State, StatusResponse};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_authenticate(&mut self, request: Request<Command>) -> trc::Result<Vec<u8>> {
+    pub async fn handle_authenticate(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<Vec<u8>> {
         if request.tokens.is_empty() {
-            return Err(trc::AuthEvent::Error
+            return Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Authentication mechanism missing."));
         }
 
         let mut tokens = request.tokens.into_iter();
         let mechanism = Mechanism::parse(&tokens.next().unwrap().unwrap_bytes())
-            .map_err(|err| trc::AuthEvent::Error.into_err().details(err))?;
+            .map_err(|err| crate::trc::AuthEvent::Error.into_err().details(err))?;
         let mut params: Vec<String> = tokens
             .filter_map(|token| token.unwrap_string().ok())
             .collect();
@@ -48,7 +51,7 @@ impl<T: SessionStream> Session<T> {
                             }
                         })
                         .ok_or_else(|| {
-                            trc::AuthEvent::Error
+                            crate::trc::AuthEvent::Error
                                 .into_err()
                                 .details("Failed to decode challenge.")
                         })?
@@ -63,7 +66,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
             _ => {
-                return Err(trc::AuthEvent::Error
+                return Err(crate::trc::AuthEvent::Error
                     .into_err()
                     .details("Authentication mechanism not supported."));
             }
@@ -79,7 +82,7 @@ impl<T: SessionStream> Session<T> {
             ))
             .await
             .map_err(|err| {
-                if err.matches(trc::EventType::Auth(trc::AuthEvent::Failed)) {
+                if err.matches(crate::trc::EventType::Auth(crate::trc::AuthEvent::Failed)) {
                     match &self.state {
                         State::NotAuthenticated { auth_failures }
                             if *auth_failures < self.server.core.imap.max_auth_failures =>
@@ -89,7 +92,9 @@ impl<T: SessionStream> Session<T> {
                             };
                         }
                         _ => {
-                            return trc::AuthEvent::TooManyAttempts.into_err().caused_by(err);
+                            return crate::trc::AuthEvent::TooManyAttempts
+                                .into_err()
+                                .caused_by(err);
                         }
                     }
                 }
@@ -106,7 +111,7 @@ impl<T: SessionStream> Session<T> {
         let in_flight = match access_token.is_imap_request_allowed() {
             LimiterResult::Allowed(in_flight) => Some(in_flight),
             LimiterResult::Forbidden => {
-                return Err(trc::LimitEvent::ConcurrentRequest.into_err());
+                return Err(crate::trc::LimitEvent::ConcurrentRequest.into_err());
             }
             LimiterResult::Disabled => None,
         };
@@ -120,13 +125,13 @@ impl<T: SessionStream> Session<T> {
         Ok(StatusResponse::ok("Authentication successful").into_bytes())
     }
 
-    pub async fn handle_unauthenticate(&mut self) -> trc::Result<Vec<u8>> {
+    pub async fn handle_unauthenticate(&mut self) -> crate::trc::Result<Vec<u8>> {
         self.state = State::NotAuthenticated { auth_failures: 0 };
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::Unauthenticate),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::Unauthenticate),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         Ok(StatusResponse::ok("Unauthenticate successful.").into_bytes())

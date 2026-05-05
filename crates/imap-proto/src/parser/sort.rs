@@ -7,7 +7,7 @@
 use compact_str::ToCompactString;
 use mail_parser::decoders::charsets::map::charset_decoder;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::search::{Arguments, Comparator, Sort},
     receiver::{Request, Token, bad},
@@ -17,7 +17,7 @@ use super::search::{parse_filters, parse_result_options};
 
 impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_sort(self) -> trc::Result<Arguments> {
+    pub fn parse_sort(self) -> crate::trc::Result<Arguments> {
         if self.tokens.is_empty() {
             return Err(self.into_error("Missing sort criteria."));
         }
@@ -121,7 +121,7 @@ impl Sort {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Flag,
             search::{Arguments, Comparator, Filter, ResultOption, Sort},

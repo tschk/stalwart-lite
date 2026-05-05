@@ -6,14 +6,14 @@
 
 use std::sync::Arc;
 
-use common::{Server, auth::AccessToken};
+use crate::common::{Server, auth::AccessToken};
+use crate::trc::JmapEvent;
 use hyper::StatusCode;
 use hyper_util::rt::TokioIo;
 use tokio_tungstenite::WebSocketStream;
-use trc::JmapEvent;
 use tungstenite::{handshake::derive_accept_key, protocol::Role};
 
-use http_proto::*;
+use crate::http_proto::*;
 use std::future::Future;
 
 use super::stream::WebSocketHandler;
@@ -24,7 +24,7 @@ pub trait WebSocketUpgrade: Sync + Send {
         req: HttpRequest,
         access_token: Arc<AccessToken>,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl WebSocketUpgrade for Server {
@@ -33,7 +33,7 @@ impl WebSocketUpgrade for Server {
         req: HttpRequest,
         access_token: Arc<AccessToken>,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let headers = req.headers();
         if headers
             .get(hyper::header::CONNECTION)
@@ -44,11 +44,11 @@ impl WebSocketUpgrade for Server {
                 .and_then(|h| h.to_str().ok())
                 != Some("websocket")
         {
-            return Err(trc::ResourceEvent::BadParameters
+            return Err(crate::trc::ResourceEvent::BadParameters
                 .into_err()
                 .details("WebSocket upgrade failed")
                 .ctx(
-                    trc::Key::Reason,
+                    crate::trc::Key::Reason,
                     "Missing or Invalid Connection or Upgrade headers.",
                 ));
         }
@@ -62,11 +62,11 @@ impl WebSocketUpgrade for Server {
         ) {
             (Some(key), Some("13")) => derive_accept_key(key.as_bytes()),
             _ => {
-                return Err(trc::ResourceEvent::BadParameters
+                return Err(crate::trc::ResourceEvent::BadParameters
                     .into_err()
                     .details("WebSocket upgrade failed")
                     .ctx(
-                        trc::Key::Reason,
+                        crate::trc::Key::Reason,
                         "Missing or Invalid Sec-WebSocket-Key headers.",
                     ));
             }
@@ -94,7 +94,7 @@ impl WebSocketUpgrade for Server {
                     .await;
                 }
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Jmap(JmapEvent::WebsocketError),
                         Details = "Websocket upgrade failed",
                         SpanId = session_id,

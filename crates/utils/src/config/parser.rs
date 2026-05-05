@@ -440,16 +440,11 @@ impl<'x, 'y> TomlParser<'x, 'y> {
 mod tests {
     use std::{collections::BTreeMap, fs, path::PathBuf};
 
-    use crate::config::Config;
+    use crate::utils::config::Config;
 
     #[test]
     fn toml_parse() {
         let file = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .to_path_buf()
             .join("tests")
             .join("resources")
             .join("smtp")
@@ -457,7 +452,13 @@ mod tests {
             .join("toml-parser.toml");
 
         let mut config = Config::default();
-        config.parse(&fs::read_to_string(file).unwrap()).unwrap();
+        config
+            .parse(
+                &fs::read_to_string(file)
+                    .unwrap()
+                    .replace("!CARGO_PKG_NAME", "utils"),
+            )
+            .unwrap();
         let expected = BTreeMap::from_iter(
             [
                 ("arrays.colors.0000", "red"),

@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::list::{self, SelectionOption},
     receiver::{Request, bad},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl Request<Command> {
-    pub fn parse_lsub(self, is_utf8: bool) -> trc::Result<list::Arguments> {
+    pub fn parse_lsub(self, is_utf8: bool) -> crate::trc::Result<list::Arguments> {
         if self.tokens.len() > 1 {
             let mut tokens = self.tokens.into_iter();
 
@@ -44,7 +44,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::list::{self, SelectionOption},
         receiver::Receiver,
     };

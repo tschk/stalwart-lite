@@ -5,15 +5,15 @@
  */
 
 use super::ZenohPubSub;
-use crate::dispatch::pubsub::{Msg, PubSubStream};
-use trc::{ClusterEvent, Error, EventType};
+use crate::store::dispatch::pubsub::{Msg, PubSubStream};
+use crate::trc::{ClusterEvent, Error, EventType};
 
 pub struct ZenohPubSubStream {
     subs: zenoh::pubsub::Subscriber<zenoh::handlers::FifoChannelHandler<zenoh::sample::Sample>>,
 }
 
 impl ZenohPubSub {
-    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> trc::Result<()> {
+    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> crate::trc::Result<()> {
         self.session
             .declare_publisher(topic)
             .await
@@ -25,7 +25,7 @@ impl ZenohPubSub {
             .map_err(|err| Error::new(EventType::Cluster(ClusterEvent::PublisherError)).reason(err))
     }
 
-    pub async fn subscribe(&self, topic: &'static str) -> trc::Result<PubSubStream> {
+    pub async fn subscribe(&self, topic: &'static str) -> crate::trc::Result<PubSubStream> {
         self.session
             .declare_subscriber(topic)
             .await

@@ -15,7 +15,8 @@ use std::{
     sync::Arc,
 };
 
-pub use crate::ipc::collector::Collector;
+pub use crate::trc_impl::ipc::collector::Collector;
+pub use crate::{bail, error, location};
 use compact_str::CompactString;
 pub use event_macro::event;
 

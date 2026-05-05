@@ -10,14 +10,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::imap::{
     core::{Session, SessionData},
     op::ImapContext,
     spawn_op,
 };
-use common::listener::SessionStream;
-use directory::Permission;
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::{
         ImapResponse,
@@ -29,7 +29,7 @@ use imap_proto::{
 use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_get_quota(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_get_quota(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapStatus)?;
 
@@ -52,7 +52,10 @@ impl<T: SessionStream> Session<T> {
         })
     }
 
-    pub async fn handle_get_quota_root(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_get_quota_root(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapStatus)?;
 
@@ -78,13 +81,13 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> SessionData<T> {
-    pub async fn get_quota(&self, arguments: Arguments) -> trc::Result<Vec<u8>> {
+    pub async fn get_quota(&self, arguments: Arguments) -> crate::trc::Result<Vec<u8>> {
         let op_start = Instant::now();
 
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate quota root
         let account_id: u32 = arguments
@@ -93,7 +96,7 @@ impl<T: SessionStream> SessionData<T> {
             .and_then(|id| id.parse().ok())
             .filter(|id| self.access_token.is_member(*id))
             .ok_or_else(|| {
-                trc::ImapEvent::Error
+                crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Invalid quota root parameter.")
                     .id(arguments.tag.to_string())
@@ -104,20 +107,20 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_access_token(account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         let used_quota = self
             .server
             .get_used_quota(account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::GetQuota),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::GetQuota),
             SpanId = self.session_id,
             Id = arguments.name.clone(),
             Details = vec![
-                trc::Value::from(used_quota),
-                trc::Value::from(access_token.quota)
+                crate::trc::Value::from(used_quota),
+                crate::trc::Value::from(access_token.quota)
             ],
             Elapsed = op_start.elapsed()
         );
@@ -144,19 +147,19 @@ impl<T: SessionStream> SessionData<T> {
             .serialize(response.serialize()))
     }
 
-    pub async fn get_quota_root(&self, arguments: Arguments) -> trc::Result<Vec<u8>> {
+    pub async fn get_quota_root(&self, arguments: Arguments) -> crate::trc::Result<Vec<u8>> {
         let op_start = Instant::now();
 
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate mailbox
         let account_id = if let Some(mailbox) = self.get_mailbox_by_name(&arguments.name) {
             mailbox.account_id
         } else {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("Mailbox does not exist.")
                 .code(ResponseCode::TryCreate)
@@ -168,20 +171,20 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_access_token(account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         let used_quota = self
             .server
             .get_used_quota(account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::GetQuota),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::GetQuota),
             SpanId = self.session_id,
             MailboxName = arguments.name.clone(),
             Details = vec![
-                trc::Value::from(used_quota),
-                trc::Value::from(access_token.quota)
+                crate::trc::Value::from(used_quota),
+                crate::trc::Value::from(access_token.quota)
             ],
             Elapsed = op_start.elapsed()
         );

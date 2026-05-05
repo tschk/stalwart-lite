@@ -12,7 +12,7 @@ pub mod reference;
 pub mod websocket;
 
 use self::method::MethodName;
-use crate::{
+use crate::jmap_proto::{
     method::{
         availability::GetAvailabilityRequest,
         changes::ChangesRequest,
@@ -39,9 +39,9 @@ use crate::{
     },
     request::{capability::CapabilityIds, reference::MaybeIdReference},
 };
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::{Null, Value};
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug)]
 pub struct Request<'x> {
@@ -72,7 +72,7 @@ pub enum RequestMethod<'x> {
     LookupBlob(BlobLookupRequest),
     UploadBlob(BlobUploadRequest),
     Echo(Value<'x, Null, Null>),
-    Error(trc::Error),
+    Error(crate::trc::Error),
 }
 
 #[derive(Debug)]

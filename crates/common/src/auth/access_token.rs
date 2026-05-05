@@ -5,29 +5,29 @@
  */
 
 use super::{AccessToken, ResourceToken, TenantInfo, roles::RolePermissions};
-use crate::{
+use crate::common::{
     Server,
     ipc::BroadcastEvent,
     listener::limiter::{ConcurrencyLimiter, LimiterResult},
 };
-use ahash::AHashSet;
-use directory::{
+use crate::directory::{
     Permission, Principal, PrincipalData, QueryParams, Type,
     backend::internal::{
         lookup::DirectoryStore,
         manage::{ChangedPrincipals, ManageDirectory},
     },
 };
+use crate::store::{query::acl::AclQuery, rand};
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::Collection};
+use crate::utils::map::{
+    bitmap::{Bitmap, BitmapItem},
+    vec_map::VecMap,
+};
+use ahash::AHashSet;
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
-};
-use store::{query::acl::AclQuery, rand};
-use trc::AddContext;
-use types::{acl::Acl, collection::Collection};
-use utils::map::{
-    bitmap::{Bitmap, BitmapItem},
-    vec_map::VecMap,
 };
 
 pub enum PrincipalOrId {
@@ -40,7 +40,7 @@ impl Server {
         &self,
         principal: Principal,
         revision: u64,
-    ) -> trc::Result<AccessToken> {
+    ) -> crate::trc::Result<AccessToken> {
         let mut role_permissions = RolePermissions::default();
 
         // Extract data
@@ -98,7 +98,7 @@ impl Server {
 
         #[cfg(feature = "enterprise")]
         {
-            use directory::{QueryParams, ROLE_USER};
+            use crate::directory::{QueryParams, ROLE_USER};
 
             if let Some(tenant_id) = tenant_id {
                 if self.is_enterprise_edition() {
@@ -112,13 +112,13 @@ impl Server {
                             .store()
                             .query(QueryParams::id(tenant_id).with_return_member_of(false))
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .ok_or_else(|| {
-                                trc::SecurityEvent::Unauthorized
+                                crate::trc::SecurityEvent::Unauthorized
                                     .into_err()
                                     .details("Tenant not found")
                                     .id(tenant_id)
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                             })?
                             .quota()
                             .unwrap_or_default(),
@@ -138,7 +138,7 @@ impl Server {
                 .store()
                 .query(QueryParams::id(group_id).with_return_member_of(false))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 && group.typ == Type::Group
             {
                 emails.extend(group.into_email_addresses());
@@ -181,17 +181,20 @@ impl Server {
                 .store()
                 .acl_query(AclQuery::HasAccess { grant_account_id })
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 if !access_token.is_member(acl_item.to_account_id) {
                     let acl = Bitmap::<Acl>::from(acl_item.permissions);
                     let collection = acl_item.to_collection;
                     if !collection.is_valid() {
-                        return Err(trc::StoreEvent::DataCorruption
-                            .ctx(trc::Key::Reason, "Corrupted collection found in ACL key.")
+                        return Err(crate::trc::StoreEvent::DataCorruption
+                            .ctx(
+                                crate::trc::Key::Reason,
+                                "Corrupted collection found in ACL key.",
+                            )
                             .details(format!("{acl_item:?}"))
                             .account_id(grant_account_id)
-                            .caused_by(trc::location!()));
+                            .caused_by(crate::trc::location!()));
                     }
 
                     let mut collections: Bitmap<Collection> = Bitmap::new();
@@ -217,7 +220,11 @@ impl Server {
         Ok(access_token.update_size())
     }
 
-    async fn build_access_token(&self, account_id: u32, revision: u64) -> trc::Result<AccessToken> {
+    async fn build_access_token(
+        &self,
+        account_id: u32,
+        revision: u64,
+    ) -> crate::trc::Result<AccessToken> {
         let err = match self
             .directory()
             .query(QueryParams::id(account_id).with_return_member_of(true))
@@ -228,10 +235,10 @@ impl Server {
                     .build_access_token_from_principal(principal, revision)
                     .await;
             }
-            Ok(None) => Err(trc::AuthEvent::Error
+            Ok(None) => Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Account not found.")
-                .caused_by(trc::location!())),
+                .caused_by(crate::trc::location!())),
             Err(err) => Err(err),
         };
 
@@ -247,7 +254,7 @@ impl Server {
     pub async fn get_access_token(
         &self,
         principal: impl Into<PrincipalOrId>,
-    ) -> trc::Result<Arc<AccessToken>> {
+    ) -> crate::trc::Result<Arc<AccessToken>> {
         let principal = principal.into();
 
         // Obtain current revision
@@ -315,9 +322,9 @@ impl Server {
                             }
                         }
                         Err(err) => {
-                            trc::error!(
+                            crate::trc::error!(
                                 err.details("Failed to list principals")
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                                     .account_id(*id)
                             );
                         }
@@ -346,9 +353,9 @@ impl Server {
                             ids = members.into_iter();
                         }
                         Err(err) => {
-                            trc::error!(
+                            crate::trc::error!(
                                 err.details("Failed to obtain principal")
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                                     .account_id(id)
                             );
                         }
@@ -489,11 +496,11 @@ impl AccessToken {
         self.permissions.get(permission.id() as usize)
     }
 
-    pub fn assert_has_permission(&self, permission: Permission) -> trc::Result<bool> {
+    pub fn assert_has_permission(&self, permission: Permission) -> crate::trc::Result<bool> {
         if self.has_permission(permission) {
             Ok(true)
         } else {
-            Err(trc::SecurityEvent::Unauthorized
+            Err(crate::trc::SecurityEvent::Unauthorized
                 .into_err()
                 .details(permission.name()))
         }

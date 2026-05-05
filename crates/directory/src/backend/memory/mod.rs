@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::Store;
 use ahash::{AHashMap, AHashSet};
-use store::Store;
 
-use crate::Principal;
+use crate::directory::Principal;
 
 pub mod config;
 pub mod lookup;

@@ -4,26 +4,29 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
+use crate::directory::Permission;
+use crate::email::cache::{MessageCacheFetch, mailbox::MailboxCacheAccess};
+use crate::imap::{
     core::{Session, SessionData},
     op::ImapContext,
     spawn_op,
 };
-use common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use email::cache::{MessageCacheFetch, mailbox::MailboxCacheAccess};
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::{create::Arguments, list::Attribute},
     receiver::Request,
 };
+use crate::store::write::BatchBuilder;
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::Collection, id::Id, special_use::SpecialUse};
 use std::time::Instant;
-use store::write::BatchBuilder;
-use trc::AddContext;
-use types::{acl::Acl, collection::Collection, id::Id, special_use::SpecialUse};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_create(&mut self, requests: Vec<Request<Command>>) -> trc::Result<()> {
+    pub async fn handle_create(
+        &mut self,
+        requests: Vec<Request<Command>>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapCreate)?;
 
@@ -51,19 +54,19 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> SessionData<T> {
-    pub async fn create_folder(&self, arguments: Arguments) -> trc::Result<StatusResponse> {
+    pub async fn create_folder(&self, arguments: Arguments) -> crate::trc::Result<StatusResponse> {
         let op_start = Instant::now();
 
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate mailbox name
         let params = self
             .validate_mailbox_create(&arguments.mailbox_name, arguments.mailbox_role)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         debug_assert!(!params.path.is_empty());
 
         // Build batch
@@ -78,10 +81,11 @@ impl<T: SessionStream> SessionData<T> {
                 params.path.len() as u64,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut batch = BatchBuilder::new();
         for (pos, &path_item) in params.path.iter().enumerate() {
-            let mut mailbox = email::mailbox::Mailbox::new(path_item).with_parent_id(parent_id);
+            let mut mailbox =
+                crate::email::mailbox::Mailbox::new(path_item).with_parent_id(parent_id);
 
             if pos == params.path.len() - 1
                 && let Some(mailbox_role) = arguments.mailbox_role.map(attr_to_role)
@@ -95,7 +99,7 @@ impl<T: SessionStream> SessionData<T> {
                 .with_collection(Collection::Mailbox)
                 .with_document(mailbox_id)
                 .custom(ObjectIndexBuilder::<(), _>::new().with_changes(mailbox))
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
                 .commit_point();
             parent_id = mailbox_id + 1;
             create_ids.push(mailbox_id);
@@ -104,16 +108,16 @@ impl<T: SessionStream> SessionData<T> {
         self.server
             .commit_batch(batch)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::CreateMailbox),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::CreateMailbox),
             SpanId = self.session_id,
             MailboxName = arguments.mailbox_name.clone(),
             AccountId = params.account_id,
             MailboxId = create_ids
                 .iter()
-                .map(|&id| trc::Value::from(id))
+                .map(|&id| crate::trc::Value::from(id))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );
@@ -130,7 +134,7 @@ impl<T: SessionStream> SessionData<T> {
         &self,
         mailbox_name: &'x str,
         mailbox_role: Option<Attribute>,
-    ) -> trc::Result<CreateParams<'x>> {
+    ) -> crate::trc::Result<CreateParams<'x>> {
         // Remove leading and trailing separators
         let mut name = mailbox_name.trim();
         if let Some(suffix) = name.strip_prefix('/') {
@@ -140,7 +144,7 @@ impl<T: SessionStream> SessionData<T> {
             name = prefix.trim();
         }
         if name.is_empty() {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(format!("Invalid folder name '{mailbox_name}'.",)));
         }
@@ -152,11 +156,11 @@ impl<T: SessionStream> SessionData<T> {
             for path_item in name.split('/') {
                 let path_item = path_item.trim();
                 if path_item.is_empty() {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Invalid empty path item."));
                 } else if path_item.len() > self.server.core.jmap.mailbox_name_max_len {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Mailbox name is too long."));
                 }
@@ -164,7 +168,7 @@ impl<T: SessionStream> SessionData<T> {
             }
 
             if path.len() > self.server.core.jmap.mailbox_max_depth {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Mailbox path is too deep."));
             }
@@ -181,7 +185,7 @@ impl<T: SessionStream> SessionData<T> {
                 if path.first() == Some(&self.server.core.jmap.shared_folder.as_str()) {
                     // Shared Folders/<username>/<folder>
                     if path.len() < 3 {
-                        return Err(trc::ImapEvent::Error
+                        return Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details("Mailboxes under root shared folders are not allowed.")
                             .code(ResponseCode::Cannot));
@@ -204,7 +208,7 @@ impl<T: SessionStream> SessionData<T> {
                         (account, full_path, prefix)
                     } else {
                         #[allow(clippy::unnecessary_literal_unwrap)]
-                        return Err(trc::ImapEvent::Error.into_err().details(format!(
+                        return Err(crate::trc::ImapEvent::Error.into_err().details(format!(
                             "Shared account '{}' not found.",
                             prefix.unwrap_or_default()
                         )));
@@ -217,16 +221,16 @@ impl<T: SessionStream> SessionData<T> {
 
                     (account, path.join("/"), None)
                 } else {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Internal server error.")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                         .code(ResponseCode::ContactAdmin));
                 };
 
             // Locate parent mailbox
             if account.mailbox_names.contains_key(&full_path) {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details(format!("Mailbox '{}' already exists.", full_path))
                     .code(ResponseCode::AlreadyExists));
@@ -265,7 +269,7 @@ impl<T: SessionStream> SessionData<T> {
                 .check_mailbox_acl(account_id, parent_mailbox_id, Acl::CreateChild)
                 .await?
             {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("You are not allowed to create sub mailboxes under this mailbox.")
                     .code(ResponseCode::NoPerm));
@@ -274,10 +278,10 @@ impl<T: SessionStream> SessionData<T> {
             && !self
                 .get_access_token()
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .is_member(account_id)
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("You are not allowed to create root folders under shared folders.")
                 .code(ResponseCode::Cannot));
@@ -295,11 +299,11 @@ impl<T: SessionStream> SessionData<T> {
                     .server
                     .get_cached_messages(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .mailbox_by_role(&special_use)
                     .is_some()
                 {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details(format!(
                             "A mailbox with role '{}' already exists.",

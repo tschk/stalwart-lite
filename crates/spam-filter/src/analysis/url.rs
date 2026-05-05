@@ -5,19 +5,19 @@
  */
 
 use super::{ElementLocation, is_trusted_domain, is_url_redirector};
-use crate::modules::dnsbl::check_dnsbl;
-use crate::modules::expression::StringResolver;
-use crate::modules::html::SRC;
-use crate::{
+use crate::common::Server;
+use crate::common::config::spamfilter::{Element, IpResolver, Location};
+use crate::common::scripts::IsMixedCharset;
+use crate::common::scripts::functions::unicode::CharUtils;
+use crate::nlp::tokenizers::types::TokenType;
+use crate::spam_filter::modules::dnsbl::check_dnsbl;
+use crate::spam_filter::modules::expression::StringResolver;
+use crate::spam_filter::modules::html::SRC;
+use crate::spam_filter::{
     Hostname, SpamFilterContext, TextPart,
     modules::html::{A, HREF, HtmlToken},
 };
-use common::Server;
-use common::config::spamfilter::{Element, IpResolver, Location};
-use common::scripts::IsMixedCharset;
-use common::scripts::functions::unicode::CharUtils;
 use hyper::{Uri, header::LOCATION};
-use nlp::tokenizers::types::TokenType;
 use reqwest::redirect::Policy;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
@@ -212,7 +212,7 @@ impl SpamFilterAnalyzeUrl for Server {
                                 }
                                 Ok(None) => {}
                                 Err(err) => {
-                                    trc::error!(err.span_id(ctx.input.span_id));
+                                    crate::trc::error!(err.span_id(ctx.input.span_id));
                                 }
                             }
                             break;
@@ -285,7 +285,7 @@ async fn http_get_header(
     url: &str,
     header: hyper::header::HeaderName,
     timeout: Duration,
-) -> trc::Result<Option<String>> {
+) -> crate::trc::Result<Option<String>> {
     #[cfg(feature = "test_mode")]
     {
         return if url.contains("redirect.") {
@@ -301,7 +301,7 @@ async fn http_get_header(
         .danger_accept_invalid_certs(true)
         .build()
         .map_err(|err| {
-            trc::SieveEvent::RuntimeError
+            crate::trc::SieveEvent::RuntimeError
                 .into_err()
                 .reason(err)
                 .details("Failed to build request")
@@ -310,7 +310,7 @@ async fn http_get_header(
         .send()
         .await
         .map_err(|err| {
-            trc::SieveEvent::RuntimeError
+            crate::trc::SieveEvent::RuntimeError
                 .into_err()
                 .reason(err)
                 .details("Failed to send request")

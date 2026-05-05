@@ -20,7 +20,7 @@ use rustls::{
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio_rustls::{Accept, LazyConfigAcceptor};
 
-use crate::{Inner, Server};
+use crate::common::{Inner, Server};
 
 use super::{
     ServerInstance, SessionStream, TcpAcceptor, TcpAcceptorResult,
@@ -70,8 +70,8 @@ impl CertificateResolver {
                             .and_then(|(_, domain)| certs.get(domain))
                     })
                     .or_else(|| {
-                        trc::event!(
-                            Tls(trc::TlsEvent::CertificateNotFound),
+                        crate::trc::event!(
+                            Tls(crate::trc::TlsEvent::CertificateNotFound),
                             Hostname = name.to_string(),
                         );
                         certs.get("*")
@@ -81,15 +81,15 @@ impl CertificateResolver {
         .or_else(|| match certs.len().cmp(&1) {
             Ordering::Equal => certs.values().next(),
             Ordering::Greater => {
-                trc::event!(
-                    Tls(trc::TlsEvent::MultipleCertificatesAvailable),
+                crate::trc::event!(
+                    Tls(crate::trc::TlsEvent::MultipleCertificatesAvailable),
                     Total = certs.len(),
                 );
                 certs.values().next()
             }
             Ordering::Less => {
-                trc::event!(
-                    Tls(trc::TlsEvent::NoCertificatesAvailable),
+                crate::trc::event!(
+                    Tls(crate::trc::TlsEvent::NoCertificatesAvailable),
                     Total = certs.len(),
                 );
                 self.inner.data.tls_self_signed_cert.as_ref()
@@ -126,8 +126,8 @@ impl TcpAcceptor {
                                     Some(domain) => {
                                         let key = core.build_acme_certificate(domain).await;
 
-                                        trc::event!(
-                                            Acme(trc::AcmeEvent::ClientSuppliedSni),
+                                        crate::trc::event!(
+                                            Acme(crate::trc::AcmeEvent::ClientSuppliedSni),
                                             ListenerId = instance.id.clone(),
                                             Domain = domain.to_string(),
                                             Result = key.is_some(),
@@ -136,8 +136,8 @@ impl TcpAcceptor {
                                         key
                                     }
                                     None => {
-                                        trc::event!(
-                                            Acme(trc::AcmeEvent::ClientMissingSni),
+                                        crate::trc::event!(
+                                            Acme(crate::trc::AcmeEvent::ClientMissingSni),
                                             ListenerId = instance.id.clone(),
                                         );
 
@@ -150,16 +150,16 @@ impl TcpAcceptor {
                                     .await
                                 {
                                     Ok(mut tls) => {
-                                        trc::event!(
-                                            Acme(trc::AcmeEvent::TlsAlpnReceived),
+                                        crate::trc::event!(
+                                            Acme(crate::trc::AcmeEvent::TlsAlpnReceived),
                                             ListenerId = instance.id.clone(),
                                         );
 
                                         let _ = tls.shutdown().await;
                                     }
                                     Err(err) => {
-                                        trc::event!(
-                                            Acme(trc::AcmeEvent::TlsAlpnError),
+                                        crate::trc::event!(
+                                            Acme(crate::trc::AcmeEvent::TlsAlpnError),
                                             ListenerId = instance.id.clone(),
                                             Reason = err.to_string(),
                                         );
@@ -172,8 +172,8 @@ impl TcpAcceptor {
                             }
                         }
                         Err(err) => {
-                            trc::event!(
-                                Tls(trc::TlsEvent::HandshakeError),
+                            crate::trc::event!(
+                                Tls(crate::trc::TlsEvent::HandshakeError),
                                 ListenerId = instance.id.clone(),
                                 Reason = err.to_string(),
                             );

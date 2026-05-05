@@ -5,6 +5,7 @@
  */
 
 use self::tokenizer::TokenMap;
+use crate::utils::config::{Rate, utils::ParseValue};
 use compact_str::CompactString;
 use regex::Regex;
 use std::{
@@ -13,7 +14,6 @@ use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     time::Duration,
 };
-use utils::config::{Rate, utils::ParseValue};
 
 pub const V_RECIPIENT: u32 = 0;
 pub const V_RECIPIENT_DOMAIN: u32 = 1;

@@ -5,8 +5,8 @@
  */
 
 use super::{ArchivedIdentity, Identity};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use types::collection::SyncCollection;
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::types::collection::SyncCollection;
 
 impl IndexableObject for Identity {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

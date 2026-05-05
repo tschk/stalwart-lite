@@ -5,17 +5,7 @@
  */
 
 use super::{ArcSeal, AuthResult, DkimSign};
-use crate::{
-    core::{Session, SessionAddress, State},
-    inbound::milter::Modification,
-    queue::{
-        self, Message, MessageSource, MessageWrapper, QueueEnvelope, RCPT_SPAM_PAYLOAD,
-        quota::HasQueueQuota,
-    },
-    reporting::analysis::AnalyzeReport,
-    scripts::ScriptResult,
-};
-use common::{
+use crate::common::{
     config::{
         smtp::{
             auth::VerifyStrategy,
@@ -28,6 +18,18 @@ use common::{
     psl,
     scripts::ScriptModification,
 };
+use crate::smtp::{
+    core::{Session, SessionAddress, State},
+    inbound::milter::Modification,
+    queue::{
+        self, Message, MessageSource, MessageWrapper, QueueEnvelope, RCPT_SPAM_PAYLOAD,
+        quota::HasQueueQuota,
+    },
+    reporting::analysis::AnalyzeReport,
+    scripts::ScriptResult,
+};
+use crate::trc::SmtpEvent;
+use crate::utils::{DomainPart, config::Rate};
 use mail_auth::{
     AuthenticatedMessage, AuthenticationResults, DkimResult, DmarcResult, ReceivedSpf,
     common::{headers::HeaderWriter, verify::VerifySignature},
@@ -43,8 +45,6 @@ use std::{
     borrow::Cow,
     time::{Instant, SystemTime},
 };
-use trc::SmtpEvent;
-use utils::{DomainPart, config::Rate};
 
 impl<T: SessionStream> Session<T> {
     pub async fn queue_message(&mut self) -> Cow<'static, [u8]> {
@@ -56,7 +56,7 @@ impl<T: SessionStream> Session<T> {
         {
             Some(parsed_message) => parsed_message,
             None => {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::MessageParseFailed),
                     SpanId = self.data.session_id,
                 );
@@ -84,7 +84,7 @@ impl<T: SessionStream> Session<T> {
                 .await
                 .unwrap_or(50)
         {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::LoopDetected),
                 SpanId = self.data.session_id,
                 Total = auth_message.received_headers_count(),
@@ -135,7 +135,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(if pass {
                     SmtpEvent::DkimPass
                 } else {
@@ -143,7 +143,10 @@ impl<T: SessionStream> Session<T> {
                 }),
                 SpanId = self.data.session_id,
                 Strict = strict,
-                Result = dkim_output.iter().map(trc::Error::from).collect::<Vec<_>>(),
+                Result = dkim_output
+                    .iter()
+                    .map(crate::trc::Error::from)
+                    .collect::<Vec<_>>(),
                 Elapsed = time.elapsed(),
             );
 
@@ -189,7 +192,7 @@ impl<T: SessionStream> Session<T> {
             let strict = arc.is_strict();
             let pass = matches!(arc_output.result(), DkimResult::Pass | DkimResult::None);
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(if pass {
                     SmtpEvent::ArcPass
                 } else {
@@ -197,7 +200,7 @@ impl<T: SessionStream> Session<T> {
                 }),
                 SpanId = self.data.session_id,
                 Strict = strict,
-                Result = trc::Error::from(arc_output.result()),
+                Result = crate::trc::Error::from(arc_output.result()),
                 Elapsed = time.elapsed(),
             );
 
@@ -288,7 +291,7 @@ impl<T: SessionStream> Session<T> {
                 };
                 let dmarc_policy = dmarc_output.policy();
 
-                trc::event!(
+                crate::trc::event!(
                     Smtp(if pass {
                         SmtpEvent::DmarcPass
                     } else {
@@ -298,7 +301,7 @@ impl<T: SessionStream> Session<T> {
                     Strict = strict,
                     Domain = dmarc_output.domain().to_string(),
                     Policy = dmarc_policy.to_string(),
-                    Result = trc::Error::from(&dmarc_result),
+                    Result = crate::trc::Error::from(&dmarc_result),
                     Elapsed = time.elapsed(),
                 );
 
@@ -415,8 +418,8 @@ impl<T: SessionStream> Session<T> {
                     set.write_header(&mut headers);
                 }
                 Err(err) => {
-                    trc::error!(
-                        trc::Error::from(err)
+                    crate::trc::error!(
+                        crate::trc::Error::from(err)
                             .span_id(self.data.session_id)
                             .details("Failed to ARC seal message")
                     );
@@ -659,8 +662,8 @@ impl<T: SessionStream> Session<T> {
                         signature.write_header(&mut headers);
                     }
                     Err(err) => {
-                        trc::error!(
-                            trc::Error::from(err)
+                        crate::trc::error!(
+                            crate::trc::Error::from(err)
                                 .span_id(self.data.session_id)
                                 .details("Failed to DKIM sign message")
                         );
@@ -872,7 +875,7 @@ impl<T: SessionStream> Session<T> {
             {
                 Ok(true)
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::TooManyMessages),
                     SpanId = self.data.session_id,
                     Limit = self.data.messages_sent
@@ -883,7 +886,7 @@ impl<T: SessionStream> Session<T> {
                 Ok(false)
             }
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RcptToMissing),
                 SpanId = self.data.session_id,
             );

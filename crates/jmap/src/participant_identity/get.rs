@@ -4,38 +4,38 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use directory::{PrincipalData, QueryParams};
-use groupware::calendar::{ParticipantIdentities, ParticipantIdentity};
-use jmap_proto::{
+use crate::common::Server;
+use crate::directory::{PrincipalData, QueryParams};
+use crate::groupware::calendar::{ParticipantIdentities, ParticipantIdentity};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::participant_identity::{self, ParticipantIdentityProperty, ParticipantIdentityValue},
 };
 use jmap_tools::{Map, Value};
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::PrincipalField, id::Id};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::PrincipalField, id::Id};
 
 pub trait ParticipantIdentityGet: Sync + Send {
     fn participant_identity_get(
         &self,
         request: GetRequest<participant_identity::ParticipantIdentity>,
-    ) -> impl Future<Output = trc::Result<GetResponse<participant_identity::ParticipantIdentity>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<participant_identity::ParticipantIdentity>>> + Send;
 
     fn participant_identity_get_or_create(
         &self,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Option<Archive<AlignedBytes>>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<Archive<AlignedBytes>>>> + Send;
 }
 
 impl ParticipantIdentityGet for Server {
     async fn participant_identity_get(
         &self,
         mut request: GetRequest<participant_identity::ParticipantIdentity>,
-    ) -> trc::Result<GetResponse<participant_identity::ParticipantIdentity>> {
+    ) -> crate::trc::Result<GetResponse<participant_identity::ParticipantIdentity>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             ParticipantIdentityProperty::Id,
@@ -60,7 +60,7 @@ impl ParticipantIdentityGet for Server {
 
         let identities = identities
             .unarchive::<ParticipantIdentities>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let ids = if let Some(ids) = ids {
             ids
@@ -114,7 +114,7 @@ impl ParticipantIdentityGet for Server {
     async fn participant_identity_get_or_create(
         &self,
         account_id: u32,
-    ) -> trc::Result<Option<Archive<AlignedBytes>>> {
+    ) -> crate::trc::Result<Option<Archive<AlignedBytes>>> {
         if let Some(identities) = self
             .store()
             .get_value::<Archive<AlignedBytes>>(ValueKey::property(
@@ -135,7 +135,7 @@ impl ParticipantIdentityGet for Server {
             .directory
             .query(QueryParams::id(account_id).with_return_member_of(false))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             principal
         } else {
@@ -179,10 +179,10 @@ impl ParticipantIdentityGet for Server {
                 PrincipalField::ParticipantIdentities,
                 Archiver::new(identities)
                     .serialize()
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             );
 
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch).await.caused_by(crate::trc::location!())?;
 
         self.store()
             .get_value::<Archive<AlignedBytes>>(ValueKey::property(

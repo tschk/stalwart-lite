@@ -5,12 +5,12 @@
  */
 
 use super::NextHop;
-use crate::queue::{Error, ErrorDetails, HostResponse, Status};
-use common::{
+use crate::common::{
     Server,
     config::smtp::queue::{ConnectionStrategy, IpAndHost, MxConfig},
     expr::{V_MX, functions::ResolveVariable},
 };
+use crate::smtp::queue::{Error, ErrorDetails, HostResponse, Status};
 use mail_auth::{IpLookupStrategy, MX};
 use rand::{Rng, seq::SliceRandom};
 use std::{future::Future, net::IpAddr, sync::Arc};

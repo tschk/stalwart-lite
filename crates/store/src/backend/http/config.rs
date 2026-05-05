@@ -10,11 +10,11 @@ use std::{
     time::Duration,
 };
 
+use crate::utils::config::Config;
 use ahash::AHashMap;
 use arc_swap::ArcSwap;
-use utils::config::Config;
 
-use crate::{InMemoryStore, Stores};
+use crate::store::{InMemoryStore, Stores};
 
 use super::{HttpStore, HttpStoreConfig, HttpStoreFormat};
 

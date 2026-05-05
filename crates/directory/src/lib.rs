@@ -4,8 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-#![warn(clippy::large_futures)]
+#![allow(clippy::large_futures)]
 
+use crate::store::Store;
+use crate::trc::ipc::bitset::Bitset;
+use crate::types::collection::Collection;
 use ahash::AHashMap;
 use backend::{
     imap::{ImapDirectory, ImapError},
@@ -20,9 +23,6 @@ use ldap3::LdapError;
 use mail_send::Credentials;
 use proc_macros::EnumMethods;
 use std::{fmt::Debug, sync::Arc};
-use store::Store;
-use trc::ipc::bitset::Bitset;
-use types::collection::Collection;
 
 pub mod backend;
 pub mod core;
@@ -477,65 +477,65 @@ pub struct Directories {
 }
 
 trait IntoError {
-    fn into_error(self) -> trc::Error;
+    fn into_error(self) -> crate::trc::Error;
 }
 
 impl IntoError for PoolError<LdapError> {
-    fn into_error(self) -> trc::Error {
+    fn into_error(self) -> crate::trc::Error {
         match self {
             PoolError::Backend(error) => error.into_error(),
-            PoolError::Timeout(_) => trc::StoreEvent::PoolError
+            PoolError::Timeout(_) => crate::trc::StoreEvent::PoolError
                 .into_err()
                 .details("Connection timed out"),
-            err => trc::StoreEvent::PoolError.reason(err),
+            err => crate::trc::StoreEvent::PoolError.reason(err),
         }
     }
 }
 
 impl IntoError for PoolError<ImapError> {
-    fn into_error(self) -> trc::Error {
+    fn into_error(self) -> crate::trc::Error {
         match self {
             PoolError::Backend(error) => error.into_error(),
-            PoolError::Timeout(_) => trc::StoreEvent::PoolError
+            PoolError::Timeout(_) => crate::trc::StoreEvent::PoolError
                 .into_err()
                 .details("Connection timed out"),
-            err => trc::StoreEvent::PoolError.reason(err),
+            err => crate::trc::StoreEvent::PoolError.reason(err),
         }
     }
 }
 
 impl IntoError for PoolError<mail_send::Error> {
-    fn into_error(self) -> trc::Error {
+    fn into_error(self) -> crate::trc::Error {
         match self {
             PoolError::Backend(error) => error.into_error(),
-            PoolError::Timeout(_) => trc::StoreEvent::PoolError
+            PoolError::Timeout(_) => crate::trc::StoreEvent::PoolError
                 .into_err()
                 .details("Connection timed out"),
-            err => trc::StoreEvent::PoolError.reason(err),
+            err => crate::trc::StoreEvent::PoolError.reason(err),
         }
     }
 }
 
 impl IntoError for ImapError {
-    fn into_error(self) -> trc::Error {
-        trc::ImapEvent::Error.into_err().reason(self)
+    fn into_error(self) -> crate::trc::Error {
+        crate::trc::ImapEvent::Error.into_err().reason(self)
     }
 }
 
 impl IntoError for mail_send::Error {
-    fn into_error(self) -> trc::Error {
-        trc::SmtpEvent::Error.into_err().reason(self)
+    fn into_error(self) -> crate::trc::Error {
+        crate::trc::SmtpEvent::Error.into_err().reason(self)
     }
 }
 
 impl IntoError for LdapError {
-    fn into_error(self) -> trc::Error {
+    fn into_error(self) -> crate::trc::Error {
         if let LdapError::LdapResult { result } = &self {
-            trc::StoreEvent::LdapError
-                .ctx(trc::Key::Code, result.rc)
+            crate::trc::StoreEvent::LdapError
+                .ctx(crate::trc::Key::Code, result.rc)
                 .reason(self)
         } else {
-            trc::StoreEvent::LdapError.reason(self)
+            crate::trc::StoreEvent::LdapError.reason(self)
         }
     }
 }

@@ -7,7 +7,7 @@
 use compact_str::ToCompactString;
 use mail_parser::decoders::charsets::map::charset_decoder;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::thread::{self, Algorithm},
     receiver::{Request, bad},
@@ -17,7 +17,7 @@ use super::search::parse_filters;
 
 impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_thread(self) -> trc::Result<thread::Arguments> {
+    pub fn parse_thread(self) -> crate::trc::Result<thread::Arguments> {
         if self.tokens.is_empty() {
             return Err(self.into_error("Missing thread criteria."));
         }
@@ -73,7 +73,7 @@ impl Algorithm {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             search::Filter,
             thread::{self, Algorithm},

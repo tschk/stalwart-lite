@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::blake3;
 use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit, Nonce, aead::Aead};
-use store::blake3;
 
 pub struct SymmetricEncrypt {
     aes: Aes256GcmSiv,

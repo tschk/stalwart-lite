@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{ResponseCode, StatusResponse};
+use crate::imap_proto::{ResponseCode, StatusResponse};
 
 use super::{ImapResponse, Sequence, list::ListItem};
 
@@ -131,7 +131,7 @@ impl Exists {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{ImapResponse, list::ListItem};
+    use crate::imap_proto::protocol::{ImapResponse, list::ListItem};
 
     use super::HighestModSeq;
 

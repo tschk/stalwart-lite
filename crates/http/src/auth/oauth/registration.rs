@@ -6,22 +6,22 @@
 
 use std::future::Future;
 
-use common::{
+use crate::common::{
     Server,
     auth::oauth::registration::{ClientRegistrationRequest, ClientRegistrationResponse},
 };
 
-use directory::{
+use crate::directory::{
     Permission, QueryParams, Type,
     backend::internal::{
         PrincipalField, PrincipalSet, lookup::DirectoryStore, manage::ManageDirectory,
     },
 };
-use store::rand::{Rng, distr::Alphanumeric, rng};
-use trc::{AddContext, AuthEvent};
+use crate::store::rand::{Rng, distr::Alphanumeric, rng};
+use crate::trc::{AddContext, AuthEvent};
 
-use crate::auth::authenticate::Authenticator;
-use http_proto::{request::fetch_body, *};
+use crate::http::auth::authenticate::Authenticator;
+use crate::http_proto::{request::fetch_body, *};
 
 use super::ErrorType;
 
@@ -30,21 +30,21 @@ pub trait ClientRegistrationHandler: Sync + Send {
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn validate_client_registration(
         &self,
         client_id: &str,
         redirect_uri: Option<&str>,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Option<ErrorType>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<ErrorType>>> + Send;
 }
 impl ClientRegistrationHandler for Server {
     async fn handle_oauth_registration_request(
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         if !self.core.oauth.allow_anonymous_client_registration {
             // Authenticate request
             let (_, access_token) = self.authenticate_headers(req, &session, true).await?;
@@ -62,7 +62,8 @@ impl ClientRegistrationHandler for Server {
             body.as_deref().unwrap_or_default(),
         )
         .map_err(|err| {
-            trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+            crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                .from_json_error(err)
         })?;
 
         // Generate client ID
@@ -83,9 +84,9 @@ impl ClientRegistrationHandler for Server {
                 None,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        trc::event!(
+        crate::trc::event!(
             Auth(AuthEvent::ClientRegistration),
             Id = client_id.to_string(),
             RemoteIp = session.remote_ip
@@ -105,7 +106,7 @@ impl ClientRegistrationHandler for Server {
         client_id: &str,
         redirect_uri: Option<&str>,
         account_id: u32,
-    ) -> trc::Result<Option<ErrorType>> {
+    ) -> crate::trc::Result<Option<ErrorType>> {
         if !self.core.oauth.require_client_authentication {
             return Ok(None);
         }
@@ -115,7 +116,7 @@ impl ClientRegistrationHandler for Server {
             .store()
             .query(QueryParams::name(client_id).with_return_member_of(false))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .filter(|p| p.typ() == Type::OauthClient)
         {
             if let Some(redirect_uri) = redirect_uri {
@@ -137,7 +138,7 @@ impl ClientRegistrationHandler for Server {
         if self
             .get_access_token(account_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .has_permission(Permission::OauthClientOverride)
         {
             return Ok(None);

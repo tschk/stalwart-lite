@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::delete,
     receiver::{Request, bad},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl Request<Command> {
-    pub fn parse_delete(self, is_utf8: bool) -> trc::Result<delete::Arguments> {
+    pub fn parse_delete(self, is_utf8: bool) -> crate::trc::Result<delete::Arguments> {
         match self.tokens.len() {
             1 => Ok(delete::Arguments {
                 mailbox_name: utf7_maybe_decode(
@@ -36,7 +36,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::delete, receiver::Receiver};
+    use crate::imap_proto::{protocol::delete, receiver::Receiver};
 
     #[test]
     fn parse_delete() {

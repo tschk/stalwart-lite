@@ -4,24 +4,24 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::acl::JmapRights, calendar::Availability, changes::state::JmapCacheState};
+use crate::jmap::{api::acl::JmapRights, calendar::Availability, changes::state::JmapCacheState};
 use calcard::jscalendar::{JSCalendarAlertAction, JSCalendarRelativeTo, JSCalendarType};
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{
     cache::GroupwareCache,
     calendar::{
         ALERT_EMAIL, ALERT_RELATIVE_TO_END, ArchivedDefaultAlert, CALENDAR_INVISIBLE,
         CALENDAR_SUBSCRIBED, Calendar,
     },
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::calendar::{self, CalendarProperty, CalendarValue, IncludeInAvailability},
 };
 use jmap_tools::{Key, Map, Value};
-use store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, ValueClass}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, ValueClass}};
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     collection::{Collection, SyncCollection},
     field::PrincipalField,
@@ -32,7 +32,7 @@ pub trait CalendarGet: Sync + Send {
         &self,
         request: GetRequest<calendar::Calendar>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<calendar::Calendar>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<calendar::Calendar>>> + Send;
 }
 
 impl CalendarGet for Server {
@@ -40,7 +40,7 @@ impl CalendarGet for Server {
         &self,
         mut request: GetRequest<calendar::Calendar>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<calendar::Calendar>> {
+    ) -> crate::trc::Result<GetResponse<calendar::Calendar>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             CalendarProperty::Id,
@@ -72,7 +72,7 @@ impl CalendarGet for Server {
                 class: ValueClass::Property(PrincipalField::DefaultCalendarId.into()),
             })
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .or_else(|| {
                 if calendar_ids.len() == 1 {
                     calendar_ids.iter().next()
@@ -120,7 +120,7 @@ impl CalendarGet for Server {
             };
             let calendar = _calendar
                 .unarchive::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = Map::with_capacity(properties.len());
             for property in &properties {
                 match property {

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::config::{Config, utils::AsKey};
+use crate::utils::config::{Config, utils::AsKey};
 use base64::{Engine, engine::general_purpose};
 use reqwest::{
     Client,

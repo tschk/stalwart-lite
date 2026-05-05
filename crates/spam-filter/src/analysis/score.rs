@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, config::spamfilter::SpamFilterAction};
+use crate::spam_filter::{
     SpamFilterContext,
     analysis::{
         classifier::SpamFilterAnalyzeClassify, date::SpamFilterAnalyzeDate,
@@ -18,14 +19,13 @@ use crate::{
         url::SpamFilterAnalyzeUrl,
     },
 };
-use common::{Server, config::spamfilter::SpamFilterAction};
 use std::{fmt::Write, future::Future, vec};
 
 // SPDX-SnippetBegin
 // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
 // SPDX-License-Identifier: LicenseRef-SEL
 #[cfg(feature = "enterprise")]
-use crate::analysis::llm::SpamFilterAnalyzeLlm;
+use crate::spam_filter::analysis::llm::SpamFilterAnalyzeLlm;
 // SPDX-SnippetEnd
 
 pub trait SpamFilterAnalyzeScore: Sync + Send {

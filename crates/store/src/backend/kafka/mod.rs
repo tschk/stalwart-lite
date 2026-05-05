@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::config::{Config, utils::AsKey};
 use rdkafka::{
     ClientConfig, ClientContext, TopicPartitionList,
     consumer::{BaseConsumer, ConsumerContext, Rebalance, StreamConsumer},
@@ -11,7 +12,6 @@ use rdkafka::{
     producer::FutureProducer,
 };
 use std::{fmt::Debug, time::Duration};
-use utils::config::{Config, utils::AsKey};
 
 pub mod pubsub;
 

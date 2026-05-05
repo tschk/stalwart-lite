@@ -6,9 +6,9 @@
 
 use std::fmt::Display;
 
-use types::dead_property::DeadProperty;
+use crate::types::dead_property::DeadProperty;
 
-use crate::{
+use crate::dav_proto::{
     Depth, Timeout,
     responses::DeadPropertyFormat,
     schema::{

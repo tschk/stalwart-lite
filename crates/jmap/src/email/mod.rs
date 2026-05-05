@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use email::message::ingest::IngestedEmail;
-use jmap_proto::{
+use crate::email::message::ingest::IngestedEmail;
+use crate::jmap_proto::{
     error::set::SetError,
     object::email::{EmailProperty, EmailValue},
 };
+use crate::types::{id::Id, keyword::Keyword};
 use jmap_tools::{JsonPointer, JsonPointerItem, Key, Map, Value};
-use types::{id::Id, keyword::Keyword};
 
 pub mod body;
 pub mod copy;

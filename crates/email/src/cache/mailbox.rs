@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::mailbox::{ArchivedMailbox, Mailbox, manage::MailboxFnc};
-use common::{
+use crate::common::{
     MailboxCache, MailboxesCache, MessageStoreCache, Server, auth::AccessToken,
     sharing::EffectiveAcl,
 };
-use store::{
+use crate::email::mailbox::{ArchivedMailbox, Mailbox, manage::MailboxFnc};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{ahash::AHashMap, roaring::RoaringBitmap};
-use trc::AddContext;
-use types::{
+use crate::store::{ahash::AHashMap, roaring::RoaringBitmap};
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     collection::Collection,
     special_use::SpecialUse,
 };
-use utils::{map::bitmap::Bitmap, topological::TopologicalSort};
+use crate::utils::{map::bitmap::Bitmap, topological::TopologicalSort};
 
 struct MailboxesCacheBuilder {
     pub change_id: u64,
@@ -34,7 +34,7 @@ pub(crate) async fn update_mailbox_cache(
     account_id: u32,
     changed_ids: &AHashMap<u32, bool>,
     store_cache: &MessageStoreCache,
-) -> trc::Result<MailboxesCache> {
+) -> crate::trc::Result<MailboxesCache> {
     let mut new_cache = MailboxesCacheBuilder {
         items: Vec::with_capacity(store_cache.mailboxes.items.len()),
         index: AHashMap::with_capacity(store_cache.mailboxes.items.len()),
@@ -52,7 +52,7 @@ pub(crate) async fn update_mailbox_cache(
                     *document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             insert_item(
                 &mut new_cache,
@@ -76,7 +76,7 @@ pub(crate) async fn update_mailbox_cache(
 pub(crate) async fn full_mailbox_cache_build(
     server: &Server,
     account_id: u32,
-) -> trc::Result<MailboxesCache> {
+) -> crate::trc::Result<MailboxesCache> {
     // Build cache
     let mut cache = MailboxesCacheBuilder {
         items: Default::default(),
@@ -96,13 +96,13 @@ pub(crate) async fn full_mailbox_cache_build(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if cache.items.is_empty() {
         server
             .create_system_folders(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         server
             .archives(
                 account_id,
@@ -114,7 +114,7 @@ pub(crate) async fn full_mailbox_cache_build(
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     build_tree(&mut cache);

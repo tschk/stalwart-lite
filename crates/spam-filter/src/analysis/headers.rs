@@ -6,11 +6,11 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
+use crate::store::ahash::AHashSet;
 use mail_parser::HeaderName;
-use store::ahash::AHashSet;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeHeaders: Sync + Send {
     fn spam_filter_analyze_headers(

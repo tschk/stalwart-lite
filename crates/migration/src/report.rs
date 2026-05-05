@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::LegacyBincode;
-use common::Server;
-use mail_auth::report::{Feedback, Report, tlsrpt::TlsReport};
-use smtp::reporting::analysis::IncomingReport;
-use store::{
+use crate::common::Server;
+use crate::migration::LegacyBincode;
+use crate::smtp::reporting::analysis::IncomingReport;
+use crate::store::{
     IterateParams, SUBSPACE_REPORT_OUT, Serialize, U64_LEN, ValueKey,
     ahash::AHashSet,
     write::{
@@ -16,7 +15,8 @@ use store::{
         key::{DeserializeBigEndian, KeySerializer},
     },
 };
-use trc::AddContext;
+use crate::trc::AddContext;
+use mail_auth::report::{Feedback, Report, tlsrpt::TlsReport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ReportType {
@@ -25,7 +25,7 @@ enum ReportType {
     Arf,
 }
 
-pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_reports(server: &Server) -> crate::trc::Result<()> {
     let mut num_dmarc = 0;
     let mut num_tls = 0;
     let mut num_arf = 0;
@@ -74,7 +74,7 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for (report, id, expires) in results {
             match report {
@@ -92,14 +92,14 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 ValueClass::Report(ReportClass::Dmarc { id, expires }),
                                 Archiver::new(bincoded.inner)
                                     .serialize()
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                             );
                             num_dmarc += 1;
                             server
                                 .store()
                                 .write(batch.build_all())
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         }
                         Ok(None) => (),
                         Err(err) => {
@@ -111,7 +111,9 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 .await
                                 .is_err()
                             {
-                                return Err(err.ctx(trc::Key::Id, id).caused_by(trc::location!()));
+                                return Err(err
+                                    .ctx(crate::trc::Key::Id, id)
+                                    .caused_by(crate::trc::location!()));
                             }
                         }
                     }
@@ -130,14 +132,14 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 ValueClass::Report(ReportClass::Tls { id, expires }),
                                 Archiver::new(bincoded.inner)
                                     .serialize()
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                             );
                             num_tls += 1;
                             server
                                 .store()
                                 .write(batch.build_all())
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         }
                         Ok(None) => (),
                         Err(err) => {
@@ -149,7 +151,9 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 .await
                                 .is_err()
                             {
-                                return Err(err.ctx(trc::Key::Id, id).caused_by(trc::location!()));
+                                return Err(err
+                                    .ctx(crate::trc::Key::Id, id)
+                                    .caused_by(crate::trc::location!()));
                             }
                         }
                     }
@@ -168,14 +172,14 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 ValueClass::Report(ReportClass::Arf { id, expires }),
                                 Archiver::new(bincoded.inner)
                                     .serialize()
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                             );
                             num_arf += 1;
                             server
                                 .store()
                                 .write(batch.build_all())
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         }
                         Ok(None) => (),
                         Err(err) => {
@@ -187,7 +191,9 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
                                 .await
                                 .is_err()
                             {
-                                return Err(err.ctx(trc::Key::Id, id).caused_by(trc::location!()));
+                                return Err(err
+                                    .ctx(crate::trc::Key::Id, id)
+                                    .caused_by(crate::trc::location!()));
                             }
                         }
                     }
@@ -212,11 +218,11 @@ pub(crate) async fn migrate_reports(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if num_dmarc > 0 || num_tls > 0 || num_arf > 0 {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details =
                 format!("Migrated {num_dmarc} DMARC, {num_tls} TLS, and {num_arf} ARF reports")
         );

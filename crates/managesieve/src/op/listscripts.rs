@@ -4,20 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::{Session, StatusResponse};
-use common::listener::SessionStream;
-use directory::Permission;
-use email::sieve::{SieveScript, ingest::SieveScriptIngest};
-use std::time::Instant;
-use store::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::sieve::{SieveScript, ingest::SieveScriptIngest};
+use crate::managesieve::core::{Session, StatusResponse};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::SieveField};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::SieveField};
+use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_listscripts(&mut self) -> trc::Result<Vec<u8>> {
+    pub async fn handle_listscripts(&mut self) -> crate::trc::Result<Vec<u8>> {
         // Validate access
         self.assert_has_permission(Permission::SieveListScripts)?;
 
@@ -27,7 +27,7 @@ impl<T: SessionStream> Session<T> {
             .server
             .document_ids(account_id, Collection::SieveScript, SieveField::Name)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if document_ids.is_empty() {
             return Ok(StatusResponse::ok("").into_bytes());
@@ -47,11 +47,11 @@ impl<T: SessionStream> Session<T> {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let script = script_
                     .unarchive::<SieveScript>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 response.push(b'\"');
                 for ch in script.name.as_bytes() {
                     if [b'\\', b'\"'].contains(ch) {
@@ -67,8 +67,8 @@ impl<T: SessionStream> Session<T> {
             }
         }
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::ListScripts),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::ListScripts),
             SpanId = self.session_id,
             Total = count,
             Elapsed = op_start.elapsed()

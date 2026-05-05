@@ -5,23 +5,23 @@
  */
 
 use super::NatsPubSub;
-use crate::dispatch::pubsub::{Msg, PubSubStream};
+use crate::store::dispatch::pubsub::{Msg, PubSubStream};
+use crate::trc::{ClusterEvent, Error, EventType};
 use futures::StreamExt;
-use trc::{ClusterEvent, Error, EventType};
 
 pub struct NatsPubSubStream {
     subs: async_nats::Subscriber,
 }
 
 impl NatsPubSub {
-    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> trc::Result<()> {
+    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> crate::trc::Result<()> {
         self.client
             .publish(topic, message.into())
             .await
             .map_err(|err| Error::new(EventType::Cluster(ClusterEvent::PublisherError)).reason(err))
     }
 
-    pub async fn subscribe(&self, topic: &'static str) -> trc::Result<PubSubStream> {
+    pub async fn subscribe(&self, topic: &'static str) -> crate::trc::Result<PubSubStream> {
         self.client
             .subscribe(topic)
             .await

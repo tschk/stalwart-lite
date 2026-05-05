@@ -8,7 +8,7 @@ use std::fmt::Display;
 
 use hyper::StatusCode;
 
-use crate::schema::{
+use crate::dav_proto::schema::{
     Namespace, Namespaces,
     response::{
         Condition, Href, List, Location, MultiStatus, PropStat, Response, ResponseDescription,

@@ -5,14 +5,14 @@
  */
 
 use super::{AddressBook, ArchivedAddressBook, ArchivedContactCard, ContactCard};
-use crate::DestroyArchive;
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use store::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::groupware::DestroyArchive;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder, now},
 };
-use trc::AddContext;
-use types::collection::{Collection, VanishedCollection};
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, VanishedCollection};
 
 impl ContactCard {
     pub fn update<'x>(
@@ -22,7 +22,7 @@ impl ContactCard {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         let mut new_card = self;
 
         // Build card
@@ -48,7 +48,7 @@ impl ContactCard {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build card
         let mut card = self;
         let now = now() as i64;
@@ -76,7 +76,7 @@ impl AddressBook {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build address book
         let mut book = self;
         let now = now() as i64;
@@ -103,7 +103,7 @@ impl AddressBook {
         account_id: u32,
         document_id: u32,
         batch: &'x mut BatchBuilder,
-    ) -> trc::Result<&'x mut BatchBuilder> {
+    ) -> crate::trc::Result<&'x mut BatchBuilder> {
         // Build address book
         let mut new_book = self;
         new_book.modified = now() as i64;
@@ -134,7 +134,7 @@ impl DestroyArchive<Archive<&ArchivedAddressBook>> {
         children_ids: Vec<u32>,
         delete_path: Option<String>,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Process deletions
         let addressbook_id = document_id;
         for document_id in children_ids {
@@ -150,7 +150,7 @@ impl DestroyArchive<Archive<&ArchivedAddressBook>> {
                 DestroyArchive(
                     card_
                         .to_unarchived::<ContactCard>()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 )
                 .delete(
                     access_token,
@@ -173,7 +173,7 @@ impl DestroyArchive<Archive<&ArchivedAddressBook>> {
         document_id: u32,
         delete_path: Option<String>,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let book = self.0;
         // Delete addressbook
         batch
@@ -185,7 +185,7 @@ impl DestroyArchive<Archive<&ArchivedAddressBook>> {
                     .with_access_token(access_token)
                     .with_current(book),
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if let Some(delete_path) = delete_path {
             batch.log_vanished_item(VanishedCollection::AddressBook, delete_path);
@@ -206,7 +206,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
         addressbook_id: u32,
         delete_path: Option<String>,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let card = self.0;
         if let Some(delete_idx) = card
             .inner
@@ -222,7 +222,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
                 // Unlink addressbook id from card
                 let mut new_card = card
                     .deserialize::<ContactCard>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 new_card.names.swap_remove(delete_idx);
                 batch
                     .with_document(document_id)
@@ -232,7 +232,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
                             .with_current(card)
                             .with_changes(new_card),
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             } else {
                 // Delete card
                 batch
@@ -242,7 +242,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
                             .with_access_token(access_token)
                             .with_current(card),
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
 
             if let Some(delete_path) = delete_path {
@@ -261,7 +261,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
         account_id: u32,
         document_id: u32,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         batch
             .with_account_id(account_id)
             .with_collection(Collection::ContactCard)
@@ -271,7 +271,7 @@ impl DestroyArchive<Archive<&ArchivedContactCard>> {
                     .with_access_token(access_token)
                     .with_current(self.0),
             )
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|b| {
                 b.commit_point();
             })

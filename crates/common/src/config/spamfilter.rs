@@ -5,19 +5,19 @@
  */
 
 use super::{Variable, functions::ResolveVariable, if_block::IfBlock, tokenizer::TokenMap};
+use crate::nlp::classifier::model::{CcfhClassifier, FhClassifier};
+use crate::utils::{
+    cache::CacheItemWeight,
+    config::{Config, utils::ParseValue},
+    glob::GlobMap,
+};
 use ahash::AHashSet;
 use mail_auth::common::resolver::ToReverseName;
-use nlp::classifier::model::{CcfhClassifier, FhClassifier};
 use std::{
     net::{IpAddr, SocketAddr},
     time::Duration,
 };
 use tokio::net::lookup_host;
-use utils::{
-    cache::CacheItemWeight,
-    config::{Config, utils::ParseValue},
-    glob::GlobMap,
-};
 
 #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default)]
 pub enum SpamClassifier {
@@ -577,7 +577,7 @@ impl SpamFilterScoreConfig {
 }
 
 impl ParseValue for Element {
-    fn parse_value(value: &str) -> utils::config::Result<Self> {
+    fn parse_value(value: &str) -> crate::utils::config::Result<Self> {
         match value {
             "url" => Ok(Element::Url),
             "domain" => Ok(Element::Domain),

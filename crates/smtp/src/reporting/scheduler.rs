@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::common::{Inner, KV_LOCK_QUEUE_REPORT, Server, core::BuildServer, ipc::ReportingEvent};
 use ahash::AHashMap;
-use common::{Inner, KV_LOCK_QUEUE_REPORT, Server, core::BuildServer, ipc::ReportingEvent};
 
+use crate::store::{
+    Deserialize, IterateParams, Store, ValueKey,
+    write::{BatchBuilder, QueueClass, ReportEvent, ValueClass, now},
+};
 use std::{
     future::Future,
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use store::{
-    Deserialize, IterateParams, Store, ValueKey,
-    write::{BatchBuilder, QueueClass, ReportEvent, ValueClass, now},
-};
 use tokio::sync::mpsc;
 
-use crate::queue::spool::LOCK_EXPIRY;
+use crate::smtp::queue::spool::LOCK_EXPIRY;
 
 use super::{AggregateTimestamp, ReportLock, dmarc::DmarcReporting, tls::TlsReporting};
 
@@ -171,16 +171,16 @@ async fn next_report_event(store: &Store) -> Vec<QueueClass> {
             batch.clear(ValueClass::Queue(event));
         }
         if let Err(err) = store.write(batch.build_all()).await {
-            trc::error!(
-                err.caused_by(trc::location!())
+            crate::trc::error!(
+                err.caused_by(crate::trc::location!())
                     .details("Failed to remove old report events")
             );
         }
     }
 
     if let Err(err) = result {
-        trc::error!(
-            err.caused_by(trc::location!())
+        crate::trc::error!(
+            err.caused_by(crate::trc::location!())
                 .details("Failed to read from store")
         );
     }
@@ -203,18 +203,18 @@ impl LockReport for Server {
         {
             Ok(result) => {
                 if !result {
-                    trc::event!(
-                        OutgoingReport(trc::OutgoingReportEvent::Locked),
-                        Expires = trc::Value::Timestamp(now() + LOCK_EXPIRY),
+                    crate::trc::event!(
+                        OutgoingReport(crate::trc::OutgoingReportEvent::Locked),
+                        Expires = crate::trc::Value::Timestamp(now() + LOCK_EXPIRY),
                         Key = key
                     );
                 }
                 result
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.details("Failed to lock report.")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 );
                 false
             }
@@ -227,9 +227,9 @@ impl LockReport for Server {
             .remove_lock(KV_LOCK_QUEUE_REPORT, key)
             .await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to unlock event.")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             );
         }
     }

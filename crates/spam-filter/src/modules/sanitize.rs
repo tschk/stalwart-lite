@@ -6,7 +6,7 @@
 
 use std::net::IpAddr;
 
-use crate::{Email, Hostname};
+use crate::spam_filter::{Email, Hostname};
 
 impl Hostname {
     pub fn new(host: &str) -> Self {

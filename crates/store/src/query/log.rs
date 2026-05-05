@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use trc::AddContext;
-use types::collection::{SyncCollection, VanishedCollection};
-use utils::codec::leb128::Leb128Iterator;
+use crate::trc::AddContext;
+use crate::types::collection::{SyncCollection, VanishedCollection};
+use crate::utils::codec::leb128::Leb128Iterator;
 
-use crate::{
+use crate::store::{
     IterateParams, LogKey, Store, U32_LEN, U64_LEN,
     write::{LogCollection, key::DeserializeBigEndian},
 };
@@ -65,7 +65,7 @@ impl Store {
         account_id: u32,
         collection_: LogCollection,
         query: Query,
-    ) -> trc::Result<Changes> {
+    ) -> crate::trc::Result<Changes> {
         let is_share_log = matches!(
             collection_,
             LogCollection::Sync(SyncCollection::ShareNotification)
@@ -109,7 +109,11 @@ impl Store {
                     if !is_share_log {
                         let (has_container_changes, has_item_changes) =
                             changelog.deserialize(value).ok_or_else(|| {
-                                trc::Error::corrupted_key(key, value.into(), trc::location!())
+                                crate::trc::Error::corrupted_key(
+                                    key,
+                                    value.into(),
+                                    crate::trc::location!(),
+                                )
                             })?;
                         if has_container_changes {
                             changelog.container_change_id = Some(change_id);
@@ -128,7 +132,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(changelog)
     }
@@ -138,7 +142,7 @@ impl Store {
         account_id: u32,
         collection: LogCollection,
         query: Query,
-    ) -> trc::Result<Vec<T>> {
+    ) -> crate::trc::Result<Vec<T>> {
         let collection = u8::from(collection);
         let (is_inclusive, from_change_id, to_change_id) = match query {
             Query::All => (true, 0, u64::MAX),
@@ -172,10 +176,10 @@ impl Store {
                         if let Some(item) = T::deserialize_vanished(&mut iter) {
                             vanished.push(item);
                         } else {
-                            return Err(trc::Error::corrupted_key(
+                            return Err(crate::trc::Error::corrupted_key(
                                 key,
                                 value.into(),
-                                trc::location!(),
+                                crate::trc::location!(),
                             ));
                         }
                     }
@@ -184,7 +188,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(vanished)
     }
@@ -193,7 +197,7 @@ impl Store {
         &self,
         account_id: u32,
         collection: LogCollection,
-    ) -> trc::Result<Option<u64>> {
+    ) -> crate::trc::Result<Option<u64>> {
         let collection = u8::from(collection);
         let from_key = LogKey {
             account_id,
@@ -219,7 +223,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(last_change_id)
     }

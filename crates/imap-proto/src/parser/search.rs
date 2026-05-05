@@ -12,17 +12,17 @@ use compact_str::ToCompactString;
 use mail_parser::decoders::charsets::DecoderFnc;
 use mail_parser::decoders::charsets::map::charset_decoder;
 
-use crate::Command;
-use crate::protocol::search::{self, Filter};
-use crate::protocol::search::{ModSeqEntry, ResultOption};
-use crate::protocol::{Flag, ProtocolVersion};
-use crate::receiver::{Request, Token, bad};
+use crate::imap_proto::Command;
+use crate::imap_proto::protocol::search::{self, Filter};
+use crate::imap_proto::protocol::search::{ModSeqEntry, ResultOption};
+use crate::imap_proto::protocol::{Flag, ProtocolVersion};
+use crate::imap_proto::receiver::{Request, Token, bad};
 
 use super::{parse_date, parse_number, parse_sequence_set};
 
 impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_search(self, version: ProtocolVersion) -> trc::Result<search::Arguments> {
+    pub fn parse_search(self, version: ProtocolVersion) -> crate::trc::Result<search::Arguments> {
         if self.tokens.is_empty() {
             return Err(self.into_error("Missing search criteria."));
         }
@@ -539,7 +539,7 @@ impl ResultOption {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Flag, ProtocolVersion, Sequence,
             search::{self, Filter, ModSeqEntry, ResultOption},

@@ -4,15 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::cache::{MessageCacheFetch, email::MessageCacheAccess};
+use crate::imap::{
     core::{SelectedMailbox, Session, SessionData},
     spawn_op,
 };
-use ahash::AHashMap;
-use common::listener::SessionStream;
-use directory::Permission;
-use email::cache::{MessageCacheFetch, email::MessageCacheAccess};
-use imap_proto::{
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{
         ImapResponse,
@@ -20,15 +19,16 @@ use imap_proto::{
     },
     receiver::Request,
 };
+use crate::trc::AddContext;
+use ahash::AHashMap;
 use std::{sync::Arc, time::Instant};
-use trc::AddContext;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_thread(
         &mut self,
         request: Request<Command>,
         is_uid: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapThread)?;
 
@@ -62,7 +62,7 @@ impl<T: SessionStream> SessionData<T> {
         mailbox: Arc<SelectedMailbox>,
         is_uid: bool,
         op_start: Instant,
-    ) -> trc::Result<Response> {
+    ) -> crate::trc::Result<Response> {
         // Run query
         let (result_set, _) = self
             .query(arguments.filter, vec![], &mailbox, &None)
@@ -72,7 +72,7 @@ impl<T: SessionStream> SessionData<T> {
         if !result_set.is_empty() {
             self.synchronize_messages(&mailbox)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         } else {
             return Ok(Response {
                 is_uid,
@@ -85,7 +85,7 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_cached_messages(mailbox.id.account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Group messages by thread
         let mut threads: AHashMap<u32, Vec<u32>> = AHashMap::new();
@@ -107,8 +107,8 @@ impl<T: SessionStream> SessionData<T> {
             .collect::<Vec<_>>();
         threads.sort_unstable();
 
-        trc::event!(
-            Imap(trc::ImapEvent::Thread),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Thread),
             SpanId = self.session_id,
             AccountId = mailbox.id.account_id,
             MailboxId = mailbox.id.mailbox_id,

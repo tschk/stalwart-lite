@@ -4,26 +4,29 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use email::sieve::{SieveScript, VacationResponse};
-use store::{
+use crate::common::Server;
+use crate::email::sieve::{SieveScript, VacationResponse};
+use crate::store::{
     Serialize, SerializeInfallible, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     blob_hash::BlobHash,
     collection::Collection,
     field::{Field, PrincipalField},
 };
 
-use crate::get_document_ids;
+use crate::migration::get_document_ids;
 
-pub(crate) async fn migrate_sieve_v013(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_sieve_v013(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let script_ids = get_document_ids(server, account_id, Collection::SieveScript)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_scripts = script_ids.len();
     if num_scripts == 0 {
@@ -60,7 +63,7 @@ pub(crate) async fn migrate_sieve_v013(server: &Server, account_id: u32) -> trc:
                             Field::ARCHIVE,
                             Archiver::new(script)
                                 .serialize()
-                                .caused_by(trc::location!())?,
+                                .caused_by(crate::trc::location!())?,
                         );
 
                     if old_sieve.is_active {
@@ -76,17 +79,17 @@ pub(crate) async fn migrate_sieve_v013(server: &Server, account_id: u32) -> trc:
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 Err(_) => {
                     if let Err(err) = legacy.deserialize_untrusted::<SieveScript>() {
-                        return Err(err.account_id(script_id).caused_by(trc::location!()));
+                        return Err(err.account_id(script_id).caused_by(crate::trc::location!()));
                     }
                 }
             },
             Ok(None) => (),
             Err(err) => {
-                return Err(err.account_id(script_id).caused_by(trc::location!()));
+                return Err(err.account_id(script_id).caused_by(crate::trc::location!()));
             }
         }
     }

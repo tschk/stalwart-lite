@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     config::spamfilter::*,
     expr::{StringCow, Variable, functions::ResolveVariable},
 };
+use crate::nlp::tokenizers::types::TokenType;
 use compact_str::{CompactString, ToCompactString, format_compact};
 use mail_parser::{Header, HeaderValue};
-use nlp::tokenizers::types::TokenType;
 
-use crate::{Recipient, SpamFilterContext, TextPart, analysis::url::UrlParts};
+use crate::spam_filter::{Recipient, SpamFilterContext, TextPart, analysis::url::UrlParts};
 
 pub(crate) struct SpamFilterResolver<'x, T: ResolveVariable> {
     pub ctx: &'x SpamFilterContext<'x>,

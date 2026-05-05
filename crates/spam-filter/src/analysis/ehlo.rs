@@ -6,9 +6,9 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeEhlo: Sync + Send {
     fn spam_filter_analyze_ehlo(

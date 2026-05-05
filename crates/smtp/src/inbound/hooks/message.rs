@@ -6,17 +6,17 @@
 
 use std::time::Instant;
 
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     DAEMON_NAME,
     config::smtp::session::{MTAHook, Stage},
     listener::SessionStream,
 };
+use ahash::AHashMap;
 
+use crate::trc::MtaHookEvent;
 use mail_auth::AuthenticatedMessage;
-use trc::MtaHookEvent;
 
-use crate::{
+use crate::smtp::{
     core::Session,
     inbound::{
         FilterResponse,
@@ -57,7 +57,7 @@ impl<T: SessionStream> Session<T> {
             let time = Instant::now();
             match self.run_mta_hook(stage, mta_hook, message, queue_id).await {
                 Ok(response) => {
-                    trc::event!(
+                    crate::trc::event!(
                         MtaHook(match response.action {
                             Action::Accept => MtaHookEvent::ActionAccept,
                             Action::Discard => MtaHookEvent::ActionDiscard,
@@ -153,7 +153,7 @@ impl<T: SessionStream> Session<T> {
                     return Err(message);
                 }
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         MtaHook(MtaHookEvent::Error),
                         SpanId = self.data.session_id,
                         Id = mta_hook.id.clone(),

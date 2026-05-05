@@ -5,23 +5,23 @@
  */
 
 use super::{AddressBook, ArchivedAddressBook, ArchivedContactCard, ContactCard};
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::nlp::language::{
+    Language,
+    detect::{LanguageDetector, MIN_LANGUAGE_SCORE},
+};
+use crate::store::{
+    search::{ContactSearchField, IndexDocument, SearchField},
+    write::{IndexPropertyClass, SearchIndex, ValueClass},
+    xxhash_rust::xxh3,
+};
+use crate::types::{acl::AclGrant, collection::SyncCollection, field::ContactField};
+use crate::utils::sanitize_email;
 use ahash::AHashSet;
 use calcard::{
     common::IanaString,
     vcard::{ArchivedVCardProperty, ArchivedVCardValue, VCardProperty},
 };
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use nlp::language::{
-    Language,
-    detect::{LanguageDetector, MIN_LANGUAGE_SCORE},
-};
-use store::{
-    search::{ContactSearchField, IndexDocument, SearchField},
-    write::{IndexPropertyClass, SearchIndex, ValueClass},
-    xxhash_rust::xxh3,
-};
-use types::{acl::AclGrant, collection::SyncCollection, field::ContactField};
-use utils::sanitize_email;
 
 impl IndexableObject for AddressBook {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::StateManager;
-use common::Server;
-use email::sieve::{SieveScript, ingest::SieveScriptIngest};
-use jmap_proto::{
+use crate::common::Server;
+use crate::email::sieve::{SieveScript, ingest::SieveScriptIngest};
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::vacation_response::{
         VacationResponse, VacationResponseProperty, VacationResponseValue,
@@ -15,36 +15,36 @@ use jmap_proto::{
     request::reference::MaybeResultReference,
     types::date::UTCDate,
 };
-use jmap_tools::{Map, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::SieveField,
     id::Id,
 };
+use jmap_tools::{Map, Value};
+use std::future::Future;
 
 pub trait VacationResponseGet: Sync + Send {
     fn vacation_response_get(
         &self,
         request: GetRequest<VacationResponse>,
-    ) -> impl Future<Output = trc::Result<GetResponse<VacationResponse>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<VacationResponse>>> + Send;
 
     fn get_vacation_sieve_script_id(
         &self,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Option<u32>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<u32>>> + Send;
 }
 
 impl VacationResponseGet for Server {
     async fn vacation_response_get(
         &self,
         mut request: GetRequest<VacationResponse>,
-    ) -> trc::Result<GetResponse<VacationResponse>> {
+    ) -> crate::trc::Result<GetResponse<VacationResponse>> {
         let account_id = request.account_id.document_id();
         let properties = request.unwrap_properties(&[
             VacationResponseProperty::Id,
@@ -96,7 +96,7 @@ impl VacationResponseGet for Server {
                     let active_script_id = self.sieve_script_get_active_id(account_id).await?;
                     let sieve = sieve_
                         .unarchive::<SieveScript>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     let vacation = sieve.vacation_response.as_ref();
                     let mut result = Map::with_capacity(properties.len());
                     for property in &properties {
@@ -169,7 +169,10 @@ impl VacationResponseGet for Server {
         Ok(response)
     }
 
-    async fn get_vacation_sieve_script_id(&self, account_id: u32) -> trc::Result<Option<u32>> {
+    async fn get_vacation_sieve_script_id(
+        &self,
+        account_id: u32,
+    ) -> crate::trc::Result<Option<u32>> {
         self.document_ids_matching(
             account_id,
             Collection::SieveScript,

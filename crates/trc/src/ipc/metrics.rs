@@ -12,7 +12,7 @@ use ipc::{
     subscriber::Interests,
 };
 
-use crate::*;
+use super::super::*;
 
 pub(crate) static METRIC_INTERESTS: GlobalInterests = GlobalInterests::new();
 

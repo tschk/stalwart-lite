@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{email_v1::FIELD_MAILBOX_IDS, get_bitmap, v014::SUBSPACE_BITMAP_TAG};
-use common::Server;
-use email::{
+use crate::common::Server;
+use crate::email::{
     mailbox::{JUNK_ID, TRASH_ID, UidMailbox},
     message::{
         index::extractors::VisitTextArchived,
@@ -19,8 +18,8 @@ use email::{
         },
     },
 };
-use mail_parser::{Encoding, Header, parsers::fields::thread::thread_name};
-use store::{
+use crate::migration::{email_v1::FIELD_MAILBOX_IDS, get_bitmap, v014::SUBSPACE_BITMAP_TAG};
+use crate::store::{
     Serialize, SerializeInfallible, U32_LEN, U64_LEN, ValueKey,
     rand::{self, seq::SliceRandom},
     write::{
@@ -28,11 +27,15 @@ use store::{
         key::KeySerializer,
     },
 };
-use trc::AddContext;
-use types::{blob_hash::BlobHash, collection::Collection, field::EmailField, keyword::*};
-use utils::cheeky_hash::CheekyHash;
+use crate::trc::AddContext;
+use crate::types::{blob_hash::BlobHash, collection::Collection, field::EmailField, keyword::*};
+use crate::utils::cheeky_hash::CheekyHash;
+use mail_parser::{Encoding, Header, parsers::fields::thread::thread_name};
 
-pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_emails_v014(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     let tombstoned_ids = get_bitmap(
         server,
         AnyKey {
@@ -55,7 +58,7 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
         },
     )
     .await
-    .caused_by(trc::location!())?
+    .caused_by(crate::trc::location!())?
     .unwrap_or_default();
 
     let mut migrate = Vec::new();
@@ -75,7 +78,7 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
                             return Err(err
                                 .account_id(account_id)
                                 .document_id(document_id)
-                                .caused_by(trc::location!()));
+                                .caused_by(crate::trc::location!()));
                         }
                     }
                 }
@@ -84,7 +87,7 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     migrate.shuffle(&mut rand::rng());
 
@@ -115,7 +118,7 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
                             return Err(err
                                 .account_id(account_id)
                                 .document_id(document_id)
-                                .caused_by(trc::location!()));
+                                .caused_by(crate::trc::location!()));
                         }
                     },
                 },
@@ -186,13 +189,13 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
                     EmailField::Archive,
                     Archiver::new(data)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 )
                 .set(
                     EmailField::Metadata,
                     Archiver::new(metadata)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
         } else {
             batch.clear(EmailField::Archive).clear(EmailField::Metadata);
@@ -202,7 +205,7 @@ pub(crate) async fn migrate_emails_v014(server: &Server, account_id: u32) -> trc
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     Ok(num_emails as u64)

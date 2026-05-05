@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::task_manager::*;
+use crate::services::task_manager::*;
 
 pub(crate) trait TaskLockManager: Sync + Send {
     fn try_lock_task(
@@ -32,17 +32,17 @@ impl TaskLockManager for Server {
         {
             Ok(result) => {
                 if !result {
-                    trc::event!(
+                    crate::trc::event!(
                         TaskQueue(TaskQueueEvent::TaskLocked),
                         AccountId = account_id,
                         DocumentId = document_id,
-                        Expires = trc::Value::Timestamp(now() + lock_expiry),
+                        Expires = crate::trc::Value::Timestamp(now() + lock_expiry),
                     );
                 }
                 result
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.account_id(account_id)
                         .document_id(document_id)
                         .details("Failed to lock task")
@@ -59,10 +59,10 @@ impl TaskLockManager for Server {
             .remove_lock(KV_LOCK_TASK, &lock_key)
             .await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to unlock task")
-                    .ctx(trc::Key::Key, lock_key)
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Key, lock_key)
+                    .caused_by(crate::trc::location!())
             );
         }
     }
@@ -215,7 +215,7 @@ impl Task<TaskAction> {
         }
     }
 
-    pub fn deserialize(key: &[u8], value: &[u8]) -> trc::Result<Self> {
+    pub fn deserialize(key: &[u8], value: &[u8]) -> crate::trc::Result<Self> {
         let document_id = key.deserialize_be_u32(U64_LEN + U32_LEN + 1)?;
 
         Ok(Task {
@@ -228,7 +228,9 @@ impl Task<TaskAction> {
                         .last()
                         .copied()
                         .and_then(SearchIndex::try_from_u8)
-                        .ok_or_else(|| trc::Error::corrupted_key(key, None, trc::location!()))?,
+                        .ok_or_else(|| {
+                            crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
+                        })?,
                     is_insert: *v == 7,
                 }),
                 Some(3) => TaskAction::SendAlarm(CalendarAlarm {
@@ -260,12 +262,18 @@ impl Task<TaskAction> {
                     })
                 }
                 Some(4) => TaskAction::SendImip,
-                Some(9) => {
-                    TaskAction::MergeThreads(MergeThreadIds::deserialize(value).ok_or_else(
-                        || trc::Error::corrupted_key(key, value.into(), trc::location!()),
-                    )?)
+                Some(9) => TaskAction::MergeThreads(
+                    MergeThreadIds::deserialize(value).ok_or_else(|| {
+                        crate::trc::Error::corrupted_key(key, value.into(), crate::trc::location!())
+                    })?,
+                ),
+                _ => {
+                    return Err(crate::trc::Error::corrupted_key(
+                        key,
+                        None,
+                        crate::trc::location!(),
+                    ));
                 }
-                _ => return Err(trc::Error::corrupted_key(key, None, trc::location!())),
             },
         })
     }

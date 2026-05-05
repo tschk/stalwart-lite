@@ -5,8 +5,8 @@
  */
 
 use super::{ArchivedFileNode, FileNode};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use types::{acl::AclGrant, collection::SyncCollection};
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::types::{acl::AclGrant, collection::SyncCollection};
 
 impl IndexableObject for FileNode {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

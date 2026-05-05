@@ -6,7 +6,7 @@
 
 use compact_str::{CompactString, ToCompactString, format_compact};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{create, list::Attribute},
     receiver::{Request, Token, bad},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl Request<Command> {
-    pub fn parse_create(self, is_utf8: bool) -> trc::Result<create::Arguments> {
+    pub fn parse_create(self, is_utf8: bool) -> crate::trc::Result<create::Arguments> {
         if !self.tokens.is_empty() {
             let mut tokens = self.tokens.into_iter();
             let mailbox_name = utf7_maybe_decode(
@@ -103,7 +103,7 @@ impl Request<Command> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::{create, list::Attribute},
         receiver::Receiver,
     };

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavErrorCondition, DavMethod, DavResourceName,
     calendar::{
         copy_move::CalendarCopyMoveRequestHandler, delete::CalendarDeleteRequestHandler,
@@ -33,9 +34,7 @@ use crate::{
     },
     principal::{matching::PrincipalMatching, propsearch::PrincipalPropSearch},
 };
-use common::{Server, auth::AccessToken};
-use compact_str::{CompactString, ToCompactString};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders,
     parser::{DavParser, tokenizer::Tokenizer},
     schema::{
@@ -47,12 +46,13 @@ use dav_proto::{
         },
     },
 };
-use directory::Permission;
-use http_proto::{HttpRequest, HttpResponse, HttpSessionData, request::fetch_body};
+use crate::directory::Permission;
+use crate::http_proto::{HttpRequest, HttpResponse, HttpSessionData, request::fetch_body};
+use crate::trc::{EventType, LimitEvent, StoreEvent, WebDavEvent};
+use crate::types::collection::Collection;
+use compact_str::{CompactString, ToCompactString};
 use hyper::{StatusCode, header};
 use std::{sync::Arc, time::Instant};
-use trc::{EventType, LimitEvent, StoreEvent, WebDavEvent};
-use types::collection::Collection;
 
 pub trait DavRequestHandler: Sync + Send {
     fn handle_dav_request(
@@ -73,7 +73,7 @@ pub(crate) trait DavRequestDispatcher: Sync + Send {
         resource: DavResourceName,
         method: DavMethod,
         body: Vec<u8>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl DavRequestDispatcher for Server {
@@ -84,7 +84,7 @@ impl DavRequestDispatcher for Server {
         resource: DavResourceName,
         method: DavMethod,
         body: Vec<u8>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Dispatch
         match method {
             DavMethod::PROPFIND => {
@@ -590,8 +590,8 @@ impl DavRequestHandler for Server {
             {
                 body
             } else {
-                trc::event!(
-                    Limit(trc::LimitEvent::SizeRequest),
+                crate::trc::event!(
+                    Limit(crate::trc::LimitEvent::SizeRequest),
                     SpanId = session.session_id,
                     Contents = "Request body too large",
                 );
@@ -616,7 +616,7 @@ impl DavRequestHandler for Server {
             Ok(response) => {
                 let event = WebDavEvent::from(method);
 
-                trc::event!(
+                crate::trc::event!(
                     WebDav(event),
                     SpanId = session.session_id,
                     Url = headers.uri.to_compact_string(),
@@ -631,11 +631,11 @@ impl DavRequestHandler for Server {
             Err(DavError::Internal(err)) => {
                 let err_type = err.event_type();
 
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(session.session_id)
-                        .ctx(trc::Key::Url, headers.uri.to_compact_string())
-                        .ctx(trc::Key::Type, resource.name())
-                        .ctx(trc::Key::Elapsed, start_time.elapsed())
+                        .ctx(crate::trc::Key::Url, headers.uri.to_compact_string())
+                        .ctx(crate::trc::Key::Type, resource.name())
+                        .ctx(crate::trc::Key::Elapsed, start_time.elapsed())
                 );
 
                 match err_type {
@@ -670,7 +670,7 @@ impl DavRequestHandler for Server {
                     StatusCode::UNSUPPORTED_MEDIA_TYPE
                 };
 
-                trc::event!(
+                crate::trc::event!(
                     WebDav(WebDavEvent::Error),
                     SpanId = session.session_id,
                     Url = headers.uri.to_compact_string(),
@@ -686,7 +686,7 @@ impl DavRequestHandler for Server {
             Err(DavError::Condition(condition)) => {
                 let event = WebDavEvent::from(method);
 
-                trc::event!(
+                crate::trc::event!(
                     WebDav(event),
                     SpanId = session.session_id,
                     Url = headers.uri.to_compact_string(),
@@ -717,7 +717,7 @@ impl DavRequestHandler for Server {
             Err(DavError::Code(code)) => {
                 let event = WebDavEvent::from(method);
 
-                trc::event!(
+                crate::trc::event!(
                     WebDav(event),
                     SpanId = session.session_id,
                     Url = headers.uri.to_compact_string(),
@@ -733,14 +733,14 @@ impl DavRequestHandler for Server {
     }
 }
 
-impl From<dav_proto::parser::Error> for DavError {
-    fn from(err: dav_proto::parser::Error) -> Self {
+impl From<crate::dav_proto::parser::Error> for DavError {
+    fn from(err: crate::dav_proto::parser::Error) -> Self {
         DavError::Parse(err)
     }
 }
 
-impl From<trc::Error> for DavError {
-    fn from(err: trc::Error) -> Self {
+impl From<crate::trc::Error> for DavError {
+    fn from(err: crate::trc::Error) -> Self {
         DavError::Internal(err)
     }
 }

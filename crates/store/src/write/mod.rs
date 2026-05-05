@@ -5,16 +5,9 @@
  */
 
 use self::assert::AssertValue;
-use crate::backend::MAX_TOKEN_LENGTH;
-use log::ChangeLogBuilder;
-use nlp::tokenizers::word::WordTokenizer;
-use rkyv::util::AlignedVec;
-use std::{
-    collections::HashSet,
-    hash::Hash,
-    time::{Duration, SystemTime},
-};
-use types::{
+use crate::nlp::tokenizers::word::WordTokenizer;
+use crate::store::backend::MAX_TOKEN_LENGTH;
+use crate::types::{
     blob_hash::BlobHash,
     collection::{Collection, SyncCollection, VanishedCollection},
     field::{
@@ -22,9 +15,16 @@ use types::{
         EmailSubmissionField, Field, MailboxField, PrincipalField, SieveField,
     },
 };
-use utils::{
+use crate::utils::{
     cheeky_hash::CheekyHash,
     map::{bitmap::Bitmap, vec_map::VecMap},
+};
+use log::ChangeLogBuilder;
+use rkyv::util::AlignedVec;
+use std::{
+    collections::HashSet,
+    hash::Hash,
+    time::{Duration, SystemTime},
 };
 
 pub mod assert;
@@ -354,8 +354,8 @@ pub enum Param {
 #[repr(transparent)]
 pub struct Params(Vec<Param>);
 
-pub type SetFnc = fn(&Params, &AssignedIds) -> trc::Result<Vec<u8>>;
-pub type MergeFnc = fn(&Params, &AssignedIds, Option<&[u8]>) -> trc::Result<MergeResult>;
+pub type SetFnc = fn(&Params, &AssignedIds) -> crate::trc::Result<Vec<u8>>;
+pub type MergeFnc = fn(&Params, &AssignedIds, Option<&[u8]>) -> crate::trc::Result<MergeResult>;
 
 #[derive(Debug, Clone)]
 pub struct MergeOperation {
@@ -411,7 +411,7 @@ impl TokenizeText for &str {
 }
 
 pub trait IntoOperations {
-    fn build(self, batch: &mut BatchBuilder) -> trc::Result<()>;
+    fn build(self, batch: &mut BatchBuilder) -> crate::trc::Result<()>;
 }
 
 #[inline(always)]
@@ -439,7 +439,7 @@ impl AssignedIds {
         }));
     }
 
-    pub fn last_change_id(&self, account_id: u32) -> trc::Result<u64> {
+    pub fn last_change_id(&self, account_id: u32) -> crate::trc::Result<u64> {
         self.ids
             .iter()
             .filter_map(|id| match id {
@@ -450,27 +450,27 @@ impl AssignedIds {
             })
             .next_back()
             .ok_or_else(|| {
-                trc::StoreEvent::UnexpectedError
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Reason, "No change ids were created")
+                crate::trc::StoreEvent::UnexpectedError
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Reason, "No change ids were created")
             })
     }
 
-    pub fn current_change_id(&self) -> trc::Result<u64> {
+    pub fn current_change_id(&self) -> crate::trc::Result<u64> {
         self.current_change_id.ok_or_else(|| {
-            trc::StoreEvent::UnexpectedError
-                .caused_by(trc::location!())
-                .ctx(trc::Key::Reason, "No current change id is set")
+            crate::trc::StoreEvent::UnexpectedError
+                .caused_by(crate::trc::location!())
+                .ctx(crate::trc::Key::Reason, "No current change id is set")
         })
     }
 
-    pub(crate) fn set_current_change_id(&mut self, account_id: u32) -> trc::Result<u64> {
+    pub(crate) fn set_current_change_id(&mut self, account_id: u32) -> crate::trc::Result<u64> {
         let change_id = self.last_change_id(account_id)?;
         self.current_change_id = Some(change_id);
         Ok(change_id)
     }
 
-    pub fn last_counter_id(&self) -> trc::Result<i64> {
+    pub fn last_counter_id(&self) -> crate::trc::Result<i64> {
         self.ids
             .iter()
             .filter_map(|id| match id {
@@ -479,9 +479,9 @@ impl AssignedIds {
             })
             .next_back()
             .ok_or_else(|| {
-                trc::StoreEvent::UnexpectedError
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Reason, "No counter ids were created")
+                crate::trc::StoreEvent::UnexpectedError
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Reason, "No counter ids were created")
             })
     }
 }

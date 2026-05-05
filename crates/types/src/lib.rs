@@ -20,7 +20,10 @@ pub type DocumentId = u32;
 pub type ChangeId = u64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "test_mode", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    any(test, feature = "test_mode"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TimeRange {
     pub start: i64,
     pub end: i64,

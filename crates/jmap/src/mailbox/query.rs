@@ -4,28 +4,28 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken};
-use email::cache::{MessageCacheFetch, mailbox::MailboxCacheAccess};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::cache::{MessageCacheFetch, mailbox::MailboxCacheAccess};
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::JmapCacheState};
+use crate::jmap_proto::{
     method::query::{Comparator, Filter, QueryRequest, QueryResponse},
     object::mailbox::{Mailbox, MailboxComparator, MailboxFilter},
 };
-use std::{collections::BTreeMap, future::Future};
-use store::{
+use crate::store::{
     ahash::AHashMap,
     roaring::RoaringBitmap,
     search::{SearchComparator, SearchFilter, SearchQuery},
     write::SearchIndex,
 };
-use types::{acl::Acl, special_use::SpecialUse};
+use crate::types::{acl::Acl, special_use::SpecialUse};
+use std::{collections::BTreeMap, future::Future};
 
 pub trait MailboxQuery: Sync + Send {
     fn mailbox_query(
         &self,
         request: QueryRequest<Mailbox>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl MailboxQuery for Server {
@@ -33,7 +33,7 @@ impl MailboxQuery for Server {
         &self,
         mut request: QueryRequest<Mailbox>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let sort_as_tree = request.arguments.sort_as_tree.unwrap_or(false);
         let filter_as_tree = request.arguments.filter_as_tree.unwrap_or(false);
@@ -128,7 +128,7 @@ impl MailboxQuery for Server {
                             ));
                         }
                         MailboxFilter::_T(other) => {
-                            return Err(trc::JmapEvent::UnsupportedFilter
+                            return Err(crate::trc::JmapEvent::UnsupportedFilter
                                 .into_err()
                                 .details(other));
                         }
@@ -221,7 +221,9 @@ impl MailboxQuery for Server {
                 }
 
                 MailboxComparator::_T(other) => {
-                    return Err(trc::JmapEvent::UnsupportedSort.into_err().details(other));
+                    return Err(crate::trc::JmapEvent::UnsupportedSort
+                        .into_err()
+                        .details(other));
                 }
             });
         }

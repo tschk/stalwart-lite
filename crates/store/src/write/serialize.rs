@@ -5,7 +5,7 @@
  */
 
 use super::{ARCHIVE_ALIGNMENT, AlignedBytes, Archive, ArchiveVersion, Archiver};
-use crate::{Deserialize, Serialize, SerializeInfallible, U32_LEN, U64_LEN, Value};
+use crate::store::{Deserialize, Serialize, SerializeInfallible, U32_LEN, U64_LEN, Value};
 use compact_str::format_compact;
 use rkyv::util::AlignedVec;
 use roaring::{RoaringBitmap, RoaringTreemap};
@@ -62,14 +62,14 @@ fn validate_marker_and_contents(bytes: &[u8]) -> Option<(bool, &[u8], ArchiveVer
 }
 
 impl Deserialize for Archive<AlignedBytes> {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         let (is_uncompressed, contents, version) =
             validate_marker_and_contents(bytes).ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
+                crate::trc::StoreEvent::DataCorruption
                     .into_err()
                     .details("Archive integrity compromised")
-                    .ctx(trc::Key::Value, bytes)
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Value, bytes)
+                    .caused_by(crate::trc::location!())
             })?;
 
         if is_uncompressed {
@@ -84,14 +84,14 @@ impl Deserialize for Archive<AlignedBytes> {
         }
     }
 
-    fn deserialize_owned(mut bytes: Vec<u8>) -> trc::Result<Self> {
+    fn deserialize_owned(mut bytes: Vec<u8>) -> crate::trc::Result<Self> {
         let (is_uncompressed, contents, version) = validate_marker_and_contents(&bytes)
             .ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
+                crate::trc::StoreEvent::DataCorruption
                     .into_err()
                     .details("Archive integrity compromised")
-                    .ctx(trc::Key::Value, bytes.as_slice())
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Value, bytes.as_slice())
+                    .caused_by(crate::trc::location!())
             })?;
 
         if is_uncompressed {
@@ -116,7 +116,7 @@ impl Deserialize for Archive<AlignedBytes> {
 }
 
 #[inline]
-fn aligned_lz4_deflate(archive: &[u8]) -> trc::Result<AlignedBytes> {
+fn aligned_lz4_deflate(archive: &[u8]) -> crate::trc::Result<AlignedBytes> {
     lz4_flex::block::uncompressed_size(archive)
         .and_then(|(uncompressed_size, archive)| {
             let mut bytes = AlignedVec::with_capacity(uncompressed_size);
@@ -128,9 +128,9 @@ fn aligned_lz4_deflate(archive: &[u8]) -> trc::Result<AlignedBytes> {
             Ok(AlignedBytes::Aligned(bytes))
         })
         .map_err(|err| {
-            trc::StoreEvent::DecompressError
-                .ctx(trc::Key::Value, archive)
-                .caused_by(trc::location!())
+            crate::trc::StoreEvent::DecompressError
+                .ctx(crate::trc::Key::Value, archive)
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })
 }
@@ -146,11 +146,11 @@ where
             >,
         >,
 {
-    fn serialize(&self) -> trc::Result<Vec<u8>> {
+    fn serialize(&self) -> crate::trc::Result<Vec<u8>> {
         rkyv::to_bytes::<rkyv::rancor::Error>(&self.inner)
             .map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::DeserializeError
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
             .map(|input| {
@@ -223,7 +223,7 @@ impl Archive<AlignedBytes> {
         }
     }
 
-    pub fn unarchive<T>(&self) -> trc::Result<&<T as rkyv::Archive>::Archived>
+    pub fn unarchive<T>(&self) -> crate::trc::Result<&<T as rkyv::Archive>::Archived>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -236,28 +236,28 @@ impl Archive<AlignedBytes> {
                 // SAFETY: Trusted input with integrity hash
                 Ok(unsafe { rkyv::access_unchecked::<T::Archived>(bytes) })
             } else {
-                Err(trc::StoreEvent::DataCorruption
+                Err(crate::trc::StoreEvent::DataCorruption
                     .into_err()
                     .details(format_compact!(
                         "Archive size mismatch, expected {} bytes but got {} bytes.",
                         std::mem::size_of::<T::Archived>(),
                         bytes.len()
                     ))
-                    .ctx(trc::Key::Value, bytes)
-                    .caused_by(trc::location!()))
+                    .ctx(crate::trc::Key::Value, bytes)
+                    .caused_by(crate::trc::location!()))
             }
         } else {
             rkyv::access::<T::Archived, rkyv::rancor::Error>(bytes).map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .ctx(trc::Key::Value, self.as_bytes())
+                crate::trc::StoreEvent::DeserializeError
+                    .ctx(crate::trc::Key::Value, self.as_bytes())
                     .details("Archive access failed")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
         }
     }
 
-    pub fn unarchive_untrusted<T>(&self) -> trc::Result<&<T as rkyv::Archive>::Archived>
+    pub fn unarchive_untrusted<T>(&self) -> crate::trc::Result<&<T as rkyv::Archive>::Archived>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -267,26 +267,26 @@ impl Archive<AlignedBytes> {
         let bytes = self.as_bytes();
         if bytes.len() >= std::mem::size_of::<T::Archived>() {
             rkyv::access::<T::Archived, rkyv::rancor::Error>(bytes).map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .ctx(trc::Key::Value, self.as_bytes())
+                crate::trc::StoreEvent::DeserializeError
+                    .ctx(crate::trc::Key::Value, self.as_bytes())
                     .details("Archive access failed")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
         } else {
-            Err(trc::StoreEvent::DataCorruption
+            Err(crate::trc::StoreEvent::DataCorruption
                 .into_err()
                 .details(format_compact!(
                     "Archive size mismatch, expected {} bytes but got {} bytes.",
                     std::mem::size_of::<T::Archived>(),
                     bytes.len()
                 ))
-                .ctx(trc::Key::Value, bytes)
-                .caused_by(trc::location!()))
+                .ctx(crate::trc::Key::Value, bytes)
+                .caused_by(crate::trc::location!()))
         }
     }
 
-    pub fn deserialize<T>(&self) -> trc::Result<T>
+    pub fn deserialize<T>(&self) -> crate::trc::Result<T>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -295,15 +295,15 @@ impl Archive<AlignedBytes> {
     {
         self.unarchive::<T>().and_then(|input| {
             rkyv::deserialize(input).map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .ctx(trc::Key::Value, self.as_bytes())
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::DeserializeError
+                    .ctx(crate::trc::Key::Value, self.as_bytes())
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
         })
     }
 
-    pub fn deserialize_untrusted<T>(&self) -> trc::Result<T>
+    pub fn deserialize_untrusted<T>(&self) -> crate::trc::Result<T>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -312,15 +312,15 @@ impl Archive<AlignedBytes> {
     {
         self.unarchive_untrusted::<T>().and_then(|input| {
             rkyv::deserialize(input).map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .ctx(trc::Key::Value, self.as_bytes())
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::DeserializeError
+                    .ctx(crate::trc::Key::Value, self.as_bytes())
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
         })
     }
 
-    pub fn to_unarchived<T>(&self) -> trc::Result<Archive<&<T as rkyv::Archive>::Archived>>
+    pub fn to_unarchived<T>(&self) -> crate::trc::Result<Archive<&<T as rkyv::Archive>::Archived>>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -333,7 +333,7 @@ impl Archive<AlignedBytes> {
         })
     }
 
-    pub fn into_deserialized<T>(&self) -> trc::Result<Archive<T>>
+    pub fn into_deserialized<T>(&self) -> crate::trc::Result<Archive<T>>
     where
         T: rkyv::Archive,
         T::Archived: for<'a> rkyv::bytecheck::CheckBytes<
@@ -420,7 +420,7 @@ where
         }
     }
 
-    pub fn serialize_versioned(self) -> trc::Result<(u64, Vec<u8>)> {
+    pub fn serialize_versioned(self) -> crate::trc::Result<(u64, Vec<u8>)> {
         self.with_version()
             .serialize()
             .map(|bytes| ((bytes.len() - U64_LEN - 1) as u64, bytes))
@@ -434,14 +434,14 @@ where
         + Sync
         + Send,
 {
-    pub fn to_deserialized<V>(&self) -> trc::Result<Archive<V>>
+    pub fn to_deserialized<V>(&self) -> crate::trc::Result<Archive<V>>
     where
         T: rkyv::Deserialize<V, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
     {
         rkyv::deserialize::<V, rkyv::rancor::Error>(self.inner)
             .map_err(|err| {
-                trc::StoreEvent::DeserializeError
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::DeserializeError
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
             .map(|inner| Archive {
@@ -450,20 +450,20 @@ where
             })
     }
 
-    pub fn deserialize<V>(&self) -> trc::Result<V>
+    pub fn deserialize<V>(&self) -> crate::trc::Result<V>
     where
         T: rkyv::Deserialize<V, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
     {
         rkyv::deserialize::<V, rkyv::rancor::Error>(self.inner).map_err(|err| {
-            trc::StoreEvent::DeserializeError
-                .caused_by(trc::location!())
+            crate::trc::StoreEvent::DeserializeError
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })
     }
 }
 
 #[inline]
-pub fn rkyv_deserialize<T, V>(input: &T) -> trc::Result<V>
+pub fn rkyv_deserialize<T, V>(input: &T) -> crate::trc::Result<V>
 where
     T: rkyv::Portable
         + for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>
@@ -472,22 +472,22 @@ where
         + rkyv::Deserialize<V, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
 {
     rkyv::deserialize::<V, rkyv::rancor::Error>(input).map_err(|err| {
-        trc::StoreEvent::DeserializeError
-            .caused_by(trc::location!())
+        crate::trc::StoreEvent::DeserializeError
+            .caused_by(crate::trc::location!())
             .reason(err)
     })
 }
 
-pub fn rkyv_unarchive<T>(input: &[u8]) -> trc::Result<&<T as rkyv::Archive>::Archived>
+pub fn rkyv_unarchive<T>(input: &[u8]) -> crate::trc::Result<&<T as rkyv::Archive>::Archived>
 where
     T: rkyv::Archive,
     T::Archived: for<'a> rkyv::bytecheck::CheckBytes<rkyv::api::high::HighValidator<'a, rkyv::rancor::Error>>
         + rkyv::Deserialize<T, rkyv::api::high::HighDeserializer<rkyv::rancor::Error>>,
 {
     rkyv::access::<T::Archived, rkyv::rancor::Error>(input).map_err(|err| {
-        trc::StoreEvent::DataCorruption
-            .caused_by(trc::location!())
-            .ctx(trc::Key::Value, input)
+        crate::trc::StoreEvent::DataCorruption
+            .caused_by(crate::trc::location!())
+            .ctx(crate::trc::Key::Value, input)
             .reason(err)
     })
 }
@@ -529,42 +529,42 @@ impl SerializeInfallible for &str {
 }
 
 impl Deserialize for String {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(String::from_utf8_lossy(bytes).into_owned())
     }
 
-    fn deserialize_owned(bytes: Vec<u8>) -> trc::Result<Self> {
+    fn deserialize_owned(bytes: Vec<u8>) -> crate::trc::Result<Self> {
         Ok(String::from_utf8(bytes)
             .unwrap_or_else(|err| String::from_utf8_lossy(err.as_bytes()).into_owned()))
     }
 }
 
 impl Deserialize for u64 {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(u64::from_be_bytes(bytes.try_into().map_err(|_| {
-            trc::StoreEvent::DataCorruption.caused_by(trc::location!())
+            crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
         })?))
     }
 }
 
 impl Deserialize for i64 {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(i64::from_be_bytes(bytes.try_into().map_err(|_| {
-            trc::StoreEvent::DataCorruption.caused_by(trc::location!())
+            crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
         })?))
     }
 }
 
 impl Deserialize for u32 {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(u32::from_be_bytes(bytes.try_into().map_err(|_| {
-            trc::StoreEvent::DataCorruption.caused_by(trc::location!())
+            crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
         })?))
     }
 }
 
 impl Deserialize for () {
-    fn deserialize(_bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(_bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(())
     }
 }
@@ -585,12 +585,12 @@ impl Default for Archive<AlignedBytes> {
 }
 
 impl Serialize for RoaringBitmap {
-    fn serialize(&self) -> trc::Result<Vec<u8>> {
+    fn serialize(&self) -> crate::trc::Result<Vec<u8>> {
         let mut bytes = Vec::with_capacity(self.serialized_size());
         self.serialize_into(&mut bytes)
             .map_err(|err| {
-                trc::StoreEvent::UnexpectedError
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::UnexpectedError
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
             .map(|_| bytes)
@@ -598,22 +598,22 @@ impl Serialize for RoaringBitmap {
 }
 
 impl Deserialize for RoaringBitmap {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         RoaringBitmap::deserialize_from(bytes).map_err(|err| {
-            trc::StoreEvent::DeserializeError
-                .caused_by(trc::location!())
+            crate::trc::StoreEvent::DeserializeError
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })
     }
 }
 
 impl Serialize for RoaringTreemap {
-    fn serialize(&self) -> trc::Result<Vec<u8>> {
+    fn serialize(&self) -> crate::trc::Result<Vec<u8>> {
         let mut bytes = Vec::with_capacity(self.serialized_size());
         self.serialize_into(&mut bytes)
             .map_err(|err| {
-                trc::StoreEvent::UnexpectedError
-                    .caused_by(trc::location!())
+                crate::trc::StoreEvent::UnexpectedError
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })
             .map(|_| bytes)
@@ -621,10 +621,10 @@ impl Serialize for RoaringTreemap {
 }
 
 impl Deserialize for RoaringTreemap {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         RoaringTreemap::deserialize_from(bytes).map_err(|err| {
-            trc::StoreEvent::DeserializeError
-                .caused_by(trc::location!())
+            crate::trc::StoreEvent::DeserializeError
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })
     }

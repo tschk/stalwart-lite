@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::throttle::NewKey;
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_SMTP, Server, config::smtp::QueueRateLimiter, expr::functions::ResolveVariable,
 };
+use crate::smtp::core::throttle::NewKey;
+use crate::store::write::now;
 use std::future::Future;
-use store::write::now;
 
 pub trait IsAllowed: Sync + Send {
     fn is_allowed<'x>(
@@ -43,20 +43,20 @@ impl IsAllowed for Server {
                 .await
             {
                 Ok(Some(next_refill)) => {
-                    trc::event!(
-                        Queue(trc::QueueEvent::RateLimitExceeded),
+                    crate::trc::event!(
+                        Queue(crate::trc::QueueEvent::RateLimitExceeded),
                         SpanId = session_id,
                         Id = throttle.id.clone(),
                         Limit = vec![
-                            trc::Value::from(throttle.rate.requests),
-                            trc::Value::from(throttle.rate.period)
+                            crate::trc::Value::from(throttle.rate.requests),
+                            crate::trc::Value::from(throttle.rate.period)
                         ],
                     );
 
                     return Err(now() + next_refill);
                 }
                 Err(err) => {
-                    trc::error!(err.span_id(session_id).caused_by(trc::location!()));
+                    crate::trc::error!(err.span_id(session_id).caused_by(crate::trc::location!()));
                 }
                 _ => (),
             }

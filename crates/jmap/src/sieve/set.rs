@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{blob::download::BlobDownload, changes::state::StateManager};
-use common::{
+use crate::common::{
     Server,
     auth::{AccessToken, ResourceToken},
     storage::index::ObjectIndexBuilder,
 };
-use email::sieve::{
+use crate::email::sieve::{
     ArchivedSieveScript, SieveScript, delete::SieveScriptDelete, ingest::SieveScriptIngest,
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap::{blob::download::BlobDownload, changes::state::StateManager};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::sieve::{Sieve, SieveProperty, SieveValue},
@@ -22,22 +22,22 @@ use jmap_proto::{
     request::{IntoValid, reference::MaybeIdReference},
     types::state::State,
 };
-use jmap_tools::{Key, Map, Value};
-use rand::distr::Alphanumeric;
-use sieve::compiler::ErrorType;
-use std::future::Future;
-use store::{
+use crate::store::{
     Serialize, SerializeInfallible, ValueKey,
     rand::{Rng, rng},
     write::{AlignedBytes, Archive, Archiver, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     blob::{BlobClass, BlobId, BlobSection},
     collection::{Collection, SyncCollection},
     field::{PrincipalField, SieveField},
     id::Id,
 };
+use jmap_tools::{Key, Map, Value};
+use rand::distr::Alphanumeric;
+use sieve::compiler::ErrorType;
+use std::future::Future;
 
 pub struct SetContext<'x> {
     resource_token: ResourceToken,
@@ -51,7 +51,7 @@ pub trait SieveScriptSet: Sync + Send {
         request: SetRequest<'_, Sieve>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<Sieve>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<Sieve>>> + Send;
 
     #[allow(clippy::type_complexity)]
     fn sieve_set_item<'x>(
@@ -61,7 +61,7 @@ pub trait SieveScriptSet: Sync + Send {
         ctx: &SetContext,
         session_id: u64,
     ) -> impl Future<
-        Output = trc::Result<
+        Output = crate::trc::Result<
             Result<
                 (
                     ObjectIndexBuilder<&'x ArchivedSieveScript, SieveScript>,
@@ -79,7 +79,7 @@ impl SieveScriptSet for Server {
         mut request: SetRequest<'_, Sieve>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<Sieve>> {
+    ) -> crate::trc::Result<SetResponse<Sieve>> {
         let account_id = request.account_id.document_id();
         let sieve_ids = self
             .document_ids(account_id, Collection::SieveScript, SieveField::Name)
@@ -128,13 +128,13 @@ impl SieveScriptSet for Server {
                             .store()
                             .assign_document_ids(account_id, Collection::SieveScript, 1)
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         batch
                             .with_account_id(account_id)
                             .with_collection(Collection::SieveScript)
                             .with_document(document_id)
                             .custom(builder.with_access_token(ctx.access_token))
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .clear(blob_hold)
                             .commit_point();
 
@@ -209,7 +209,7 @@ impl SieveScriptSet for Server {
             {
                 let sieve = sieve_
                     .to_unarchived::<SieveScript>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 match self
                     .sieve_set_item(
@@ -256,7 +256,7 @@ impl SieveScriptSet for Server {
                         // Write record
                         batch
                             .custom(builder.with_access_token(ctx.access_token))
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .commit_point();
 
                         // Update blobId property if needed
@@ -353,7 +353,7 @@ impl SieveScriptSet for Server {
             && let Ok(change_id) = self
                 .commit_batch(batch)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .last_change_id(account_id)
         {
             ctx.response.new_state = State::Exact(change_id).into();
@@ -369,7 +369,7 @@ impl SieveScriptSet for Server {
         update: Option<(u32, Archive<&'x ArchivedSieveScript>)>,
         ctx: &SetContext<'_>,
         session_id: u64,
-    ) -> trc::Result<
+    ) -> crate::trc::Result<
         Result<
             (
                 ObjectIndexBuilder<&'x ArchivedSieveScript, SieveScript>,
@@ -476,10 +476,10 @@ impl SieveScriptSet for Server {
                     {
                         Ok(_) => (),
                         Err(err) => {
-                            if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota))
-                                || err.matches(trc::EventType::Limit(trc::LimitEvent::TenantQuota))
+                            if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota))
+                                || err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::TenantQuota))
                             {
-                                trc::error!(err.account_id(ctx.resource_token.account_id).span_id(session_id));
+                                crate::trc::error!(err.account_id(ctx.resource_token.account_id).span_id(session_id));
                                 return Ok(Err(SetError::over_quota()));
                             } else {
                                 return Err(err);
@@ -491,7 +491,7 @@ impl SieveScriptSet for Server {
                     match self.core.sieve.untrusted_compiler.compile(&bytes) {
                         Ok(script) => {
                             changes.size = bytes.len() as u32;
-                            bytes.extend(Archiver::new(script).untrusted().serialize().caused_by(trc::location!())?);
+                            bytes.extend(Archiver::new(script).untrusted().serialize().caused_by(crate::trc::location!())?);
                             bytes.into()
                         }
                         Err(err) => {

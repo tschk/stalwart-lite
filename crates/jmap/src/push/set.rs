@@ -4,10 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use base64::{Engine, engine::general_purpose};
-use common::{Server, auth::AccessToken, ipc::PushEvent};
-use email::push::{Keys, PushSubscription, PushSubscriptions};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, ipc::PushEvent};
+use crate::email::push::{Keys, PushSubscription, PushSubscriptions};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::push_subscription::{self, PushSubscriptionProperty, PushSubscriptionValue},
@@ -15,17 +14,18 @@ use jmap_proto::{
     request::IntoValid,
     types::date::UTCDate,
 };
-use jmap_tools::{Key, Map, Value};
-use rand::distr::Alphanumeric;
-use std::future::Future;
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     rand::{Rng, rng},
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, now},
 };
-use trc::{AddContext, ServerEvent};
-use types::{collection::Collection, field::PrincipalField};
-use utils::map::bitmap::Bitmap;
+use crate::trc::{AddContext, ServerEvent};
+use crate::types::{collection::Collection, field::PrincipalField};
+use crate::utils::map::bitmap::Bitmap;
+use base64::{Engine, engine::general_purpose};
+use jmap_tools::{Key, Map, Value};
+use rand::distr::Alphanumeric;
+use std::future::Future;
 
 const EXPIRES_MAX: i64 = 7 * 24 * 3600; // 7 days
 const VERIFICATION_CODE_LEN: usize = 32;
@@ -35,7 +35,7 @@ pub trait PushSubscriptionSet: Sync + Send {
         &self,
         request: SetRequest<'_, push_subscription::PushSubscription>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<SetResponse<push_subscription::PushSubscription>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<push_subscription::PushSubscription>>> + Send;
 }
 
 impl PushSubscriptionSet for Server {
@@ -43,7 +43,7 @@ impl PushSubscriptionSet for Server {
         &self,
         mut request: SetRequest<'_, push_subscription::PushSubscription>,
         access_token: &AccessToken,
-    ) -> trc::Result<SetResponse<push_subscription::PushSubscription>> {
+    ) -> crate::trc::Result<SetResponse<push_subscription::PushSubscription>> {
         // Load existing push subscriptions
         let account_id = access_token.primary_id();
         let subscriptions_archive = self
@@ -58,7 +58,7 @@ impl PushSubscriptionSet for Server {
         let mut subscriptions = if let Some(subscriptions) = &subscriptions_archive {
             subscriptions
                 .deserialize::<PushSubscriptions>()
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         } else {
             PushSubscriptions::default()
         };
@@ -232,13 +232,15 @@ impl PushSubscriptionSet for Server {
                     PrincipalField::PushSubscriptions,
                     Archiver::new(subscriptions)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
             } else {
                 batch.clear(PrincipalField::PushSubscriptions);
             }
 
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
 
             // Notify push manager
             if self
@@ -253,10 +255,10 @@ impl PushSubscriptionSet for Server {
                 .await
                 .is_err()
             {
-                trc::event!(
+                crate::trc::event!(
                     Server(ServerEvent::ThreadError),
                     Details = "Error sending push updates.",
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
             }
         }

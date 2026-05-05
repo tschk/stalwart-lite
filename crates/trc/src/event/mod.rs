@@ -12,7 +12,7 @@ pub mod metrics;
 use compact_str::ToCompactString;
 use std::fmt::Display;
 
-use crate::*;
+use super::*;
 
 impl<T> Event<T> {
     pub fn with_capacity(inner: T, capacity: usize) -> Self {

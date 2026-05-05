@@ -182,7 +182,7 @@ impl Leb128Writer for Base32Writer {}
 mod tests {
     use std::io::Write;
 
-    use crate::codec::base32_custom::{Base32Reader, Base32Writer};
+    use crate::utils::codec::base32_custom::{Base32Reader, Base32Writer};
 
     #[test]
     fn base32_roundtrip() {

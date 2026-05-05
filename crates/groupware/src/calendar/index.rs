@@ -8,30 +8,30 @@ use super::{
     ArchivedCalendar, ArchivedCalendarEvent, ArchivedCalendarPreferences, ArchivedDefaultAlert,
     ArchivedTimezone, Calendar, CalendarEvent, CalendarPreferences, DefaultAlert, Timezone,
 };
-use crate::calendar::{
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::groupware::calendar::{
     ArchivedCalendarEventNotification, ArchivedChangedBy, ArchivedEventPreferences,
     CalendarEventNotification, ChangedBy, EventPreferences,
 };
-use ahash::AHashSet;
-use calcard::icalendar::{
-    ArchivedICalendarParameterValue, ArchivedICalendarProperty, ArchivedICalendarValue,
-    ICalendarParameterValue, ICalendarProperty, ICalendarValue,
-};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use nlp::language::{
+use crate::nlp::language::{
     Language,
     detect::{LanguageDetector, MIN_LANGUAGE_SCORE},
 };
-use store::{
+use crate::store::{
     U32_LEN,
     search::{CalendarSearchField, IndexDocument, SearchField},
     write::{IndexPropertyClass, SearchIndex, ValueClass},
     xxhash_rust::xxh3,
 };
-use types::{
+use crate::types::{
     acl::AclGrant,
     collection::SyncCollection,
     field::{CalendarEventField, CalendarNotificationField},
+};
+use ahash::AHashSet;
+use calcard::icalendar::{
+    ArchivedICalendarParameterValue, ArchivedICalendarProperty, ArchivedICalendarValue,
+    ICalendarParameterValue, ICalendarProperty, ICalendarValue,
 };
 
 impl IndexableObject for Calendar {

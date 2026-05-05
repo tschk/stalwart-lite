@@ -5,7 +5,8 @@
  */
 
 use super::propfind::PrincipalPropFind;
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError,
     common::{
         DavQuery, DavQueryResource,
@@ -13,8 +14,7 @@ use crate::{
         uri::{DavUriResource, UriResource},
     },
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders,
     schema::{
         property::{DavProperty, WebDavProperty},
@@ -22,10 +22,10 @@ use dav_proto::{
         response::MultiStatus,
     },
 };
-use http_proto::HttpResponse;
+use crate::http_proto::HttpResponse;
+use crate::store::roaring::RoaringBitmap;
+use crate::types::collection::Collection;
 use hyper::StatusCode;
-use store::roaring::RoaringBitmap;
-use types::collection::Collection;
 
 pub(crate) trait PrincipalMatching: Sync + Send {
     fn handle_principal_match(
@@ -33,7 +33,7 @@ pub(crate) trait PrincipalMatching: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PrincipalMatch,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl PrincipalMatching for Server {
@@ -42,7 +42,7 @@ impl PrincipalMatching for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         mut request: PrincipalMatch,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         let resource = self.validate_uri(access_token, headers.uri).await?;
 
         match resource.collection {

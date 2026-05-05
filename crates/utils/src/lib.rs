@@ -67,8 +67,8 @@ impl<T> UnwrapFailure<T> for Option<T> {
         match self {
             Some(result) => result,
             None => {
-                trc::event!(
-                    Server(trc::ServerEvent::StartupError),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::StartupError),
                     Details = message.to_compact_string()
                 );
                 eprintln!("{message}");
@@ -83,8 +83,8 @@ impl<T, E: std::fmt::Display> UnwrapFailure<T> for Result<T, E> {
         match self {
             Ok(result) => result,
             Err(err) => {
-                trc::event!(
-                    Server(trc::ServerEvent::StartupError),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::StartupError),
                     Details = message.to_compact_string(),
                     Reason = err.to_compact_string()
                 );
@@ -103,8 +103,8 @@ impl<T, E: std::fmt::Display> UnwrapFailure<T> for Result<T, E> {
 }
 
 pub fn failed(message: &str) -> ! {
-    trc::event!(
-        Server(trc::ServerEvent::StartupError),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::StartupError),
         Details = message.to_compact_string(),
     );
     eprintln!("{message}");
@@ -130,8 +130,8 @@ pub async fn wait_for_shutdown() {
         match tokio::signal::ctrl_c().await {
             Ok(()) => "SIGINT",
             Err(err) => {
-                trc::event!(
-                    Server(trc::ServerEvent::ThreadError),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::ThreadError),
                     Details = "Unable to listen for shutdown signal",
                     Reason = err.to_string(),
                 );
@@ -140,7 +140,7 @@ pub async fn wait_for_shutdown() {
         }
     };
 
-    trc::event!(Server(trc::ServerEvent::Shutdown), CausedBy = signal);
+    crate::trc::event!(Server(crate::trc::ServerEvent::Shutdown), CausedBy = signal);
 }
 
 pub fn rustls_client_config(allow_invalid_certs: bool) -> ClientConfig {

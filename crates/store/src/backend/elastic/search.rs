@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     backend::elastic::{
         DeleteByQueryResponse, ElasticSearchStore, SearchResponse, main::assert_success,
     },
@@ -18,7 +18,7 @@ use serde_json::{Map, Value, json};
 use std::fmt::Write;
 
 impl ElasticSearchStore {
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         let mut request = String::with_capacity(512);
 
         for document in documents {
@@ -59,7 +59,7 @@ impl ElasticSearchStore {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<R>> {
+    ) -> crate::trc::Result<Vec<R>> {
         let mut search_after: Option<Value> = None;
         let mut results = Vec::new();
         let mut has_more = true;
@@ -94,10 +94,10 @@ impl ElasticSearchStore {
             let text = response
                 .text()
                 .await
-                .map_err(|err| trc::StoreEvent::ElasticsearchError.reason(err))?;
+                .map_err(|err| crate::trc::StoreEvent::ElasticsearchError.reason(err))?;
 
             let response = serde_json::from_str::<SearchResponse>(&text).map_err(|err| {
-                trc::StoreEvent::ElasticsearchError
+                crate::trc::StoreEvent::ElasticsearchError
                     .reason(err)
                     .details(text)
             })?;
@@ -114,9 +114,9 @@ impl ElasticSearchStore {
         Ok(results)
     }
 
-    pub async fn unindex(&self, filter: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, filter: SearchQuery) -> crate::trc::Result<u64> {
         if filter.filters.is_empty() {
-            return Err(trc::StoreEvent::ElasticsearchError
+            return Err(crate::trc::StoreEvent::ElasticsearchError
                 .reason("Unindex operation requires at least one filter"));
         }
 
@@ -140,14 +140,14 @@ impl ElasticSearchStore {
         let response_body = response
             .text()
             .await
-            .map_err(|err| trc::StoreEvent::ElasticsearchError.reason(err))?;
+            .map_err(|err| crate::trc::StoreEvent::ElasticsearchError.reason(err))?;
 
         serde_json::from_str::<DeleteByQueryResponse>(&response_body)
             .map(|delete_response| delete_response.deleted)
-            .map_err(|err| trc::StoreEvent::ElasticsearchError.reason(err))
+            .map_err(|err| crate::trc::StoreEvent::ElasticsearchError.reason(err))
     }
 
-    pub async fn refresh_index(&self, index: SearchIndex) -> trc::Result<()> {
+    pub async fn refresh_index(&self, index: SearchIndex) -> crate::trc::Result<()> {
         let url = format!("{}/{}/_refresh", self.url, index.index_name());
 
         assert_success(self.client.post(url).send().await)

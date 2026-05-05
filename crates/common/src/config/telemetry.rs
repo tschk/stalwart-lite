@@ -4,6 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::Stores;
+use crate::trc::{EventType, Level, TelemetryEvent, ipc::subscriber::Interests};
+use crate::utils::config::{Config, http::parse_http_headers, utils::ParseValue};
 use ahash::{AHashMap, AHashSet};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use hyper::{HeaderMap, header::CONTENT_TYPE};
@@ -18,9 +21,6 @@ use opentelemetry_sdk::{
 };
 use opentelemetry_semantic_conventions::resource::SERVICE_VERSION;
 use std::{collections::HashMap, str::FromStr, sync::Arc, time::Duration};
-use store::Stores;
-use trc::{EventType, Level, TelemetryEvent, ipc::subscriber::Interests};
-use utils::config::{Config, http::parse_http_headers, utils::ParseValue};
 
 #[derive(Debug)]
 pub struct TelemetrySubscriber {
@@ -38,7 +38,7 @@ pub enum TelemetrySubscriberType {
     OtelTracer(OtelTracer),
     Webhook(WebhookTracer),
     #[cfg(unix)]
-    JournalTracer(crate::telemetry::tracers::journald::Subscriber),
+    JournalTracer(crate::common::telemetry::tracers::journald::Subscriber),
     // SPDX-SnippetBegin
     // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
     // SPDX-License-Identifier: LicenseRef-SEL
@@ -97,7 +97,7 @@ pub struct WebhookTracer {
 #[derive(Debug)]
 #[cfg(feature = "enterprise")]
 pub struct StoreTracer {
-    pub store: store::Store,
+    pub store: crate::store::Store,
 }
 // SPDX-SnippetEnd
 
@@ -407,7 +407,7 @@ impl Tracers {
                             .iter()
                             .any(|t| matches!(t.typ, TelemetrySubscriberType::JournalTracer(_)))
                         {
-                            match crate::telemetry::tracers::journald::Subscriber::new() {
+                            match crate::common::telemetry::tracers::journald::Subscriber::new() {
                                 Ok(subscriber) => {
                                     TelemetrySubscriberType::JournalTracer(subscriber)
                                 }

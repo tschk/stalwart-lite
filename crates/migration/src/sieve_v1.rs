@@ -5,30 +5,33 @@
  */
 
 use super::object::Object;
-use crate::{
+use crate::common::Server;
+use crate::email::sieve::{SieveScript, VacationResponse};
+use crate::migration::{
     get_document_ids,
     object::{Property, TryFromLegacy, Value},
     v014::SUBSPACE_BITMAP_TEXT,
 };
-use common::Server;
-use email::sieve::{SieveScript, VacationResponse};
-use store::{
+use crate::store::{
     SUBSPACE_INDEXES, SUBSPACE_PROPERTY, Serialize, SerializeInfallible, U64_LEN, ValueKey,
     write::{
         AlignedBytes, AnyKey, Archive, Archiver, BatchBuilder, ValueClass, key::KeySerializer,
     },
 };
-use trc::{AddContext, StoreEvent};
-use types::{
+use crate::trc::{AddContext, StoreEvent};
+use crate::types::{
     collection::Collection,
     field::{Field, PrincipalField, SieveField},
 };
 
-pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_sieve_v011(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let script_ids = get_document_ids(server, account_id, Collection::SieveScript)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_scripts = script_ids.len();
     if num_scripts == 0 {
@@ -58,7 +61,7 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     for script_id in &script_ids {
@@ -89,7 +92,7 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
                             Field::ARCHIVE,
                             Archiver::new(script)
                                 .serialize()
-                                .caused_by(trc::location!())?,
+                                .caused_by(crate::trc::location!())?,
                         );
 
                     if is_active {
@@ -105,9 +108,9 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Store(StoreEvent::DataCorruption),
                         Details = "Failed to migrate SieveScript",
                         AccountId = account_id,
@@ -130,7 +133,7 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
                     return Err(err
                         .account_id(account_id)
                         .document_id(script_id)
-                        .caused_by(trc::location!()));
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -159,7 +162,7 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Increment document id counter
     if did_migrate {
@@ -171,7 +174,7 @@ pub(crate) async fn migrate_sieve_v011(server: &Server, account_id: u32) -> trc:
                 script_ids.max().map(|id| id as u64).unwrap_or(num_scripts) + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         Ok(num_scripts)
     } else {
         Ok(0)

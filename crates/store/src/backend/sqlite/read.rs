@@ -5,11 +5,11 @@
  */
 
 use super::{SqliteStore, into_error};
-use crate::{Deserialize, IterateParams, Key, ValueKey, write::ValueClass};
+use crate::store::{Deserialize, IterateParams, Key, ValueKey, write::ValueClass};
 use rusqlite::OptionalExtension;
 
 impl SqliteStore {
-    pub(crate) async fn get_value<U>(&self, key: impl Key) -> trc::Result<Option<U>>
+    pub(crate) async fn get_value<U>(&self, key: impl Key) -> crate::trc::Result<Option<U>>
     where
         U: Deserialize + 'static,
     {
@@ -36,8 +36,8 @@ impl SqliteStore {
     pub(crate) async fn iterate<T: Key>(
         &self,
         params: IterateParams<T>,
-        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> trc::Result<bool> + Sync + Send,
-    ) -> trc::Result<()> {
+        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> crate::trc::Result<bool> + Sync + Send,
+    ) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().map_err(into_error)?;
 
         self.spawn_worker(move || {
@@ -109,7 +109,7 @@ impl SqliteStore {
     pub(crate) async fn get_counter(
         &self,
         key: impl Into<ValueKey<ValueClass>> + Sync + Send,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         let key = key.into();
         let table = char::from(key.subspace());
         let key = key.serialize(0);

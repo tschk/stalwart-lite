@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::{Store, Stores};
+use crate::utils::config::Config;
 use deadpool::{
     Runtime,
     managed::{Manager, Pool},
 };
 use std::{sync::Arc, time::Duration};
-use store::{Store, Stores};
-use utils::config::Config;
 
 use ahash::AHashMap;
 
-use crate::{
+use crate::directory::{
     Directories, Directory, DirectoryInner,
     backend::{
         imap::ImapDirectory, ldap::LdapDirectory, memory::MemoryDirectory, oidc::OpenIdDirectory,

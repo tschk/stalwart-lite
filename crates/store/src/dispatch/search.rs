@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use trc::AddContext;
+use crate::trc::AddContext;
 
-use crate::{
+use crate::store::{
     SearchStore, Store,
     search::{
         IndexDocument, SearchComparator, SearchField, SearchFilter, SearchOperator, SearchQuery,
@@ -18,7 +18,7 @@ use crate::{
 use std::cmp::Ordering;
 
 impl SearchStore {
-    pub async fn query_account(&self, query: SearchQuery) -> trc::Result<Vec<u32>> {
+    pub async fn query_account(&self, query: SearchQuery) -> crate::trc::Result<Vec<u32>> {
         // Pre-filter by mask
         if query.mask.is_empty() {
             return Ok(vec![]);
@@ -53,9 +53,9 @@ impl SearchStore {
         }
 
         if account_id == u32::MAX {
-            return Err(trc::StoreEvent::UnexpectedError
+            return Err(crate::trc::StoreEvent::UnexpectedError
                 .reason("Account ID filter is required for account queries")
-                .caused_by(trc::location!()));
+                .caused_by(crate::trc::location!()));
         }
 
         if !has_local_filters && !has_external_filters && query.comparators.is_empty() {
@@ -77,15 +77,15 @@ impl SearchStore {
                         query.mask.iter().collect()
                     }
                 })
-                .caused_by(trc::location!());
+                .caused_by(crate::trc::location!());
         }
 
         let filters = if has_external_filters {
             // Split filters
             let split_filters = split_filters(query.filters).ok_or_else(|| {
-                trc::StoreEvent::UnexpectedError
+                crate::trc::StoreEvent::UnexpectedError
                     .reason("Invalid filter query")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
 
             let mut filters = Vec::with_capacity(split_filters.len());
@@ -201,7 +201,7 @@ impl SearchStore {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<u32>> {
+    ) -> crate::trc::Result<Vec<u32>> {
         match self {
             SearchStore::Store(store) => match store {
                 #[cfg(feature = "postgres")]
@@ -221,7 +221,7 @@ impl SearchStore {
         }
     }
 
-    pub async fn query_global(&self, query: SearchQuery) -> trc::Result<Vec<u64>> {
+    pub async fn query_global(&self, query: SearchQuery) -> crate::trc::Result<Vec<u64>> {
         match self {
             SearchStore::Store(store) => match store {
                 #[cfg(feature = "postgres")]
@@ -261,7 +261,7 @@ impl SearchStore {
         }
     }
 
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         match self {
             SearchStore::Store(store) => match store {
                 #[cfg(feature = "postgres")]
@@ -281,7 +281,7 @@ impl SearchStore {
         }
     }
 
-    pub async fn unindex(&self, query: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, query: SearchQuery) -> crate::trc::Result<u64> {
         match self {
             SearchStore::Store(store) => match store {
                 #[cfg(feature = "postgres")]

@@ -4,44 +4,44 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::StateManager;
-use common::Server;
-use email::cache::MessageCacheFetch;
-use jmap_proto::{
+use crate::common::Server;
+use crate::email::cache::MessageCacheFetch;
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::thread::{Thread, ThreadProperty, ThreadValue},
     request::MaybeInvalid,
 };
-use jmap_tools::Map;
-use std::future::Future;
-use store::{
+use crate::store::{
     ahash::AHashMap,
     roaring::RoaringBitmap,
     search::{EmailSearchField, SearchComparator, SearchField, SearchQuery},
     write::SearchIndex,
 };
-use trc::AddContext;
-use types::{collection::SyncCollection, id::Id};
+use crate::trc::AddContext;
+use crate::types::{collection::SyncCollection, id::Id};
+use jmap_tools::Map;
+use std::future::Future;
 
 pub trait ThreadGet: Sync + Send {
     fn thread_get(
         &self,
         request: GetRequest<Thread>,
-    ) -> impl Future<Output = trc::Result<GetResponse<Thread>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Thread>>> + Send;
 }
 
 impl ThreadGet for Server {
     async fn thread_get(
         &self,
         mut request: GetRequest<Thread>,
-    ) -> trc::Result<GetResponse<Thread>> {
+    ) -> crate::trc::Result<GetResponse<Thread>> {
         let account_id = request.account_id.document_id();
         let mut thread_map: AHashMap<u32, RoaringBitmap> = AHashMap::with_capacity(32);
         let mut all_ids = RoaringBitmap::new();
         for item in &self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .emails
             .items
         {

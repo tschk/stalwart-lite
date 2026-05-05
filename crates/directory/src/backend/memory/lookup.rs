@@ -5,12 +5,12 @@
  */
 
 use super::{EmailType, MemoryDirectory};
-use crate::{Principal, QueryBy, QueryParams, backend::RcptType};
+use crate::directory::{Principal, QueryBy, QueryParams, backend::RcptType};
 
 use mail_send::Credentials;
 
 impl MemoryDirectory {
-    pub async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         match by.by {
             QueryBy::Name(name) => {
                 for principal in &self.principals {
@@ -47,7 +47,7 @@ impl MemoryDirectory {
         Ok(None)
     }
 
-    pub async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    pub async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         Ok(self.emails_to_ids.get(address).and_then(|names| {
             names
                 .iter()
@@ -58,11 +58,11 @@ impl MemoryDirectory {
         }))
     }
 
-    pub async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         Ok(self.emails_to_ids.contains_key(address).into())
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         let mut result = Vec::new();
         for (key, value) in &self.emails_to_ids {
             if key.contains(address) && value.iter().any(|t| matches!(t, EmailType::Primary(_))) {
@@ -72,7 +72,7 @@ impl MemoryDirectory {
         Ok(result)
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         let mut result = Vec::new();
         for (key, value) in &self.emails_to_ids {
             if key == address {
@@ -93,7 +93,7 @@ impl MemoryDirectory {
         Ok(result)
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         Ok(self.domains.contains(domain))
     }
 }

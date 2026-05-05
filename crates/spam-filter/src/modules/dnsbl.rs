@@ -10,16 +10,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use common::{
+use crate::common::{
     Server,
     config::spamfilter::{DnsBlServer, Element, IpResolver, Location},
     expr::functions::ResolveVariable,
 };
 
+use crate::trc::SpamEvent;
 use mail_auth::{Error, common::resolver::IntoFqdn};
-use trc::SpamEvent;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 use super::expression::SpamFilterResolver;
 
@@ -128,13 +128,13 @@ async fn is_dnsbl(
                 .await
             {
                 Ok(result) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Spam(SpamEvent::Dnsbl),
                         Hostname = zone.clone(),
                         Result = result
                             .entry
                             .iter()
-                            .map(|ip| trc::Value::from(ip.to_string()))
+                            .map(|ip| crate::trc::Value::from(ip.to_string()))
                             .collect::<Vec<_>>(),
                         Details = element.as_str(),
                         Elapsed = time.elapsed()
@@ -159,10 +159,10 @@ async fn is_dnsbl(
                     entry
                 }
                 Err(Error::DnsRecordNotFound(_)) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Spam(SpamEvent::Dnsbl),
                         Hostname = zone.clone(),
-                        Result = trc::Value::None,
+                        Result = crate::trc::Value::None,
                         Details = element.as_str(),
                         Elapsed = time.elapsed()
                     );
@@ -176,7 +176,7 @@ async fn is_dnsbl(
                     return None;
                 }
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Spam(SpamEvent::DnsblError),
                         Hostname = zone,
                         Elapsed = time.elapsed(),

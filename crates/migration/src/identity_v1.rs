@@ -5,24 +5,27 @@
  */
 
 use super::object::Object;
-use crate::{
+use crate::common::Server;
+use crate::email::identity::{EmailAddress, Identity};
+use crate::migration::{
     get_document_ids,
     object::{FromLegacy, Property, Value},
 };
-use common::Server;
-use email::identity::{EmailAddress, Identity};
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::Field};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::Field};
 
-pub(crate) async fn migrate_identities_v011(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_identities_v011(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     // Obtain identity ids
     let identity_ids = get_document_ids(server, account_id, Collection::Identity)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_identities = identity_ids.len();
     if num_identities == 0 {
@@ -51,7 +54,7 @@ pub(crate) async fn migrate_identities_v011(server: &Server, account_id: u32) ->
                         Field::ARCHIVE,
                         Archiver::new(Identity::from_legacy(legacy))
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
 
                 did_migrate = true;
@@ -60,7 +63,7 @@ pub(crate) async fn migrate_identities_v011(server: &Server, account_id: u32) ->
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => (),
             Err(err) => {
@@ -78,7 +81,7 @@ pub(crate) async fn migrate_identities_v011(server: &Server, account_id: u32) ->
                     return Err(err
                         .account_id(account_id)
                         .document_id(identity_id)
-                        .caused_by(trc::location!()));
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -98,7 +101,7 @@ pub(crate) async fn migrate_identities_v011(server: &Server, account_id: u32) ->
                     + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         Ok(num_identities)
     } else {
         Ok(0)

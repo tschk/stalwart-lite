@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use common::{config::smtp::auth::VerifyStrategy, listener::SessionStream};
+use crate::common::{config::smtp::auth::VerifyStrategy, listener::SessionStream};
 
 use super::Session;
 

@@ -9,7 +9,7 @@ use std::{borrow::Cow, fmt::Debug, str::FromStr, time::Duration};
 use compact_str::{CompactString, ToCompactString, format_compact};
 use mail_auth::common::verify::VerifySignature;
 
-use crate::*;
+use super::super::*;
 
 impl AsRef<EventType> for Error {
     fn as_ref(&self) -> &EventType {
@@ -67,6 +67,12 @@ impl From<f32> for Value {
 
 impl From<u16> for Value {
     fn from(value: u16) -> Self {
+        Self::UInt(value.into())
+    }
+}
+
+impl From<u8> for Value {
+    fn from(value: u8) -> Self {
         Self::UInt(value.into())
     }
 }
@@ -140,18 +146,6 @@ impl From<StoreEvent> for Error {
 impl From<AuthEvent> for Error {
     fn from(value: AuthEvent) -> Self {
         Error::new(EventType::Auth(value))
-    }
-}
-
-impl From<Vec<u8>> for Value {
-    fn from(value: Vec<u8>) -> Self {
-        Self::Bytes(value)
-    }
-}
-
-impl From<&[u8]> for Value {
-    fn from(value: &[u8]) -> Self {
-        Self::Bytes(value.to_vec())
     }
 }
 

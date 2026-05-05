@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::{Session, State, StatusResponse};
-use common::listener::SessionStream;
-use directory::Permission;
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::managesieve::core::{Session, State, StatusResponse};
 
 pub mod authenticate;
 pub mod capability;
@@ -22,17 +22,17 @@ pub mod renamescript;
 pub mod setactive;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_start_tls(&self) -> trc::Result<Vec<u8>> {
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::StartTls),
+    pub async fn handle_start_tls(&self) -> crate::trc::Result<Vec<u8>> {
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::StartTls),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         Ok(StatusResponse::ok("Begin TLS negotiation now").into_bytes())
     }
 
-    pub fn assert_has_permission(&self, permission: Permission) -> trc::Result<bool> {
+    pub fn assert_has_permission(&self, permission: Permission) -> crate::trc::Result<bool> {
         match &self.state {
             State::Authenticated { access_token, .. } => {
                 access_token.assert_has_permission(permission)

@@ -6,11 +6,11 @@
 
 use std::sync::Arc;
 
+use crate::directory::Directory;
+use crate::store::{BlobStore, InMemoryStore, PubSubStore, PurgeSchedule, SearchStore, Store};
 use ahash::AHashMap;
-use directory::Directory;
-use store::{BlobStore, InMemoryStore, PubSubStore, PurgeSchedule, SearchStore, Store};
 
-use crate::manager::config::ConfigManager;
+use crate::common::manager::config::ConfigManager;
 
 #[derive(Default, Clone)]
 pub struct Storage {

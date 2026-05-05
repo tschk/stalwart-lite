@@ -4,29 +4,29 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken, ipc::PushEvent};
-use email::push::PushSubscriptions;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, ipc::PushEvent};
+use crate::email::push::PushSubscriptions;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::push_subscription::{self, PushSubscriptionProperty, PushSubscriptionValue},
     types::date::UTCDate,
 };
-use jmap_tools::{Map, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, now},
 };
-use trc::{AddContext, ServerEvent};
-use types::{collection::Collection, field::PrincipalField, id::Id};
-use utils::map::bitmap::Bitmap;
+use crate::trc::{AddContext, ServerEvent};
+use crate::types::{collection::Collection, field::PrincipalField, id::Id};
+use crate::utils::map::bitmap::Bitmap;
+use jmap_tools::{Map, Value};
+use std::future::Future;
 
 pub trait PushSubscriptionFetch: Sync + Send {
     fn push_subscription_get(
         &self,
         request: GetRequest<push_subscription::PushSubscription>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<push_subscription::PushSubscription>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<push_subscription::PushSubscription>>> + Send;
 }
 
 impl PushSubscriptionFetch for Server {
@@ -34,7 +34,7 @@ impl PushSubscriptionFetch for Server {
         &self,
         mut request: GetRequest<push_subscription::PushSubscription>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<push_subscription::PushSubscription>> {
+    ) -> crate::trc::Result<GetResponse<push_subscription::PushSubscription>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             PushSubscriptionProperty::Id,
@@ -70,7 +70,7 @@ impl PushSubscriptionFetch for Server {
         };
         let subscriptions = subscriptions_
             .to_unarchived::<PushSubscriptions>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let ids = if let Some(ids) = ids {
             ids
@@ -104,7 +104,7 @@ impl PushSubscriptionFetch for Server {
                         result.insert_unchecked(PushSubscriptionProperty::Id, id);
                     }
                     PushSubscriptionProperty::Url | PushSubscriptionProperty::Keys => {
-                        return Err(trc::JmapEvent::Forbidden.into_err().details(
+                        return Err(crate::trc::JmapEvent::Forbidden.into_err().details(
                             "The 'url' and 'keys' properties are not readable".to_string(),
                         ));
                     }
@@ -175,13 +175,15 @@ impl PushSubscriptionFetch for Server {
                     PrincipalField::PushSubscriptions,
                     Archiver::new(updated_subscriptions)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
             } else {
                 batch.clear(PrincipalField::PushSubscriptions);
             }
 
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
 
             // Update push servers
             if self
@@ -196,10 +198,10 @@ impl PushSubscriptionFetch for Server {
                 .await
                 .is_err()
             {
-                trc::event!(
+                crate::trc::event!(
                     Server(ServerEvent::ThreadError),
                     Details = "Error sending push updates.",
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
             }
         }

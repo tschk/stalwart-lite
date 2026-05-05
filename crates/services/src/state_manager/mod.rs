@@ -9,15 +9,15 @@ pub mod http;
 pub mod manager;
 pub mod push;
 
-use common::ipc::PushNotification;
-use email::push::PushSubscription;
+use crate::common::ipc::PushNotification;
+use crate::email::push::PushSubscription;
+use crate::types::{id::Id, type_state::DataType};
+use crate::utils::map::bitmap::Bitmap;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::mpsc;
-use types::{id::Id, type_state::DataType};
-use utils::map::bitmap::Bitmap;
 
 const PURGE_EVERY: Duration = Duration::from_secs(3600);
 const SEND_TIMEOUT: Duration = Duration::from_millis(500);

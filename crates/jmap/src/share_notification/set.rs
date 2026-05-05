@@ -4,28 +4,28 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use jmap_proto::{
+use crate::common::Server;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::share_notification::ShareNotification,
     request::IntoValid,
 };
-use store::write::{BatchBuilder, ValueClass};
-use trc::AddContext;
+use crate::store::write::{BatchBuilder, ValueClass};
+use crate::trc::AddContext;
 
 pub trait ShareNotificationSet: Sync + Send {
     fn share_notification_set(
         &self,
         request: SetRequest<'_, ShareNotification>,
-    ) -> impl Future<Output = trc::Result<SetResponse<ShareNotification>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<ShareNotification>>> + Send;
 }
 
 impl ShareNotificationSet for Server {
     async fn share_notification_set(
         &self,
         mut request: SetRequest<'_, ShareNotification>,
-    ) -> trc::Result<SetResponse<ShareNotification>> {
+    ) -> crate::trc::Result<SetResponse<ShareNotification>> {
         let account_id = request.account_id.document_id();
         let mut response = SetResponse::from_request(&request, self.core.jmap.set_max_objects)?;
 
@@ -57,7 +57,7 @@ impl ShareNotificationSet for Server {
 
         // Write changes
         if !batch.is_empty() {
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch).await.caused_by(crate::trc::location!())?;
         }
 
         Ok(response)

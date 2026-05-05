@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::blob::download::BlobDownload;
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap::blob::download::BlobDownload;
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::validate::{ValidateSieveScriptRequest, ValidateSieveScriptResponse},
     request::MaybeInvalid,
@@ -18,7 +18,7 @@ pub trait SieveScriptValidate: Sync + Send {
         &self,
         request: ValidateSieveScriptRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<ValidateSieveScriptResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ValidateSieveScriptResponse>> + Send;
 }
 
 impl SieveScriptValidate for Server {
@@ -26,7 +26,7 @@ impl SieveScriptValidate for Server {
         &self,
         request: ValidateSieveScriptRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<ValidateSieveScriptResponse> {
+    ) -> crate::trc::Result<ValidateSieveScriptResponse> {
         Ok(ValidateSieveScriptResponse {
             account_id: request.account_id,
             error: match request.blob_id {

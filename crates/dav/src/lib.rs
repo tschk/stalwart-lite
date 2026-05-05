@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
-#![warn(clippy::large_futures)]
+#![allow(clippy::large_futures)]
 
 pub mod calendar;
 pub mod card;
@@ -12,14 +12,14 @@ pub mod file;
 pub mod principal;
 pub mod request;
 
-use dav_proto::schema::{
+use crate::dav_proto::schema::{
     request::DavPropertyValue,
     response::{Condition, List, Prop, PropStat, ResponseDescription, Status},
 };
-use groupware::{DavResourceName, RFC_3986};
+use crate::groupware::{DavResourceName, RFC_3986};
+use crate::store::ahash::AHashMap;
 use hyper::{Method, StatusCode};
 use std::borrow::Cow;
-use store::ahash::AHashMap;
 pub(crate) type Result<T> = std::result::Result<T, DavError>;
 
 #[derive(Debug, Clone, Copy)]
@@ -43,38 +43,38 @@ pub enum DavMethod {
     ACL,
 }
 
-impl From<DavMethod> for trc::WebDavEvent {
+impl From<DavMethod> for crate::trc::WebDavEvent {
     fn from(value: DavMethod) -> Self {
         match value {
-            DavMethod::GET => trc::WebDavEvent::Get,
-            DavMethod::PUT => trc::WebDavEvent::Put,
-            DavMethod::POST => trc::WebDavEvent::Post,
-            DavMethod::DELETE => trc::WebDavEvent::Delete,
-            DavMethod::HEAD => trc::WebDavEvent::Head,
-            DavMethod::PATCH => trc::WebDavEvent::Patch,
-            DavMethod::PROPFIND => trc::WebDavEvent::Propfind,
-            DavMethod::PROPPATCH => trc::WebDavEvent::Proppatch,
-            DavMethod::REPORT => trc::WebDavEvent::Report,
-            DavMethod::MKCOL => trc::WebDavEvent::Mkcol,
-            DavMethod::MKCALENDAR => trc::WebDavEvent::Mkcalendar,
-            DavMethod::COPY => trc::WebDavEvent::Copy,
-            DavMethod::MOVE => trc::WebDavEvent::Move,
-            DavMethod::LOCK => trc::WebDavEvent::Lock,
-            DavMethod::UNLOCK => trc::WebDavEvent::Unlock,
-            DavMethod::OPTIONS => trc::WebDavEvent::Options,
-            DavMethod::ACL => trc::WebDavEvent::Acl,
+            DavMethod::GET => crate::trc::WebDavEvent::Get,
+            DavMethod::PUT => crate::trc::WebDavEvent::Put,
+            DavMethod::POST => crate::trc::WebDavEvent::Post,
+            DavMethod::DELETE => crate::trc::WebDavEvent::Delete,
+            DavMethod::HEAD => crate::trc::WebDavEvent::Head,
+            DavMethod::PATCH => crate::trc::WebDavEvent::Patch,
+            DavMethod::PROPFIND => crate::trc::WebDavEvent::Propfind,
+            DavMethod::PROPPATCH => crate::trc::WebDavEvent::Proppatch,
+            DavMethod::REPORT => crate::trc::WebDavEvent::Report,
+            DavMethod::MKCOL => crate::trc::WebDavEvent::Mkcol,
+            DavMethod::MKCALENDAR => crate::trc::WebDavEvent::Mkcalendar,
+            DavMethod::COPY => crate::trc::WebDavEvent::Copy,
+            DavMethod::MOVE => crate::trc::WebDavEvent::Move,
+            DavMethod::LOCK => crate::trc::WebDavEvent::Lock,
+            DavMethod::UNLOCK => crate::trc::WebDavEvent::Unlock,
+            DavMethod::OPTIONS => crate::trc::WebDavEvent::Options,
+            DavMethod::ACL => crate::trc::WebDavEvent::Acl,
         }
     }
 }
 
 pub(crate) enum DavError {
-    Parse(dav_proto::parser::Error),
-    Internal(trc::Error),
+    Parse(crate::dav_proto::parser::Error),
+    Internal(crate::trc::Error),
     Condition(DavErrorCondition),
     Code(StatusCode),
 }
 
-struct DavErrorCondition {
+pub(crate) struct DavErrorCondition {
     pub code: StatusCode,
     pub condition: Condition,
     pub details: Option<String>,

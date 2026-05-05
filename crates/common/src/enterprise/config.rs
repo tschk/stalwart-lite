@@ -12,16 +12,14 @@ use super::{
     AlertContent, AlertContentToken, AlertMethod, Enterprise, MetricAlert, MetricStore,
     SpamFilterLlmConfig, TraceStore, Undelete, license::LicenseKey, llm::AiApiConfig,
 };
-use crate::{
+use crate::common::{
     expr::{Expression, tokenizer::TokenMap},
     manager::config::ConfigManager,
 };
-use ahash::AHashMap;
-use directory::{Type, backend::internal::manage::ManageDirectory};
-use std::{sync::Arc, time::Duration};
-use store::{Store, Stores};
-use trc::{EventType, MetricType, TOTAL_EVENT_COUNT};
-use utils::{
+use crate::directory::{Type, backend::internal::manage::ManageDirectory};
+use crate::store::{Store, Stores};
+use crate::trc::{EventType, MetricType, TOTAL_EVENT_COUNT};
+use crate::utils::{
     config::{
         Config, ConfigKey,
         cron::SimpleCron,
@@ -29,6 +27,8 @@ use utils::{
     },
     template::Template,
 };
+use ahash::AHashMap;
+use std::{sync::Arc, time::Duration};
 
 impl Enterprise {
     pub async fn parse(
@@ -103,8 +103,8 @@ impl Enterprise {
                 )
                 .await
             {
-                trc::error!(
-                    err.caused_by(trc::location!())
+                crate::trc::error!(
+                    err.caused_by(crate::trc::location!())
                         .details("Failed to update license key")
                 );
             }

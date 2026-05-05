@@ -9,7 +9,7 @@ use std::net::IpAddr;
 use compact_str::CompactString;
 use mail_auth::common::resolver::ToReverseName;
 
-use crate::expr::Variable;
+use crate::common::expr::Variable;
 
 pub(crate) fn fn_is_empty(v: Vec<Variable>) -> Variable {
     match &v[0] {

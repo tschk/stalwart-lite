@@ -4,30 +4,30 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Inner, KV_LOCK_HOUSEKEEPER, LONG_1D_SLUMBER, Server,
     config::{spamfilter, telemetry::OtelMetrics},
     core::BuildServer,
     ipc::{BroadcastEvent, HousekeeperEvent, PurgeType},
 };
-use email::message::delete::EmailDeletion;
-use smtp::reporting::SmtpReporting;
-use spam_filter::modules::classifier::SpamClassifier;
+use crate::email::message::delete::EmailDeletion;
+use crate::smtp::reporting::SmtpReporting;
+use crate::spam_filter::modules::classifier::SpamClassifier;
+use crate::store::{PurgeStore, write::now};
+use crate::trc::{Collector, MetricType, PurgeEvent};
 use std::{
     collections::BinaryHeap,
     future::Future,
     sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
-use store::{PurgeStore, write::now};
 use tokio::sync::mpsc;
-use trc::{Collector, MetricType, PurgeEvent};
 
 // SPDX-SnippetBegin
 // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
 // SPDX-License-Identifier: LicenseRef-SEL
 #[cfg(feature = "enterprise")]
-use common::telemetry::{
+use crate::common::telemetry::{
     metrics::store::{MetricsStore, SharedMetricHistory},
     tracers::store::TracingStore,
 };
@@ -73,7 +73,7 @@ const METRIC_ALERTS_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
 pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEvent>) {
     tokio::spawn(async move {
-        trc::event!(Housekeeper(trc::HousekeeperEvent::Start));
+        crate::trc::event!(Housekeeper(crate::trc::HousekeeperEvent::Start));
         let start_time = SystemTime::now();
 
         // Add all events to queue
@@ -147,7 +147,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                             );
                         }
                         Err(err) => {
-                            trc::error!(
+                            crate::trc::error!(
                                 err.details("Failed to initialize ACME certificate manager.")
                             );
                         }
@@ -249,7 +249,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                 .inner
                                 .ipc
                                 .queue_tx
-                                .send(common::ipc::QueueEvent::ReloadSettings)
+                                .send(crate::common::ipc::QueueEvent::ReloadSettings)
                                 .await
                                 .ok();
 
@@ -270,7 +270,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                                 .ok();
                                         }
                                         Err(err) => {
-                                            trc::error!(err.details(
+                                            crate::trc::error!(err.details(
                                                 "Failed to reload ACME certificate manager."
                                             ));
                                         }
@@ -293,8 +293,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                             });
                         }
                         HousekeeperEvent::Exit => {
-                            trc::event!(
-                                Housekeeper(trc::HousekeeperEvent::Stop),
+                            crate::trc::event!(
+                                Housekeeper(crate::trc::HousekeeperEvent::Stop),
                                 Reason = "Shutdown"
                             );
 
@@ -303,8 +303,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                     }
                 }
                 Ok(None) => {
-                    trc::event!(
-                        Housekeeper(trc::HousekeeperEvent::Stop),
+                    crate::trc::event!(
+                        Housekeeper(crate::trc::HousekeeperEvent::Stop),
                         Reason = "Channel closed"
                     );
                     return;
@@ -314,24 +314,27 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                     while let Some(event) = queue.pop() {
                         match event.event {
                             ActionClass::Acme(provider_id) => {
-                                trc::event!(Housekeeper(trc::HousekeeperEvent::Run), Type = "acme");
+                                crate::trc::event!(
+                                    Housekeeper(crate::trc::HousekeeperEvent::Run),
+                                    Type = "acme"
+                                );
 
                                 let server = server.clone();
                                 tokio::spawn(async move {
                                     if let Some(provider) =
                                         server.core.acme.providers.get(&provider_id)
                                     {
-                                        trc::event!(
-                                            Acme(trc::AcmeEvent::OrderStart),
+                                        crate::trc::event!(
+                                            Acme(crate::trc::AcmeEvent::OrderStart),
                                             Hostname = provider.domains.as_slice()
                                         );
 
                                         let renew_at = match server.renew(provider).await {
                                             Ok(renew_at) => {
-                                                trc::event!(
-                                                    Acme(trc::AcmeEvent::OrderCompleted),
+                                                crate::trc::event!(
+                                                    Acme(crate::trc::AcmeEvent::OrderCompleted),
                                                     Domain = provider.domains.as_slice(),
-                                                    Expires = trc::Value::Timestamp(
+                                                    Expires = crate::trc::Value::Timestamp(
                                                         now() + renew_at.as_secs()
                                                     )
                                                 );
@@ -339,7 +342,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                                 renew_at
                                             }
                                             Err(err) => {
-                                                trc::error!(
+                                                crate::trc::error!(
                                                     err.details("Failed to renew certificates.")
                                                 );
 
@@ -365,8 +368,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                 });
                             }
                             ActionClass::Account => {
-                                trc::event!(
-                                    Housekeeper(trc::HousekeeperEvent::Run),
+                                crate::trc::event!(
+                                    Housekeeper(crate::trc::HousekeeperEvent::Run),
                                     Type = "purge_account"
                                 );
 
@@ -392,8 +395,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                 if let Some(schedule) =
                                     server.core.storage.purge_schedules.get(idx).cloned()
                                 {
-                                    trc::event!(
-                                        Housekeeper(trc::HousekeeperEvent::Run),
+                                    crate::trc::event!(
+                                        Housekeeper(crate::trc::HousekeeperEvent::Run),
                                         Type = "purge_store",
                                         Id = idx
                                     );
@@ -429,8 +432,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                             }
                             ActionClass::OtelMetrics => {
                                 if let Some(otel) = &server.core.metrics.otel {
-                                    trc::event!(
-                                        Housekeeper(trc::HousekeeperEvent::Run),
+                                    crate::trc::event!(
+                                        Housekeeper(crate::trc::HousekeeperEvent::Run),
                                         Type = "metrics_report"
                                     );
 
@@ -457,8 +460,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                 }
                             }
                             ActionClass::CalculateMetrics => {
-                                trc::event!(
-                                    Housekeeper(trc::HousekeeperEvent::Run),
+                                crate::trc::event!(
+                                    Housekeeper(crate::trc::HousekeeperEvent::Run),
                                     Type = "metrics_calculate"
                                 );
 
@@ -499,7 +502,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                                     );
                                                 }
                                                 Err(err) => {
-                                                    trc::error!(
+                                                    crate::trc::error!(
                                                         err.details("Failed to obtain queue size")
                                                     );
                                                 }
@@ -516,7 +519,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                                     );
                                                 }
                                                 Err(err) => {
-                                                    trc::error!(
+                                                    crate::trc::error!(
                                                         err.details(
                                                             "Failed to obtain account count"
                                                         )
@@ -532,7 +535,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                                     );
                                                 }
                                                 Err(err) => {
-                                                    trc::error!(
+                                                    crate::trc::error!(
                                                         err.details(
                                                             "Failed to obtain domain count"
                                                         )
@@ -553,12 +556,12 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                         }
                                         Ok(None) => {}
                                         Err(err) => {
-                                            trc::error!(
-                                                trc::EventType::Server(
-                                                    trc::ServerEvent::ThreadError,
+                                            crate::trc::error!(
+                                                crate::trc::EventType::Server(
+                                                    crate::trc::ServerEvent::ThreadError,
                                                 )
                                                 .reason(err)
-                                                .caused_by(trc::location!())
+                                                .caused_by(crate::trc::location!())
                                                 .details("Join Error")
                                             );
                                         }
@@ -580,8 +583,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                         .as_ref()
                                         .and_then(|c| c.train_frequency)
                                 {
-                                    trc::event!(
-                                        Housekeeper(trc::HousekeeperEvent::Run),
+                                    crate::trc::event!(
+                                        Housekeeper(crate::trc::HousekeeperEvent::Run),
                                         Type = "spam_classifier_train"
                                     );
 
@@ -593,7 +596,7 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                     let server = server.clone();
                                     tokio::spawn(async move {
                                         if let Err(err) = server.spam_train(false).await {
-                                            trc::error!(
+                                            crate::trc::error!(
                                                 err.details("Failed to train spam classifier")
                                             );
                                         }
@@ -612,8 +615,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                     .as_ref()
                                     .and_then(|e| e.metrics_store.as_ref())
                                 {
-                                    trc::event!(
-                                        Housekeeper(trc::HousekeeperEvent::Run),
+                                    crate::trc::event!(
+                                        Housekeeper(crate::trc::HousekeeperEvent::Run),
                                         Type = "metrics_internal"
                                     );
 
@@ -630,7 +633,9 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                             .write_metrics(core, now(), metrics_history)
                                             .await
                                         {
-                                            trc::error!(err.details("Failed to write metrics"));
+                                            crate::trc::error!(
+                                                err.details("Failed to write metrics")
+                                            );
                                         }
                                     });
                                 }
@@ -638,8 +643,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
 
                             #[cfg(feature = "enterprise")]
                             ActionClass::AlertMetrics => {
-                                trc::event!(
-                                    Housekeeper(trc::HousekeeperEvent::Run),
+                                crate::trc::event!(
+                                    Housekeeper(crate::trc::HousekeeperEvent::Run),
                                     Type = "metrics_alert"
                                 );
 
@@ -664,8 +669,8 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
 
                             #[cfg(feature = "enterprise")]
                             ActionClass::RenewLicense => {
-                                trc::event!(
-                                    Housekeeper(trc::HousekeeperEvent::Run),
+                                crate::trc::event!(
+                                    Housekeeper(crate::trc::HousekeeperEvent::Run),
                                     Type = "renew_license"
                                 );
 
@@ -703,7 +708,9 @@ pub fn spawn_housekeeper(inner: Arc<Inner>, mut rx: mpsc::Receiver<HousekeeperEv
                                         }
                                     }
                                     Err(err) => {
-                                        trc::error!(err.details("Failed to reload configuration."));
+                                        crate::trc::error!(
+                                            err.details("Failed to reload configuration.")
+                                        );
                                     }
                                 }
                             } // SPDX-SnippetEnd
@@ -760,17 +767,17 @@ impl Purge for Server {
             {
                 Ok(true) => (),
                 Ok(false) => {
-                    trc::event!(Purge(PurgeEvent::InProgress), Details = lock_type);
+                    crate::trc::event!(Purge(PurgeEvent::InProgress), Details = lock_type);
                     return;
                 }
                 Err(err) => {
-                    trc::error!(err.details("Failed to lock task.").details(lock_type));
+                    crate::trc::error!(err.details("Failed to lock task.").details(lock_type));
                     return;
                 }
             }
         }
 
-        trc::event!(Purge(PurgeEvent::Started), Type = lock_type, Id = store_idx);
+        crate::trc::event!(Purge(PurgeEvent::Started), Type = lock_type, Id = store_idx);
         let time = Instant::now();
 
         match purge {
@@ -795,7 +802,7 @@ impl Purge for Server {
                 // SPDX-SnippetEnd
 
                 if let Err(err) = store.purge_store().await {
-                    trc::error!(err.details("Failed to purge data store"));
+                    crate::trc::error!(err.details("Failed to purge data store"));
                 }
 
                 // SPDX-SnippetBegin
@@ -813,7 +820,7 @@ impl Purge for Server {
                         .purge_spans(trace_retention, self.search_store().into())
                         .await
                 {
-                    trc::error!(err.details("Failed to purge tracing spans"));
+                    crate::trc::error!(err.details("Failed to purge tracing spans"));
                 }
 
                 #[cfg(feature = "enterprise")]
@@ -825,25 +832,25 @@ impl Purge for Server {
                         .and_then(|e| e.metrics_store.as_ref())
                     && let Err(err) = metrics_store.store.purge_metrics(metrics_retention).await
                 {
-                    trc::error!(err.details("Failed to purge metrics"));
+                    crate::trc::error!(err.details("Failed to purge metrics"));
                 }
                 // SPDX-SnippetEnd
             }
             PurgeType::Blobs { store, blob_store } => {
                 if let Err(err) = store.purge_blobs(blob_store).await {
-                    trc::error!(err.details("Failed to purge blob store"));
+                    crate::trc::error!(err.details("Failed to purge blob store"));
                 }
             }
             PurgeType::Lookup { store, prefix } => {
                 if let Some(prefix) = prefix {
                     if let Err(err) = store.key_delete_prefix(&prefix).await {
-                        trc::error!(
+                        crate::trc::error!(
                             err.details("Failed to delete key prefix")
-                                .ctx(trc::Key::Key, prefix)
+                                .ctx(crate::trc::Key::Key, prefix)
                         );
                     }
                 } else if let Err(err) = store.purge_in_memory_store().await {
-                    trc::error!(err.details("Failed to purge in-memory store"));
+                    crate::trc::error!(err.details("Failed to purge in-memory store"));
                 }
             }
             PurgeType::Account {
@@ -858,7 +865,7 @@ impl Purge for Server {
             }
         }
 
-        trc::event!(
+        crate::trc::event!(
             Purge(PurgeEvent::Finished),
             Type = lock_type,
             Id = store_idx,
@@ -872,7 +879,7 @@ impl Purge for Server {
                 .remove_lock(KV_LOCK_HOUSEKEEPER, lock_name)
                 .await
         {
-            trc::error!(
+            crate::trc::error!(
                 err.details("Failed to delete task lock.")
                     .details(lock_type)
             );
@@ -882,9 +889,9 @@ impl Purge for Server {
 
 impl Queue {
     pub fn schedule(&mut self, due: Instant, event: ActionClass) {
-        trc::event!(
-            Housekeeper(trc::HousekeeperEvent::Schedule),
-            Due = trc::Value::Timestamp(
+        crate::trc::event!(
+            Housekeeper(crate::trc::HousekeeperEvent::Schedule),
+            Due = crate::trc::Value::Timestamp(
                 now() + due.saturating_duration_since(Instant::now()).as_secs()
             ),
             Id = format!("{:?}", event)

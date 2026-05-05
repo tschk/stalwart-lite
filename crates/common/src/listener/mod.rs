@@ -6,6 +6,8 @@
 
 use std::{borrow::Cow, net::IpAddr, sync::Arc, time::Instant};
 
+use crate::trc::{Event, EventType, Key};
+use crate::utils::{config::ipmask::IpAddrMask, snowflake::SnowflakeIdGenerator};
 use compact_str::ToCompactString;
 use rustls::ServerConfig;
 use std::fmt::Debug;
@@ -14,10 +16,8 @@ use tokio::{
     sync::watch,
 };
 use tokio_rustls::{Accept, TlsAcceptor};
-use trc::{Event, EventType, Key};
-use utils::{config::ipmask::IpAddrMask, snowflake::SnowflakeIdGenerator};
 
-use crate::{
+use crate::common::{
     Server,
     config::server::ServerProtocol,
     expr::{functions::ResolveVariable, *},
@@ -145,8 +145,8 @@ pub trait SessionManager: Sync + Send + 'static + Clone {
                                 .await;
                         }
                         Err(err) => {
-                            trc::event!(
-                                Tls(trc::TlsEvent::HandshakeError),
+                            crate::trc::event!(
+                                Tls(crate::trc::TlsEvent::HandshakeError),
                                 ListenerId = session.instance.id.clone(),
                                 LocalPort = local_port,
                                 RemoteIp = session.remote_ip,
@@ -222,7 +222,7 @@ pub trait SessionManager: Sync + Send + 'static + Clone {
 }
 
 impl<T: SessionStream> ResolveVariable for SessionData<T> {
-    fn resolve_variable(&self, variable: u32) -> crate::expr::Variable<'_> {
+    fn resolve_variable(&self, variable: u32) -> crate::common::expr::Variable<'_> {
         match variable {
             V_REMOTE_IP => self.remote_ip.to_compact_string().into(),
             V_REMOTE_PORT => self.remote_port.into(),
@@ -231,7 +231,7 @@ impl<T: SessionStream> ResolveVariable for SessionData<T> {
             V_LISTENER => self.instance.id.as_str().into(),
             V_PROTOCOL => self.protocol.as_str().into(),
             V_TLS => self.stream.is_tls().into(),
-            _ => crate::expr::Variable::default(),
+            _ => crate::common::expr::Variable::default(),
         }
     }
 

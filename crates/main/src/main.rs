@@ -9,14 +9,17 @@
 #![warn(clippy::cast_possible_wrap)]
 #![warn(clippy::cast_sign_loss)]
 
-use common::{config::server::ServerProtocol, core::BuildServer, manager::boot::BootManager};
-use http::HttpSessionManager;
-use imap::core::ImapSessionManager;
-use services::{StartServices, broadcast::subscriber::spawn_broadcast_subscriber};
-use smtp::StartQueueManager;
+use stalwart_lib as trc;
+use stalwart_lib::Collector;
+use stalwart_lib::common::{
+    config::server::ServerProtocol, core::BuildServer, manager::boot::BootManager,
+};
+use stalwart_lib::http::HttpSessionManager;
+use stalwart_lib::imap::core::ImapSessionManager;
+use stalwart_lib::services::{StartServices, broadcast::subscriber::spawn_broadcast_subscriber};
+use stalwart_lib::smtp::StartQueueManager;
+use stalwart_lib::utils::wait_for_shutdown;
 use std::time::Duration;
-use trc::Collector;
-use utils::wait_for_shutdown;
 
 #[cfg(not(target_env = "msvc"))]
 use jemallocator::Jemalloc;
@@ -31,7 +34,7 @@ async fn main() -> std::io::Result<()> {
     let mut init = Box::pin(BootManager::init()).await;
 
     // Migrate database
-    if let Err(err) = migration::try_migrate(&init.inner.build_server()).await {
+    if let Err(err) = stalwart_lib::migration::try_migrate(&init.inner.build_server()).await {
         trc::event!(
             Server(trc::ServerEvent::StartupError),
             Details = "Failed to migrate database, aborting startup.",
@@ -78,7 +81,7 @@ async fn main() -> std::io::Result<()> {
     let (shutdown_tx, shutdown_rx) = init.servers.spawn(|server, acceptor, shutdown_rx| {
         match &server.protocol {
             ServerProtocol::Smtp | ServerProtocol::Lmtp => server.spawn(
-                smtp::core::SmtpSessionManager::new(init.inner.clone()),
+                stalwart_lib::smtp::core::SmtpSessionManager::new(init.inner.clone()),
                 init.inner.clone(),
                 acceptor,
                 shutdown_rx,

@@ -1,6 +1,10 @@
 [package]
-name = "event_macro"
-version = "0.15.5"
+name = "stalwart-lite-event-macro"
+description = "Event macro support for stalwart-lite"
+version.workspace = true
+license.workspace = true
+repository = "https://github.com/tschk/stalwart-lite"
+homepage = "https://github.com/tschk/stalwart-lite"
 edition = "2024"
 
 [lib]

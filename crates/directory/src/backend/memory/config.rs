@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use store::Store;
-use utils::config::{Config, utils::AsKey};
+use crate::store::Store;
+use crate::utils::config::{Config, utils::AsKey};
 
-use crate::{
+use crate::directory::{
     Principal, PrincipalData, ROLE_ADMIN, ROLE_USER, Type,
     backend::internal::manage::ManageDirectory,
 };

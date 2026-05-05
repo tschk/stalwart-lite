@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, Token, tokenizer::Tokenizer},
     schema::{Element, NamedElement, Namespace, request::PropertyUpdate},
 };
 
 impl DavParser for PropertyUpdate {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         stream.expect_named_element(NamedElement::dav(Element::Propertyupdate))?;
         let mut update = PropertyUpdate {
             set: Vec::with_capacity(4),

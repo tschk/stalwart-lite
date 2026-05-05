@@ -6,7 +6,7 @@
 
 use std::{str::FromStr, time::Duration};
 
-use utils::{config::Config, template::Template};
+use crate::utils::{config::Config, template::Template};
 
 #[derive(Debug, Clone, Default)]
 pub struct GroupwareConfig {
@@ -141,7 +141,7 @@ impl GroupwareConfig {
                 .map(|s| s.to_string()),
             alarms_template: Template::parse(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../../resources/html-templates/calendar-alarm.html.min"
+                "/resources/html-templates/calendar-alarm.html.min"
             )))
             .expect("Failed to parse calendar template"),
             itip_enabled: config
@@ -192,7 +192,7 @@ impl GroupwareConfig {
                 .unwrap_or(90 * 24 * 60 * 60),
             itip_template: Template::parse(include_str!(concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/../../resources/html-templates/calendar-invite.html.min"
+                "/resources/html-templates/calendar-invite.html.min"
             )))
             .expect("Failed to parse calendar template"),
         }

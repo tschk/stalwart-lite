@@ -5,13 +5,13 @@
  */
 
 use super::get::ChangesLookup;
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap::{
     api::request::set_account_id_if_missing, email::query::EmailQuery,
     mailbox::query::MailboxQuery, sieve::query::SieveScriptQuery,
     submission::query::EmailSubmissionQuery,
 };
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::jmap_proto::{
     method::{
         changes::{ChangesRequest, ChangesResponse},
         query_changes::{AddedItem, QueryChangesRequest, QueryChangesResponse},
@@ -26,7 +26,7 @@ pub trait QueryChanges: Sync + Send {
         &self,
         request: QueryChangesRequestMethod,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryChangesResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryChangesResponse>> + Send;
 }
 
 impl QueryChanges for Server {
@@ -34,7 +34,7 @@ impl QueryChanges for Server {
         &self,
         request: QueryChangesRequestMethod,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryChangesResponse> {
+    ) -> crate::trc::Result<QueryChangesResponse> {
         let mut response;
         let mut is_mutable = true;
         let results;
@@ -142,13 +142,13 @@ impl QueryChanges for Server {
             | QueryChangesRequestMethod::CalendarEvent(_)
             | QueryChangesRequestMethod::CalendarEventNotification(_)
             | QueryChangesRequestMethod::ShareNotification(_) => {
-                return Err(trc::JmapEvent::CannotCalculateChanges.into_err());
+                return Err(crate::trc::JmapEvent::CannotCalculateChanges.into_err());
             }
             QueryChangesRequestMethod::Principal(_) => {
-                return Err(trc::JmapEvent::CannotCalculateChanges.into_err());
+                return Err(crate::trc::JmapEvent::CannotCalculateChanges.into_err());
             }
             QueryChangesRequestMethod::Quota(_) => {
-                return Err(trc::JmapEvent::CannotCalculateChanges.into_err());
+                return Err(crate::trc::JmapEvent::CannotCalculateChanges.into_err());
             }
         }
 

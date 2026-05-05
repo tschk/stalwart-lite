@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use email::message::metadata::{
+use crate::email::message::metadata::{
     ArchivedMessageMetadataContents, ArchivedMetadataHeaderValue, ArchivedMetadataPartType,
     PART_ENCODING_BASE64, PART_ENCODING_QP, PART_SIZE_MASK,
 };
-use jmap_proto::object::email::{EmailProperty, EmailValue};
+use crate::jmap_proto::object::email::{EmailProperty, EmailValue};
+use crate::types::blob::BlobId;
+use crate::utils::chained_bytes::ChainedBytes;
 use jmap_tools::{Map, Value};
 use mail_parser::{HeaderValue, MessagePart, MimeHeaders, PartType};
-use types::blob::BlobId;
-use utils::chained_bytes::ChainedBytes;
 
 use super::headers::HeaderToValue;
 

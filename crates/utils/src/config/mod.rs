@@ -178,21 +178,21 @@ impl Config {
         for (key, err) in &self.errors {
             let (cause, message) = match err {
                 ConfigError::Parse { error } => (
-                    trc::ConfigEvent::ParseError,
+                    crate::trc::ConfigEvent::ParseError,
                     format!("Failed to parse setting {key:?}: {error}"),
                 ),
                 ConfigError::Build { error } => (
-                    trc::ConfigEvent::BuildError,
+                    crate::trc::ConfigEvent::BuildError,
                     format!("Build error for key {key:?}: {error}"),
                 ),
                 ConfigError::Macro { error } => (
-                    trc::ConfigEvent::MacroError,
+                    crate::trc::ConfigEvent::MacroError,
                     format!("Macro expansion error for setting {key:?}: {error}"),
                 ),
             };
 
-            trc::error!(
-                trc::EventType::Config(cause)
+            crate::trc::error!(
+                crate::trc::EventType::Config(cause)
                     .into_err()
                     .details(CompactString::from(message))
             );
@@ -206,29 +206,29 @@ impl Config {
         for (key, warn) in &self.warnings {
             let (cause, message) = match warn {
                 ConfigWarning::AppliedDefault { default } => (
-                    trc::ConfigEvent::DefaultApplied,
+                    crate::trc::ConfigEvent::DefaultApplied,
                     format!("WARNING: Missing setting {key:?}, applied default {default:?}"),
                 ),
                 ConfigWarning::Missing => (
-                    trc::ConfigEvent::MissingSetting,
+                    crate::trc::ConfigEvent::MissingSetting,
                     format!("WARNING: Missing setting {key:?}"),
                 ),
                 ConfigWarning::Unread { value } => (
-                    trc::ConfigEvent::UnusedSetting,
+                    crate::trc::ConfigEvent::UnusedSetting,
                     format!("WARNING: Unused setting {key:?} with value {value:?}"),
                 ),
                 ConfigWarning::Parse { error } => (
-                    trc::ConfigEvent::ParseWarning,
+                    crate::trc::ConfigEvent::ParseWarning,
                     format!("WARNING: Failed to parse {key:?}: {error}"),
                 ),
                 ConfigWarning::Build { error } => (
-                    trc::ConfigEvent::BuildWarning,
+                    crate::trc::ConfigEvent::BuildWarning,
                     format!("WARNING for {key:?}: {error}"),
                 ),
             };
 
-            trc::error!(
-                trc::EventType::Config(cause)
+            crate::trc::error!(
+                crate::trc::EventType::Config(cause)
                     .into_err()
                     .details(CompactString::from(message))
             );

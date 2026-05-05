@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use store::{Deserialize, SerializeInfallible, U32_LEN, U64_LEN, write::key::KeySerializer};
-use types::{acl::Acl, collection::Collection};
-use utils::map::bitmap::Bitmap;
+use crate::store::{Deserialize, SerializeInfallible, U32_LEN, U64_LEN, write::key::KeySerializer};
+use crate::types::{acl::Acl, collection::Collection};
+use crate::utils::map::bitmap::Bitmap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShareNotification {
@@ -34,9 +34,9 @@ impl SerializeInfallible for ShareNotification {
 }
 
 impl Deserialize for ShareNotification {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Self::deserialize_from_slice(bytes)
-            .ok_or(trc::StoreEvent::DataCorruption.caused_by(trc::location!()))
+            .ok_or(crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!()))
     }
 }
 

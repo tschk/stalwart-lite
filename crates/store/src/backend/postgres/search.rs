@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::language::Language;
+use crate::store::{
     backend::postgres::{PostgresStore, PsqlSearchField, into_error, into_pool_error},
     search::{
         IndexDocument, SearchComparator, SearchDocumentId, SearchFilter, SearchOperator,
@@ -12,7 +13,6 @@ use crate::{
     },
     write::SearchIndex,
 };
-use nlp::language::Language;
 use std::fmt::Write;
 use tokio_postgres::{
     IsolationLevel,
@@ -20,7 +20,7 @@ use tokio_postgres::{
 };
 
 impl PostgresStore {
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let trx = conn
             .build_transaction()
@@ -129,7 +129,7 @@ impl PostgresStore {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<R>> {
+    ) -> crate::trc::Result<Vec<R>> {
         let mut query = format!("SELECT {} FROM {}", R::field().column(), index.psql_table());
         let params = self.build_filter(&mut query, filters);
         if !sort.is_empty() {
@@ -148,7 +148,7 @@ impl PostgresStore {
             .map_err(into_error)
     }
 
-    pub async fn unindex(&self, filter: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, filter: SearchQuery) -> crate::trc::Result<u64> {
         debug_assert!(!filter.filters.is_empty());
         let mut query = format!("DELETE FROM {} ", filter.index.psql_table());
         let params = self.build_filter(&mut query, &filter.filters);

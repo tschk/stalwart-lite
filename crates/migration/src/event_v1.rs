@@ -4,17 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{DavName, Server};
-use groupware::calendar::{AlarmDelta, CalendarEvent, CalendarEventData, ComponentTimeRange};
-use store::{
+use crate::common::{DavName, Server};
+use crate::groupware::calendar::{
+    AlarmDelta, CalendarEvent, CalendarEventData, ComponentTimeRange,
+};
+use crate::store::{
     Serialize, ValueKey,
     rand::{self, seq::SliceRandom},
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, serialize::rkyv_deserialize},
 };
-use trc::AddContext;
-use types::{collection::Collection, dead_property::DeadProperty, field::Field};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, dead_property::DeadProperty, field::Field};
 
-use crate::{event_v2::migrate_icalendar_v02, get_document_ids};
+use crate::migration::{event_v2::migrate_icalendar_v02, get_document_ids};
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,
@@ -60,11 +62,11 @@ pub struct AlarmV1 {
     pub alarms: Box<[AlarmDelta]>,
 }
 
-pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> crate::trc::Result<()> {
     // Obtain email ids
     let account_ids = get_document_ids(server, u32::MAX, Collection::Principal)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_accounts = account_ids.len();
     if num_accounts == 0 {
@@ -78,7 +80,7 @@ pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result
     for account_id in account_ids {
         let document_ids = get_document_ids(server, account_id, Collection::CalendarEvent)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .unwrap_or_default();
         if document_ids.is_empty() {
             continue;
@@ -94,7 +96,7 @@ pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             else {
                 continue;
             };
@@ -108,7 +110,7 @@ pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result
                         display_name: event.display_name,
                         data: CalendarEventData::new(
                             migrate_icalendar_v02(event.data.event),
-                            calcard_latest::common::timezone::Tz::Floating,
+                            calcard::common::timezone::Tz::Floating,
                             server.core.groupware.max_ical_instances,
                             &mut next_email_alarm,
                         ),
@@ -129,7 +131,7 @@ pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result
                             Field::ARCHIVE,
                             Archiver::new(new_event)
                                 .serialize()
-                                .caused_by(trc::location!())?,
+                                .caused_by(crate::trc::location!())?,
                         );
                     if let Some(next_email_alarm) = next_email_alarm {
                         next_email_alarm.write_task(&mut batch);
@@ -138,21 +140,21 @@ pub(crate) async fn migrate_calendar_events_v012(server: &Server) -> trc::Result
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     num_migrated += 1;
                 }
                 Err(err) => {
                     if let Err(err_) = archive.unarchive_untrusted::<CalendarEvent>() {
-                        trc::error!(err_.caused_by(trc::location!()));
-                        return Err(err.caused_by(trc::location!()));
+                        crate::trc::error!(err_.caused_by(crate::trc::location!()));
+                        return Err(err.caused_by(crate::trc::location!()));
                     }
                 }
             }
         }
 
         if num_migrated > 0 {
-            trc::event!(
-                Server(trc::ServerEvent::Startup),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::Startup),
                 Details =
                     format!("Migrated {num_migrated} Calendar Events for account {account_id}")
             );

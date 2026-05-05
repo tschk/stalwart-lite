@@ -5,37 +5,39 @@
  */
 
 use super::{Account, MailboxId, MailboxSync, Session, SessionData};
-use crate::core::Mailbox;
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     auth::AccessToken,
     listener::{SessionStream, limiter::InFlight},
     sharing::EffectiveAcl,
 };
-use directory::backend::internal::manage::ManageDirectory;
-use email::{
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess},
     mailbox::INBOX_ID,
 };
-use imap_proto::protocol::list::Attribute;
+use crate::imap::core::Mailbox;
+use crate::imap_proto::protocol::list::Attribute;
+use crate::store::{
+    ValueKey,
+    write::{AlignedBytes, Archive},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    acl::Acl, collection::Collection, id::Id, keyword::Keyword, special_use::SpecialUse,
+};
+use ahash::AHashMap;
 use parking_lot::Mutex;
 use std::{
     collections::BTreeMap,
     sync::{Arc, atomic::Ordering},
 };
-use store::{
-    ValueKey,
-    write::{AlignedBytes, Archive},
-};
-use trc::AddContext;
-use types::{acl::Acl, collection::Collection, id::Id, keyword::Keyword, special_use::SpecialUse};
 
 impl<T: SessionStream> SessionData<T> {
     pub async fn new(
         session: &Session<T>,
         access_token: Arc<AccessToken>,
         in_flight: Option<InFlight>,
-    ) -> trc::Result<Self> {
+    ) -> crate::trc::Result<Self> {
         let mut session = SessionData {
             stream_tx: session.stream_tx.clone(),
             server: session.server.clone(),
@@ -53,7 +55,7 @@ impl<T: SessionStream> SessionData<T> {
             session
                 .fetch_account_mailboxes(session.account_id, None, &access_token, None)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .unwrap(),
         ];
 
@@ -67,14 +69,14 @@ impl<T: SessionStream> SessionData<T> {
                     .store()
                     .get_principal_name(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .unwrap_or_else(|| Id::from(account_id).to_string())
             );
             mailboxes.push(
                 session
                     .fetch_account_mailboxes(account_id, prefix.into(), &access_token, None)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .unwrap(),
             );
         }
@@ -90,12 +92,12 @@ impl<T: SessionStream> SessionData<T> {
         mailbox_prefix: Option<String>,
         access_token: &AccessToken,
         current_state: Option<u64>,
-    ) -> trc::Result<Option<Account>> {
+    ) -> crate::trc::Result<Option<Account>> {
         let cache = self
             .server
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if current_state.is_some_and(|state| state == cache.last_change_id) {
             return Ok(None);
         }
@@ -195,7 +197,7 @@ impl<T: SessionStream> SessionData<T> {
                             mailbox_id: mailbox.document_id,
                         })
                         .await
-                        .caused_by(trc::location!())? as u64,
+                        .caused_by(crate::trc::location!())? as u64,
                     total_deleted_storage: None,
                     size: None,
                 },
@@ -208,7 +210,7 @@ impl<T: SessionStream> SessionData<T> {
     pub async fn synchronize_mailboxes(
         &self,
         return_changes: bool,
-    ) -> trc::Result<Option<MailboxSync>> {
+    ) -> crate::trc::Result<Option<MailboxSync>> {
         let mut changes = if return_changes {
             MailboxSync::default().into()
         } else {
@@ -220,7 +222,7 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_access_token(self.account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let state = access_token.state();
 
         // Shared mailboxes might have changed
@@ -272,7 +274,7 @@ impl<T: SessionStream> SessionData<T> {
                         .store()
                         .get_principal_name(account_id)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .unwrap_or_else(|| Id::from(account_id).to_string())
                 );
                 added_accounts.push(
@@ -298,7 +300,7 @@ impl<T: SessionStream> SessionData<T> {
             if let Some(changed_account) = self
                 .fetch_account_mailboxes(account_id, prefix, &access_token, last_state.into())
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 changed_accounts.push(changed_account);
             }
@@ -398,7 +400,7 @@ impl<T: SessionStream> SessionData<T> {
         account_id: u32,
         document_id: u32,
         item: Acl,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         let access_token = self.get_access_token().await?;
         Ok(access_token.is_member(account_id)
             || self
@@ -414,7 +416,7 @@ impl<T: SessionStream> SessionData<T> {
                     if let Some(mailbox) = mailbox {
                         Ok(Some(
                             mailbox
-                                .unarchive::<email::mailbox::Mailbox>()?
+                                .unarchive::<crate::email::mailbox::Mailbox>()?
                                 .acls
                                 .effective_acl(&access_token)
                                 .contains(item),
@@ -424,8 +426,8 @@ impl<T: SessionStream> SessionData<T> {
                     }
                 })?
                 .ok_or_else(|| {
-                    trc::ImapEvent::Error
-                        .caused_by(trc::location!())
+                    crate::trc::ImapEvent::Error
+                        .caused_by(crate::trc::location!())
                         .details("Mailbox no longer exists.")
                 })?)
     }

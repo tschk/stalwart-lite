@@ -6,11 +6,11 @@
 
 use ahash::HashMap;
 
+use crate::trc::{AddContext, AuthEvent};
 use mail_send::Credentials;
 use reqwest::{StatusCode, header::AUTHORIZATION};
-use trc::{AddContext, AuthEvent};
 
-use crate::{
+use crate::directory::{
     Principal, PrincipalData, QueryBy, QueryParams, ROLE_USER, Type,
     backend::{
         RcptType,
@@ -27,7 +27,7 @@ use super::{OpenIdConfig, OpenIdDirectory};
 type OpenIdResponse = HashMap<String, serde_json::Value>;
 
 impl OpenIdDirectory {
-    pub async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         match &by.by {
             QueryBy::Credentials(Credentials::OAuthBearer { token }) => {
                 // Send request
@@ -95,13 +95,15 @@ impl OpenIdDirectory {
                             .data_store
                             .get_or_create_principal_id(external_principal.name(), Type::Individual)
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         let mut principal = self
                             .data_store
                             .query(QueryParams::id(id).with_return_member_of(by.return_member_of))
                             .await
-                            .caused_by(trc::location!())?
-                            .ok_or_else(|| manage::not_found(id).caused_by(trc::location!()))?;
+                            .caused_by(crate::trc::location!())?
+                            .ok_or_else(|| {
+                                manage::not_found(id).caused_by(crate::trc::location!())
+                            })?;
 
                         // Keep the internal store up to date with the OIDC server
                         let changes = principal.update_external(external_principal);
@@ -113,19 +115,22 @@ impl OpenIdDirectory {
                                         .create_domains(),
                                 )
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         }
 
                         Ok(Some(principal))
                     }
-                    StatusCode::UNAUTHORIZED => Err(trc::AuthEvent::Failed
+                    StatusCode::UNAUTHORIZED => Err(crate::trc::AuthEvent::Failed
                         .into_err()
                         .code(401)
                         .details("Unauthorized")),
-                    other => Err(trc::AuthEvent::Error
+                    other => Err(crate::trc::AuthEvent::Error
                         .into_err()
                         .code(other.as_u16())
-                        .ctx(trc::Key::Reason, response.text().await.unwrap_or_default())
+                        .ctx(
+                            crate::trc::Key::Reason,
+                            response.text().await.unwrap_or_default(),
+                        )
                         .details("Unexpected status code")),
                 }
             }
@@ -133,35 +138,35 @@ impl OpenIdDirectory {
         }
     }
 
-    pub async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    pub async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         self.data_store.email_to_id(address).await
     }
 
-    pub async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         self.data_store.rcpt(address).await
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.vrfy(address).await
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.expn(address).await
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         self.data_store.is_local_domain(domain).await
     }
 }
 
 trait BuildPrincipal {
-    fn build_principal(&mut self, config: &OpenIdConfig) -> trc::Result<Principal>;
-    fn take_required_field(&mut self, field: &str) -> trc::Result<String>;
+    fn build_principal(&mut self, config: &OpenIdConfig) -> crate::trc::Result<Principal>;
+    fn take_required_field(&mut self, field: &str) -> crate::trc::Result<String>;
     fn take_field(&mut self, field: &str) -> Option<String>;
 }
 
 impl BuildPrincipal for OpenIdResponse {
-    fn build_principal(&mut self, config: &OpenIdConfig) -> trc::Result<Principal> {
+    fn build_principal(&mut self, config: &OpenIdConfig) -> crate::trc::Result<Principal> {
         let email = self
             .take_required_field(&config.email_field)?
             .to_lowercase();
@@ -174,7 +179,7 @@ impl BuildPrincipal for OpenIdResponse {
             return Err(AuthEvent::Error
                 .into_err()
                 .details("Email field is not valid")
-                .ctx(trc::Key::Key, email));
+                .ctx(crate::trc::Key::Key, email));
         }
         let full_name = config
             .full_name_field
@@ -196,15 +201,15 @@ impl BuildPrincipal for OpenIdResponse {
         })
     }
 
-    fn take_required_field(&mut self, field: &str) -> trc::Result<String> {
+    fn take_required_field(&mut self, field: &str) -> crate::trc::Result<String> {
         match self.remove(field) {
             Some(serde_json::Value::String(value)) if !value.is_empty() => Ok(value),
-            other => Err(trc::AuthEvent::Error
+            other => Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Unexpected field type in OIDC response")
-                .ctx(trc::Key::Key, field.to_string())
+                .ctx(crate::trc::Key::Key, field.to_string())
                 .ctx(
-                    trc::Key::Value,
+                    crate::trc::Key::Value,
                     serde_json::to_string(&other.unwrap_or(serde_json::Value::Null))
                         .unwrap_or_default(),
                 )),

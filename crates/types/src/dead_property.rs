@@ -5,8 +5,14 @@
  */
 
 #[derive(Debug, Clone, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[cfg_attr(feature = "test_mode", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "test_mode", serde(tag = "type", content = "data"))]
+#[cfg_attr(
+    any(test, feature = "test_mode"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(
+    any(test, feature = "test_mode"),
+    serde(tag = "type", content = "data")
+)]
 #[rkyv(derive(Debug))]
 pub enum DeadPropertyTag {
     ElementStart(DeadElementTag),
@@ -15,7 +21,10 @@ pub enum DeadPropertyTag {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[cfg_attr(feature = "test_mode", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    any(test, feature = "test_mode"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[rkyv(derive(Debug))]
 pub struct DeadElementTag {
     pub name: String,
@@ -23,8 +32,11 @@ pub struct DeadElementTag {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-#[cfg_attr(feature = "test_mode", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "test_mode", serde(transparent))]
+#[cfg_attr(
+    any(test, feature = "test_mode"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[cfg_attr(any(test, feature = "test_mode"), serde(transparent))]
 #[rkyv(derive(Debug))]
 #[repr(transparent)]
 pub struct DeadProperty(pub Vec<DeadPropertyTag>);

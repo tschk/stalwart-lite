@@ -6,7 +6,7 @@
 
 use compact_str::CompactString;
 
-use crate::expr::{StringCow, Variable};
+use crate::common::expr::{StringCow, Variable};
 
 pub(crate) fn fn_is_email(v: Vec<Variable>) -> Variable {
     let mut last_ch = 0;

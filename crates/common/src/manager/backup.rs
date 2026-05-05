@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::Core;
+use crate::common::Core;
+use crate::store::{
+    write::{AnyClass, AnyKey, ValueClass},
+    *,
+};
+use crate::types::blob_hash::{BLOB_HASH_LEN, BlobHash};
+use crate::utils::{UnwrapFailure, codec::leb128::Leb128_};
 use ahash::AHashSet;
 use lz4_flex::frame::FrameEncoder;
 use std::{
@@ -12,12 +18,6 @@ use std::{
     path::{Path, PathBuf},
     sync::mpsc::{self, SyncSender},
 };
-use store::{
-    write::{AnyClass, AnyKey, ValueClass},
-    *,
-};
-use types::blob_hash::{BLOB_HASH_LEN, BlobHash};
-use utils::{UnwrapFailure, codec::leb128::Leb128_};
 
 pub(super) const MAGIC_MARKER: u8 = 123;
 
@@ -127,7 +127,11 @@ impl Core {
                         |key, _| {
                             let hash = BlobHash::try_from_hash_slice(
                                 key.get(0..BLOB_HASH_LEN).ok_or_else(|| {
-                                    trc::Error::corrupted_key(key, None, trc::location!())
+                                    crate::trc::Error::corrupted_key(
+                                        key,
+                                        None,
+                                        crate::trc::location!(),
+                                    )
                                 })?,
                             )
                             .unwrap();

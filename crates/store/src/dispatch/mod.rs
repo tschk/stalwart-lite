@@ -6,7 +6,7 @@
 
 use roaring::RoaringBitmap;
 
-use crate::Store;
+use crate::store::Store;
 
 pub mod blob;
 pub mod lookup;

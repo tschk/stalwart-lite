@@ -8,7 +8,7 @@
  *
  */
 
-use crate::*;
+use super::super::*;
 use compact_str::format_compact;
 use std::net::{Ipv4Addr, Ipv6Addr};
 

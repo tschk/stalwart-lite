@@ -5,16 +5,16 @@
  */
 
 use super::ElementLocation;
-use crate::{IpParts, SpamFilterContext, TextPart, modules::dnsbl::check_dnsbl};
-use common::{
+use crate::common::{
     Server,
     config::spamfilter::{Element, IpResolver, Location},
 };
+use crate::nlp::tokenizers::types::TokenType;
+use crate::spam_filter::{IpParts, SpamFilterContext, TextPart, modules::dnsbl::check_dnsbl};
+use crate::store::ahash::AHashSet;
 use mail_auth::IprevResult;
 use mail_parser::{HeaderName, HeaderValue, Host};
-use nlp::tokenizers::types::TokenType;
 use std::future::Future;
-use store::ahash::AHashSet;
 
 pub trait SpamFilterAnalyzeIp: Sync + Send {
     fn spam_filter_analyze_ip(

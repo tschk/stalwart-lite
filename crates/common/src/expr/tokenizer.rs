@@ -6,9 +6,9 @@
 
 use std::{borrow::Cow, iter::Peekable, slice::Iter, time::Duration};
 
+use crate::utils::config::utils::ParseValue;
 use ahash::AHashMap;
 use regex::Regex;
-use utils::config::utils::ParseValue;
 
 use super::{
     functions::{ASYNC_FUNCTIONS, FUNCTIONS},

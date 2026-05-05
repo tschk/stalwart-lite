@@ -1,6 +1,10 @@
 [package]
-name = "proc_macros"
-version = "0.15.5"
+name = "stalwart-lite-proc-macros"
+description = "Proc macro support for stalwart-lite"
+version.workspace = true
+license.workspace = true
+repository = "https://github.com/tschk/stalwart-lite"
+homepage = "https://github.com/tschk/stalwart-lite"
 edition = "2024"
 
 [lib]

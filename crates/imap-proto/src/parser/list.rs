@@ -6,7 +6,7 @@
 
 use compact_str::{CompactString, ToCompactString};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{
         list::{self, ReturnOption, SelectionOption},
@@ -18,7 +18,7 @@ use crate::{
 
 impl Request<Command> {
     #[allow(clippy::while_let_on_iterator)]
-    pub fn parse_list(self, is_utf8: bool) -> trc::Result<list::Arguments> {
+    pub fn parse_list(self, is_utf8: bool) -> crate::trc::Result<list::Arguments> {
         match self.tokens.len() {
             0 | 1 => Err(self.into_error("Missing arguments.")),
             2 => {
@@ -209,7 +209,7 @@ impl ReturnOption {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             list::{self, ReturnOption, SelectionOption},
             status::Status,

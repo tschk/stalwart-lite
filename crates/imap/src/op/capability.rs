@@ -6,10 +6,10 @@
 
 use std::time::Instant;
 
-use crate::core::Session;
-use common::listener::SessionStream;
-use directory::Permission;
-use imap_proto::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::imap::core::Session;
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{
         ImapResponse,
@@ -19,13 +19,13 @@ use imap_proto::{
 };
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_capability(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_capability(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapCapability)?;
 
         let op_start = Instant::now();
-        trc::event!(
-            Imap(trc::ImapEvent::Capabilities),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Capabilities),
             SpanId = self.session_id,
             Tls = self.is_tls,
             Strict = !self.server.core.imap.allow_plain_auth,
@@ -48,13 +48,13 @@ impl<T: SessionStream> Session<T> {
         .await
     }
 
-    pub async fn handle_id(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_id(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapId)?;
 
         let op_start = Instant::now();
-        trc::event!(
-            Imap(trc::ImapEvent::Id),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Id),
             SpanId = self.session_id,
             Elapsed = op_start.elapsed()
         );

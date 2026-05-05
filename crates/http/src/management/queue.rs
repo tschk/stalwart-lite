@@ -5,15 +5,29 @@
  */
 
 use super::FutureTimestamp;
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use common::{
+use crate::common::{
     Server,
     auth::AccessToken,
     config::smtp::queue::{ArchivedQueueExpiry, QueueExpiry, QueueName},
     ipc::QueueEvent,
 };
-use directory::{Permission, Type, backend::internal::manage::ManageDirectory};
-use http_proto::{request::decode_path_element, *};
+use crate::directory::{Permission, Type, backend::internal::manage::ManageDirectory};
+use crate::http_proto::{request::decode_path_element, *};
+use crate::smtp::{
+    queue::{
+        self, ArchivedMessage, ArchivedStatus, ErrorDetails, QueueId, Status, spool::SmtpSpool,
+    },
+    reporting::{dmarc::DmarcReporting, tls::TlsReporting},
+};
+use crate::store::{
+    Deserialize, IterateParams, ValueKey,
+    write::{
+        AlignedBytes, Archive, QueueClass, ReportEvent, ValueClass, key::DeserializeBigEndian, now,
+    },
+};
+use crate::trc::AddContext;
+use crate::utils::url_params::UrlParams;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use hyper::Method;
 use mail_auth::{
     dmarc::URI,
@@ -23,21 +37,7 @@ use mail_auth::{
 use mail_parser::DateTime;
 use serde::{Deserializer, Serializer};
 use serde_json::json;
-use smtp::{
-    queue::{
-        self, ArchivedMessage, ArchivedStatus, ErrorDetails, QueueId, Status, spool::SmtpSpool,
-    },
-    reporting::{dmarc::DmarcReporting, tls::TlsReporting},
-};
 use std::{future::Future, sync::atomic::Ordering};
-use store::{
-    Deserialize, IterateParams, ValueKey,
-    write::{
-        AlignedBytes, Archive, QueueClass, ReportEvent, ValueClass, key::DeserializeBigEndian, now,
-    },
-};
-use trc::AddContext;
-use utils::url_params::UrlParams;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct Message {
@@ -125,7 +125,7 @@ pub trait QueueManagement: Sync + Send {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl QueueManagement for Server {
@@ -134,7 +134,7 @@ impl QueueManagement for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let params = UrlParams::new(req.uri().query());
         let mut tenant_domains: Option<Vec<String>> = None;
 
@@ -160,7 +160,7 @@ impl QueueManagement for Server {
                         .map(|p| p.name)
                         .collect::<Vec<_>>()
                 })
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .into();
         }
 
@@ -212,7 +212,7 @@ impl QueueManagement for Server {
                         .into_http_response());
                     }
                 }
-                Err(trc::ResourceEvent::NotFound.into_err())
+                Err(crate::trc::ResourceEvent::NotFound.into_err())
             }
             ("messages", None, &Method::PATCH) => {
                 // Validate the access token
@@ -317,7 +317,7 @@ impl QueueManagement for Server {
                     }))
                     .into_http_response())
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
             ("messages", None, &Method::DELETE) => {
@@ -413,7 +413,7 @@ impl QueueManagement for Server {
                     }))
                     .into_http_response())
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
             ("reports", None, &Method::GET) => {
@@ -478,7 +478,7 @@ impl QueueManagement for Server {
                     }))
                     .into_http_response())
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
             ("reports", None, &Method::DELETE) => {
@@ -539,7 +539,7 @@ impl QueueManagement for Server {
                     }))
                     .into_http_response())
                 } else {
-                    Err(trc::ResourceEvent::NotFound.into_err())
+                    Err(crate::trc::ResourceEvent::NotFound.into_err())
                 }
             }
             ("status", None, &Method::GET) => {
@@ -569,7 +569,7 @@ impl QueueManagement for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }
@@ -634,7 +634,7 @@ async fn fetch_queued_messages(
     server: &Server,
     params: &UrlParams<'_>,
     tenant_domains: &Option<Vec<String>>,
-) -> trc::Result<QueuedMessages> {
+) -> crate::trc::Result<QueuedMessages> {
     let queue = params.get("queue").and_then(QueueName::new);
     let text = params.get("text");
     let from = params.get("from");
@@ -677,10 +677,10 @@ async fn fetch_queued_messages(
             IterateParams::new(from_key, to_key).ascending(),
             |key, value| {
                 let message_ = <Archive<AlignedBytes> as Deserialize>::deserialize(value)
-                    .add_context(|ctx| ctx.ctx(trc::Key::Key, key))?;
+                    .add_context(|ctx| ctx.ctx(crate::trc::Key::Key, key))?;
                 let message = message_
                     .unarchive::<queue::Message>()
-                    .add_context(|ctx| ctx.ctx(trc::Key::Key, key))?;
+                    .add_context(|ctx| ctx.ctx(crate::trc::Key::Key, key))?;
                 let matches = tenant_domains
                     .as_ref()
                     .is_none_or(|domains| message.has_domain(domains))
@@ -737,7 +737,7 @@ async fn fetch_queued_messages(
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| result)
 }
 
@@ -750,7 +750,7 @@ async fn fetch_queued_reports(
     server: &Server,
     params: &UrlParams<'_>,
     tenant_domains: &Option<Vec<String>>,
-) -> trc::Result<QueuedReports> {
+) -> crate::trc::Result<QueuedReports> {
     let domain = params.get("domain").map(|d| d.to_lowercase());
     let type_ = params.get("type").and_then(|t| match t {
         "dmarc" => 0u8.into(),
@@ -823,7 +823,7 @@ async fn fetch_queued_reports(
             },
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| result)
 }
 

@@ -5,19 +5,19 @@
  */
 
 use super::backup::MAGIC_MARKER;
-use crate::{Core, DATABASE_SCHEMA_VERSION};
+use crate::common::{Core, DATABASE_SCHEMA_VERSION};
+use crate::store::{
+    BlobStore, SUBSPACE_BLOBS, SUBSPACE_COUNTER, SUBSPACE_INDEXES, SUBSPACE_QUOTA, Store, U32_LEN,
+    write::{AnyClass, BatchBuilder, ValueClass, key::DeserializeBigEndian},
+};
+use crate::types::{collection::Collection, field::Field};
+use crate::utils::{UnwrapFailure, failed};
 use lz4_flex::frame::FrameDecoder;
 use std::{
     fs::File,
     io::{BufReader, ErrorKind, Read},
     path::{Path, PathBuf},
 };
-use store::{
-    BlobStore, SUBSPACE_BLOBS, SUBSPACE_COUNTER, SUBSPACE_INDEXES, SUBSPACE_QUOTA, Store, U32_LEN,
-    write::{AnyClass, BatchBuilder, ValueClass, key::DeserializeBigEndian},
-};
-use types::{collection::Collection, field::Field};
-use utils::{UnwrapFailure, failed};
 
 impl Core {
     pub async fn restore(&self, src: PathBuf) {

@@ -19,7 +19,9 @@
  * for copyright infringement, breach of contract, and fraud.
  */
 
-use crate::manager::fetch_resource;
+use crate::common::manager::fetch_resource;
+use crate::store::write::now;
+use crate::trc::ServerEvent;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use hyper::{HeaderMap, header::AUTHORIZATION};
 use ring::signature::{ED25519, UnparsedPublicKey};
@@ -27,8 +29,6 @@ use std::{
     fmt::{Display, Formatter},
     time::Duration,
 };
-use store::write::now;
-use trc::ServerEvent;
 
 //const LICENSING_API: &str = "https://localhost:444/api/license/";
 const LICENSING_API: &str = "https://license.stalw.art/api/license/";
@@ -189,7 +189,7 @@ impl LicenseKey {
                 .map_err(|_| LicenseError::Validation)?,
         );
 
-        trc::event!(
+        crate::trc::event!(
             Server(ServerEvent::Licensing),
             Details = "Attempting to renew Enterprise license from license.stalw.art",
         );
@@ -208,7 +208,7 @@ impl LicenseKey {
             Ok(encoded_key) => match LicenseKey::new(&encoded_key, &self.domain) {
                 Ok(key) => Ok(RenewedLicense { key, encoded_key }),
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Server(ServerEvent::Licensing),
                         Details = "Failed to decode license renewal",
                         Reason = err.to_string(),
@@ -217,7 +217,7 @@ impl LicenseKey {
                 }
             },
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Server(ServerEvent::Licensing),
                     Details = "Failed to renew Enterprise license",
                     Reason = err.clone(),

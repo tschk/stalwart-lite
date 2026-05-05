@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::rename,
     receiver::{Request, bad},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 impl Request<Command> {
-    pub fn parse_rename(self, is_utf8: bool) -> trc::Result<rename::Arguments> {
+    pub fn parse_rename(self, is_utf8: bool) -> crate::trc::Result<rename::Arguments> {
         match self.tokens.len() {
             2 => {
                 let mut tokens = self.tokens.into_iter();
@@ -47,7 +47,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::rename, receiver::Receiver};
+    use crate::imap_proto::{protocol::rename, receiver::Receiver};
 
     #[test]
     fn parse_rename() {

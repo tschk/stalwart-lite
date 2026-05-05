@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use directory::backend::internal::manage::ManageDirectory;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::jmap_proto::{
     error::set::SetError,
     object::{JmapRight, JmapSharedObject},
 };
-use jmap_tools::{JsonPointerIter, Key, Map, Property, Value};
-use types::{
+use crate::types::{
     acl::{Acl, AclGrant},
     id::Id,
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use jmap_tools::{JsonPointerIter, Key, Map, Property, Value};
 
 pub struct JmapRights;
 

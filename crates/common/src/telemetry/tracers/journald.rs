@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::ipc::subscriber::SubscriberBuilder;
+use crate::trc::{Event, EventDetails, Level, TelemetryEvent};
 use ahash::AHashSet;
 use std::io::Write;
-use trc::ipc::subscriber::SubscriberBuilder;
-use trc::{Event, EventDetails, Level, TelemetryEvent};
 
 pub(crate) fn spawn_journald_tracer(builder: SubscriberBuilder, subscriber: Subscriber) {
     let (_, mut rx) = builder.register();
@@ -51,7 +51,7 @@ impl Subscriber {
         }
 
         if let Err(err) = self.send_payload(&buf) {
-            trc::event!(
+            crate::trc::event!(
                 Telemetry(TelemetryEvent::JournalError),
                 Details = "Failed to send event to journald",
                 Reason = err.to_string()

@@ -6,13 +6,13 @@
 
 use std::future::Future;
 
-use common::{
+use crate::common::{
     Server,
     auth::{AccessToken, oauth::oidc::Userinfo},
 };
 use serde::{Deserialize, Serialize};
 
-use http_proto::*;
+use crate::http_proto::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenIdMetadata {
@@ -35,20 +35,20 @@ pub trait OpenIdHandler: Sync + Send {
     fn handle_userinfo_request(
         &self,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_oidc_metadata(
         &self,
         req: HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl OpenIdHandler for Server {
     async fn handle_userinfo_request(
         &self,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         Ok(JsonResponse::new(Userinfo {
             sub: Some(access_token.primary_id.to_string()),
             name: access_token.description.clone(),
@@ -65,7 +65,7 @@ impl OpenIdHandler for Server {
         &self,
         req: HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let base_url = HttpContext::new(&session, &req)
             .resolve_response_url(self)
             .await;

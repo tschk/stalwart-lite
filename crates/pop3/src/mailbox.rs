@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::Session;
-use common::listener::SessionStream;
-use email::{
+use crate::common::listener::SessionStream;
+use crate::email::{
     cache::{MessageCacheFetch, mailbox::MailboxCacheAccess},
     mailbox::INBOX_ID,
 };
+use crate::pop3::Session;
+use crate::trc::AddContext;
+use crate::types::special_use::SpecialUse;
 use std::collections::BTreeMap;
-use trc::AddContext;
-use types::special_use::SpecialUse;
 
 #[derive(Default)]
 pub struct Mailbox {
@@ -31,13 +31,13 @@ pub struct Message {
 }
 
 impl<T: SessionStream> Session<T> {
-    pub async fn fetch_mailbox(&self, account_id: u32) -> trc::Result<Mailbox> {
+    pub async fn fetch_mailbox(&self, account_id: u32) -> crate::trc::Result<Mailbox> {
         // Obtain UID validity
         let cache = self
             .server
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if cache.emails.items.is_empty() {
             return Ok(Mailbox::default());

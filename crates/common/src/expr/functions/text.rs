@@ -8,7 +8,7 @@ use compact_str::{CompactString, ToCompactString, format_compact};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 
-use crate::expr::{StringCow, Variable};
+use crate::common::expr::{StringCow, Variable};
 
 pub(crate) fn fn_trim(mut v: Vec<Variable>) -> Variable {
     v.remove(0).transform(|s| match s {

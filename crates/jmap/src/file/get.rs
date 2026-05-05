@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::acl::JmapRights, changes::state::JmapCacheState};
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{cache::GroupwareCache, file::FileNode};
-use jmap_proto::{
+use crate::jmap::{api::acl::JmapRights, changes::state::JmapCacheState};
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{cache::GroupwareCache, file::FileNode};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::file_node::{self, FileNodeProperty, FileNodeValue},
     types::date::UTCDate,
 };
 use jmap_tools::{Map, Value};
-use store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, now}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, now}};
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     blob::{BlobClass, BlobId},
     blob_hash::BlobHash,
@@ -27,7 +27,7 @@ pub trait FileNodeGet: Sync + Send {
         &self,
         request: GetRequest<file_node::FileNode>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<file_node::FileNode>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<file_node::FileNode>>> + Send;
 }
 
 impl FileNodeGet for Server {
@@ -35,7 +35,7 @@ impl FileNodeGet for Server {
         &self,
         mut request: GetRequest<file_node::FileNode>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<file_node::FileNode>> {
+    ) -> crate::trc::Result<GetResponse<file_node::FileNode>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             FileNodeProperty::Id,
@@ -96,7 +96,7 @@ impl FileNodeGet for Server {
             };
             let file_node = _file_node
                 .unarchive::<FileNode>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = Map::with_capacity(properties.len());
             for property in &properties {
                 match property {

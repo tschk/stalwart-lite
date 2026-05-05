@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::Store;
 use deadpool::managed::Pool;
 use ldap3::{LdapConnSettings, ldap_escape};
-use store::Store;
 
 pub mod config;
 pub mod lookup;

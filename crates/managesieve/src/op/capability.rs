@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::{Session, StatusResponse};
-use common::listener::SessionStream;
-use jmap_proto::request::capability::Capabilities;
+use crate::common::listener::SessionStream;
+use crate::jmap_proto::request::capability::Capabilities;
+use crate::managesieve::core::{Session, StatusResponse};
 use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_capability(&self, message: &'static str) -> trc::Result<Vec<u8>> {
+    pub async fn handle_capability(&self, message: &'static str) -> crate::trc::Result<Vec<u8>> {
         let op_start = Instant::now();
 
         let mut response = Vec::with_capacity(128);
@@ -56,8 +56,8 @@ impl<T: SessionStream> Session<T> {
             response.extend_from_slice(b"\"SIEVE\" \"\"\r\n");
         }
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::Capabilities),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::Capabilities),
             SpanId = self.session_id,
             Tls = self.stream.is_tls(),
             Strict = !self.server.core.imap.allow_plain_auth,

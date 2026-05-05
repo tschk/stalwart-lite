@@ -8,16 +8,16 @@ use super::{
     ArchivedCalendarEventData, ArchivedTimezone, CalendarEventData, Timezone,
     alarm::{CalendarAlarm, ExpandAlarm},
 };
-use crate::calendar::{ComponentTimeRange, alarm::CalendarAlarmType};
+use crate::groupware::calendar::{ComponentTimeRange, alarm::CalendarAlarmType};
+use crate::store::{
+    ahash::AHashMap,
+    write::{key::KeySerializer, now},
+};
 use calcard::{
     common::timezone::Tz,
     icalendar::{ICalendar, ICalendarComponentType, dates::TimeOrDelta},
 };
 use compact_str::ToCompactString;
-use store::{
-    ahash::AHashMap,
-    write::{key::KeySerializer, now},
-};
 
 impl CalendarEventData {
     pub fn new(
@@ -163,8 +163,8 @@ impl CalendarEventData {
         }
 
         if !expanded.errors.is_empty() {
-            trc::event!(
-                Calendar(trc::CalendarEvent::RuleExpansionError),
+            crate::trc::event!(
+                Calendar(crate::trc::CalendarEvent::RuleExpansionError),
                 Reason = expanded
                     .errors
                     .into_iter()

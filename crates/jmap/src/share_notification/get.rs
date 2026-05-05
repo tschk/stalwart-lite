@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken, sharing::notification::ShareNotification};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, sharing::notification::ShareNotification};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::{
         JmapRight,
@@ -20,32 +20,32 @@ use jmap_proto::{
 };
 use jmap_tools::{Key, Map, Value};
 use std::{sync::Arc, time::Duration};
-use store::{
+use crate::store::{
     Deserialize, IterateParams, LogKey, U64_LEN,
     ahash::{AHashMap, AHashSet},
     write::key::DeserializeBigEndian,
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     id::Id,
     type_state::DataType,
 };
-use utils::{map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
+use crate::utils::{map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
 
 pub trait ShareNotificationGet: Sync + Send {
     fn share_notification_get(
         &self,
         request: GetRequest<share_notification::ShareNotification>,
-    ) -> impl Future<Output = trc::Result<GetResponse<share_notification::ShareNotification>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<share_notification::ShareNotification>>> + Send;
 }
 
 impl ShareNotificationGet for Server {
     async fn share_notification_get(
         &self,
         mut request: GetRequest<share_notification::ShareNotification>,
-    ) -> trc::Result<GetResponse<share_notification::ShareNotification>> {
+    ) -> crate::trc::Result<GetResponse<share_notification::ShareNotification>> {
         let properties = request.unwrap_properties(&[
             ShareNotificationProperty::Id,
             ShareNotificationProperty::Name,
@@ -81,7 +81,7 @@ impl ShareNotificationGet for Server {
                     })
                     .collect::<AHashSet<_>>()
             } else {
-                return Err(trc::JmapEvent::RequestTooLarge.into_err());
+                return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
             }
         } else {
             AHashSet::new()
@@ -134,7 +134,7 @@ impl ShareNotificationGet for Server {
                     if !has_ids || ids.remove(&change_id) {
                         notifications.push((
                             change_id,
-                            ShareNotification::deserialize(value).caused_by(trc::location!())?,
+                            ShareNotification::deserialize(value).caused_by(crate::trc::location!())?,
                         ));
                     }
 
@@ -143,7 +143,7 @@ impl ShareNotificationGet for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for (change_id, notification) in notifications {
             let changed_by_token = if let Some(token) = token_cache.get(&notification.changed_by) {

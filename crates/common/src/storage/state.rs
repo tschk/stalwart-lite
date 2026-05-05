@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
     IPC_CHANNEL_BUFFER, Server,
     auth::AccessToken,
     ipc::{PushEvent, PushNotification},
 };
+use crate::types::type_state::DataType;
+use crate::utils::map::bitmap::Bitmap;
 use tokio::sync::mpsc;
-use types::type_state::DataType;
-use utils::map::bitmap::Bitmap;
 
 impl Server {
     pub async fn subscribe_push_manager(
         &self,
         access_token: &AccessToken,
         types: Bitmap<DataType>,
-    ) -> trc::Result<mpsc::Receiver<PushNotification>> {
+    ) -> crate::trc::Result<mpsc::Receiver<PushNotification>> {
         let (tx, rx) = mpsc::channel::<PushNotification>(IPC_CHANNEL_BUFFER);
         let push_tx = self.inner.ipc.push_tx.clone();
 
@@ -30,9 +30,9 @@ impl Server {
             })
             .await
             .map_err(|err| {
-                trc::EventType::Server(trc::ServerEvent::ThreadError)
+                crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                     .reason(err)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
 
         Ok(rx)

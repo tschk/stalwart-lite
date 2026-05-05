@@ -4,34 +4,34 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::query::QueryResponseBuilder;
-use common::{Server, sharing::notification::ShareNotification};
-use jmap_proto::{
+use crate::jmap::api::query::QueryResponseBuilder;
+use crate::common::{Server, sharing::notification::ShareNotification};
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::share_notification::{self, ShareNotificationFilter},
     types::state::State,
 };
 use std::time::Duration;
-use store::{Deserialize, IterateParams, LogKey, U64_LEN, write::key::DeserializeBigEndian};
-use trc::AddContext;
-use types::{
+use crate::store::{Deserialize, IterateParams, LogKey, U64_LEN, write::key::DeserializeBigEndian};
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     id::Id,
 };
-use utils::snowflake::SnowflakeIdGenerator;
+use crate::utils::snowflake::SnowflakeIdGenerator;
 
 pub trait ShareNotificationQuery: Sync + Send {
     fn share_notification_query(
         &self,
         request: QueryRequest<share_notification::ShareNotification>,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl ShareNotificationQuery for Server {
     async fn share_notification_query(
         &self,
         mut request: QueryRequest<share_notification::ShareNotification>,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
         let mut from_change_id = SnowflakeIdGenerator::from_duration(
             self.core
@@ -64,11 +64,11 @@ impl ShareNotificationQuery for Server {
                         object_type = Some(id.document_id());
                     }
                     ShareNotificationFilter::_T(other) => {
-                        return Err(trc::JmapEvent::UnsupportedFilter.into_err().details(other));
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter.into_err().details(other));
                     }
                 },
                 Filter::And | Filter::Or | Filter::Not | Filter::Close => {
-                    return Err(trc::JmapEvent::UnsupportedFilter
+                    return Err(crate::trc::JmapEvent::UnsupportedFilter
                         .into_err()
                         .details("Logical operators are not supported"));
                 }
@@ -96,7 +96,7 @@ impl ShareNotificationQuery for Server {
 
                     if collection.is_some() || object_type.is_some() {
                         let notification =
-                            ShareNotification::deserialize(value).caused_by(trc::location!())?;
+                            ShareNotification::deserialize(value).caused_by(crate::trc::location!())?;
                         if collection.is_some_and(|c| c != notification.object_type)
                             || object_type.is_some_and(|o| o != notification.object_account_id)
                         {
@@ -110,7 +110,7 @@ impl ShareNotificationQuery for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let mut response = QueryResponseBuilder::new(
             results.len(),

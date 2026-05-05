@@ -10,17 +10,17 @@ use std::{
     path::Path,
 };
 
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{Permission, backend::internal::manage};
+use crate::utils::url_params::UrlParams;
 use chrono::DateTime;
-use common::{Server, auth::AccessToken};
-use directory::{Permission, backend::internal::manage};
 use rev_lines::RevLines;
 use serde::Serialize;
 use serde_json::json;
 use std::future::Future;
 use tokio::sync::oneshot;
-use utils::url_params::UrlParams;
 
-use http_proto::*;
+use crate::http_proto::*;
 
 #[derive(Serialize)]
 struct LogEntry {
@@ -36,7 +36,7 @@ pub trait LogManagement: Sync + Send {
         &self,
         req: &HttpRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl LogManagement for Server {
@@ -44,7 +44,7 @@ impl LogManagement for Server {
         &self,
         req: &HttpRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Validate the access token
         access_token.assert_has_permission(Permission::LogsView)?;
 
@@ -70,15 +70,15 @@ impl LogManagement for Server {
         let (total, items) = rx
             .await
             .map_err(|err| {
-                trc::EventType::Server(trc::ServerEvent::ThreadError)
+                crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                     .reason(err)
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?
             .map_err(|err| {
-                trc::ManageEvent::Error
+                crate::trc::ManageEvent::Error
                     .reason(err)
                     .details("Failed to read log files")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
 
         Ok(JsonResponse::new(json!({

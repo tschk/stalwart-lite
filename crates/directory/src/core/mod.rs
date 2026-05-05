@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::Permission;
+use crate::directory::Permission;
 
 pub mod cache;
 pub mod config;
@@ -325,7 +325,7 @@ impl Permission {
 
 #[cfg(test)]
 mod test {
-    use crate::Permission;
+    use crate::directory::Permission;
 
     #[test]
     #[ignore]

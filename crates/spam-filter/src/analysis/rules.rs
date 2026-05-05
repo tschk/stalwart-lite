@@ -6,12 +6,12 @@
 
 use std::future::Future;
 
-use common::{
+use crate::common::{
     Server,
     config::spamfilter::{IpResolver, Location},
 };
 
-use crate::{
+use crate::spam_filter::{
     SpamFilterContext, TextPart,
     modules::expression::{EmailHeader, SpamFilterResolver, StringResolver},
 };

@@ -5,7 +5,7 @@
  */
 
 use super::{Archive, ArchiveVersion};
-use crate::{U32_LEN, U64_LEN};
+use crate::store::{U32_LEN, U64_LEN};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssertValue {

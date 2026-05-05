@@ -4,27 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::blob::download::BlobDownload;
+use crate::jmap::blob::download::BlobDownload;
 use calcard::{
     icalendar::ICalendar,
     jscalendar::{JSCalendarProperty, import::ConversionOptions},
 };
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap_proto::{
     method::parse::{ParseRequest, ParseResponse},
     object::calendar_event::CalendarEvent,
     request::IntoValid,
 };
 use jmap_tools::{Key, Value};
-use types::{blob::BlobId, id::Id};
-use utils::map::vec_map::VecMap;
+use crate::types::{blob::BlobId, id::Id};
+use crate::utils::map::vec_map::VecMap;
 
 pub trait CalendarEventParse: Sync + Send {
     fn calendar_event_parse(
         &self,
         request: ParseRequest<CalendarEvent>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<ParseResponse<CalendarEvent>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ParseResponse<CalendarEvent>>> + Send;
 }
 
 impl CalendarEventParse for Server {
@@ -32,9 +32,9 @@ impl CalendarEventParse for Server {
         &self,
         request: ParseRequest<CalendarEvent>,
         access_token: &AccessToken,
-    ) -> trc::Result<ParseResponse<CalendarEvent>> {
+    ) -> crate::trc::Result<ParseResponse<CalendarEvent>> {
         if request.blob_ids.len() > self.core.jmap.calendar_parse_max_items {
-            return Err(trc::JmapEvent::RequestTooLarge.into_err());
+            return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
         }
         let return_all_properties = request.properties.is_none();
         let properties = request

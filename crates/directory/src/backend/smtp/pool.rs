@@ -4,13 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use async_trait::async_trait;
 use deadpool::managed;
 use mail_send::{Error, smtp::AssertReply};
 
 use super::{SmtpClient, SmtpConnectionManager};
 
-#[async_trait]
 impl managed::Manager for SmtpConnectionManager {
     type Type = SmtpClient;
     type Error = Error;
@@ -46,7 +44,7 @@ impl managed::Manager for SmtpConnectionManager {
                 .map_err(managed::RecycleError::Backend)
         } else {
             Err(managed::RecycleError::Message(
-                "No longer valid: Too many authentication failures".to_string(),
+                "No longer valid: Too many authentication failures".into(),
             ))
         }
     }

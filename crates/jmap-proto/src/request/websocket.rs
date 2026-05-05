@@ -5,18 +5,18 @@
  */
 
 use super::Request;
-use crate::{
+use crate::jmap_proto::{
     error::request::{RequestError, RequestErrorType, RequestLimitError},
     object::AnyId,
     request::{Call, deserialize::DeserializeArguments},
     response::{Response, ResponseMethod, serialize::serialize_hex, status::PushObject},
 };
+use crate::types::type_state::DataType;
 use serde::{
     Deserialize, Deserializer,
     de::{self, MapAccess, Visitor},
 };
 use std::{borrow::Cow, collections::HashMap, fmt};
-use types::type_state::DataType;
 
 #[derive(Debug)]
 pub struct WebSocketRequest<'x> {
@@ -104,21 +104,21 @@ enum MessageType {
 }
 
 impl<'x> WebSocketMessage<'x> {
-    pub fn parse(json: &'x [u8], max_calls: usize, max_size: usize) -> trc::Result<Self> {
+    pub fn parse(json: &'x [u8], max_calls: usize, max_size: usize) -> crate::trc::Result<Self> {
         if json.len() <= max_size {
             match serde_json::from_slice::<Self>(json) {
                 Ok(WebSocketMessage::Request(req))
                     if req.request.method_calls.len() > max_calls =>
                 {
-                    Err(trc::LimitEvent::CallsIn.into_err())
+                    Err(crate::trc::LimitEvent::CallsIn.into_err())
                 }
                 Ok(msg) => Ok(msg),
-                Err(err) => Err(trc::JmapEvent::NotRequest
+                Err(err) => Err(crate::trc::JmapEvent::NotRequest
                     .into_err()
                     .details(format!("Invalid WebSocket JMAP request {err}"))),
             }
         } else {
-            Err(trc::LimitEvent::SizeRequest.into_err())
+            Err(crate::trc::LimitEvent::SizeRequest.into_err())
         }
     }
 }

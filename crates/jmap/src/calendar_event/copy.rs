@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap::{
     calendar_event::{CalendarSyntheticId, set::CalendarEventSet},
     changes::state::JmapCacheState,
 };
 use calcard::jscalendar::JSCalendarProperty;
-use common::{Server, auth::AccessToken};
-use groupware::{cache::GroupwareCache, calendar::CalendarEvent};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{cache::GroupwareCache, calendar::CalendarEvent};
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::{
         copy::{CopyRequest, CopyResponse},
@@ -26,13 +26,13 @@ use jmap_proto::{
     },
     types::state::State,
 };
-use store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, BatchBuilder}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive, BatchBuilder}};
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
-use utils::map::vec_map::VecMap;
+use crate::utils::map::vec_map::VecMap;
 
 pub trait JmapCalendarEventCopy: Sync + Send {
     fn calendar_event_copy<'x>(
@@ -41,7 +41,7 @@ pub trait JmapCalendarEventCopy: Sync + Send {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<CopyResponse<calendar_event::CalendarEvent>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<CopyResponse<calendar_event::CalendarEvent>>> + Send;
 }
 
 impl JmapCalendarEventCopy for Server {
@@ -51,19 +51,19 @@ impl JmapCalendarEventCopy for Server {
         access_token: &AccessToken,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
         _session: &HttpSessionData,
-    ) -> trc::Result<CopyResponse<calendar_event::CalendarEvent>> {
+    ) -> crate::trc::Result<CopyResponse<calendar_event::CalendarEvent>> {
         let account_id = request.account_id.document_id();
         let from_account_id = request.from_account_id.document_id();
 
         if account_id == from_account_id {
-            return Err(trc::JmapEvent::InvalidArguments
+            return Err(crate::trc::JmapEvent::InvalidArguments
                 .into_err()
                 .details("From accountId is equal to fromAccountId"));
         }
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let old_state = cache.assert_state(false, &request.if_in_state)?;
         let mut response = CopyResponse {
             from_account_id: request.from_account_id,
@@ -77,7 +77,7 @@ impl JmapCalendarEventCopy for Server {
         let from_cache = self
             .fetch_dav_resources(access_token, from_account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let from_calendar_event_ids = if access_token.is_member(from_account_id) {
             from_cache.document_ids(false).collect::<RoaringBitmap>()
         } else {
@@ -143,7 +143,7 @@ impl JmapCalendarEventCopy for Server {
 
             let calendar_event = _calendar_event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             match self
                 .create_calendar_event(
@@ -179,7 +179,7 @@ impl JmapCalendarEventCopy for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             response.new_state = State::Exact(change_id);

@@ -6,10 +6,10 @@
 
 use std::time::Duration;
 
+use crate::utils::config::{Config, utils::AsKey};
 use mail_send::smtp::tls::build_tls_connector;
-use utils::config::{Config, utils::AsKey};
 
-use crate::core::config::build_pool;
+use crate::directory::core::config::build_pool;
 
 use super::{ImapConnectionManager, ImapDirectory};
 

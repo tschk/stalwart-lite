@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::JmapObject,
     request::{
         MaybeInvalid,
@@ -12,10 +12,10 @@ use crate::{
         reference::MaybeIdReference,
     },
 };
+use crate::types::{blob::BlobId, id::Id};
+use crate::utils::map::vec_map::VecMap;
 use jmap_tools::Value;
 use serde::{Deserialize, Deserializer};
-use types::{blob::BlobId, id::Id};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone)]
 pub struct ParseRequest<T: JmapObject> {

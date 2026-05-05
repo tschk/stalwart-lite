@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::listener::SessionStream;
+use crate::common::listener::SessionStream;
 
+use crate::trc::OutgoingReportEvent;
+use crate::utils::config::Rate;
 use mail_auth::{
     AuthenticatedMessage, AuthenticationResults, DkimOutput, common::verify::VerifySignature,
 };
-use trc::OutgoingReportEvent;
-use utils::config::Rate;
 
-use crate::{core::Session, reporting::SmtpReporting};
+use crate::smtp::{core::Session, reporting::SmtpReporting};
 
 impl<T: SessionStream> Session<T> {
     pub async fn send_dkim_report(
@@ -32,13 +32,13 @@ impl<T: SessionStream> Session<T> {
 
         // Throttle recipient
         if !self.throttle_rcpt(rcpt, rate, "dkim").await {
-            trc::event!(
+            crate::trc::event!(
                 OutgoingReport(OutgoingReportEvent::DkimRateLimited),
                 SpanId = self.data.session_id,
                 To = rcpt.to_string(),
                 Limit = vec![
-                    trc::Value::from(rate.requests),
-                    trc::Value::from(rate.period)
+                    crate::trc::Value::from(rate.requests),
+                    crate::trc::Value::from(rate.period)
                 ],
             );
 
@@ -81,7 +81,7 @@ impl<T: SessionStream> Session<T> {
             )
             .ok();
 
-        trc::event!(
+        crate::trc::event!(
             OutgoingReport(OutgoingReportEvent::DkimReport),
             SpanId = self.data.session_id,
             From = from_addr.to_string(),

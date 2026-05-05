@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::contact::assert_is_unique_uid;
+use crate::jmap::contact::assert_is_unique_uid;
 use calcard::jscontact::{JSContact, JSContactProperty, JSContactValue};
-use common::{DavName, DavResources, Server, auth::AccessToken};
-use groupware::{DestroyArchive, cache::GroupwareCache, contact::ContactCard};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::common::{DavName, DavResources, Server, auth::AccessToken};
+use crate::groupware::{DestroyArchive, cache::GroupwareCache, contact::ContactCard};
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::contact,
@@ -17,14 +17,14 @@ use jmap_proto::{
     types::state::State,
 };
 use jmap_tools::{JsonPointerHandler, JsonPointerItem, Key, Value};
-use store::{
+use crate::store::{
     ValueKey,
     ahash::AHashSet,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     blob::BlobId,
     collection::{Collection, SyncCollection},
@@ -37,7 +37,7 @@ pub trait ContactCardSet: Sync + Send {
         request: SetRequest<'_, contact::ContactCard>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<contact::ContactCard>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<contact::ContactCard>>> + Send;
 
     #[allow(clippy::too_many_arguments)]
     fn create_contact_card(
@@ -49,7 +49,7 @@ pub trait ContactCardSet: Sync + Send {
         can_add_address_books: &Option<RoaringBitmap>,
         js_contact: JSContact<'_, Id, BlobId>,
         updates: Value<'_, JSContactProperty<Id>, JSContactValue<Id, BlobId>>,
-    ) -> impl Future<Output = trc::Result<Result<u32, SetError<JSContactProperty<Id>>>>>;
+    ) -> impl Future<Output = crate::trc::Result<Result<u32, SetError<JSContactProperty<Id>>>>>;
 }
 
 impl ContactCardSet for Server {
@@ -58,7 +58,7 @@ impl ContactCardSet for Server {
         mut request: SetRequest<'_, contact::ContactCard>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<contact::ContactCard>> {
+    ) -> crate::trc::Result<SetResponse<contact::ContactCard>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
@@ -135,10 +135,10 @@ impl ContactCardSet for Server {
             };
             let contact_card = contact_card_
                 .to_unarchived::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_contact_card = contact_card
                 .deserialize::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut js_contact = new_contact_card.card.into_jscontact();
 
             // Process changes
@@ -260,11 +260,11 @@ impl ContactCardSet for Server {
                     .await
                 {
                     Ok(_) => {}
-                    Err(err) if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) => {
+                    Err(err) if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota)) => {
                         response.not_updated.append(id, SetError::over_quota());
                         continue 'update;
                     }
-                    Err(err) => return Err(err.caused_by(trc::location!())),
+                    Err(err) => return Err(err.caused_by(crate::trc::location!())),
                 }
             }
 
@@ -277,7 +277,7 @@ impl ContactCardSet for Server {
                     document_id,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.updated.append(id, None);
         }
 
@@ -298,7 +298,7 @@ impl ContactCardSet for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             else {
                 response.not_destroyed.append(id, SetError::not_found());
                 continue;
@@ -306,7 +306,7 @@ impl ContactCardSet for Server {
 
             let contact_card = contact_card_
                 .to_unarchived::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate ACLs
             if let Some(can_delete_address_books) = &can_delete_address_books {
@@ -328,7 +328,7 @@ impl ContactCardSet for Server {
             // Delete record
             DestroyArchive(contact_card)
                 .delete_all(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.destroyed.push(id);
         }
@@ -339,7 +339,7 @@ impl ContactCardSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             self.notify_task_queue();
 
@@ -358,7 +358,7 @@ impl ContactCardSet for Server {
         can_add_address_books: &Option<RoaringBitmap>,
         mut js_contact: JSContact<'_, Id, BlobId>,
         updates: Value<'_, JSContactProperty<Id>, JSContactValue<Id, BlobId>>,
-    ) -> trc::Result<Result<u32, SetError<JSContactProperty<Id>>>> {
+    ) -> crate::trc::Result<Result<u32, SetError<JSContactProperty<Id>>>> {
         // Process changes
         let mut names = Vec::new();
         if let Err(err) = update_contact_card(updates, &mut names, &mut js_contact) {
@@ -414,10 +414,10 @@ impl ContactCardSet for Server {
             .await
         {
             Ok(_) => {}
-            Err(err) if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) => {
+            Err(err) if err.matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota)) => {
                 return Ok(Err(SetError::over_quota()));
             }
-            Err(err) => return Err(err.caused_by(trc::location!())),
+            Err(err) => return Err(err.caused_by(crate::trc::location!())),
         }
 
         // Insert record
@@ -425,7 +425,7 @@ impl ContactCardSet for Server {
             .store()
             .assign_document_ids(account_id, Collection::ContactCard, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         ContactCard {
             names,
             size: size as u32,
@@ -433,7 +433,7 @@ impl ContactCardSet for Server {
             ..Default::default()
         }
         .insert(access_token, account_id, document_id, batch)
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|_| Ok(document_id))
     }
 }

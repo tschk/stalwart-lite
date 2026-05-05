@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{
         AnyId, JmapObject, JmapObjectId, JmapRight, JmapSharedObject, MaybeReference, parse_ref,
     },
     request::{MaybeInvalid, deserialize::DeserializeArguments},
     types::date::UTCDate,
 };
+use crate::types::{acl::Acl, blob::BlobId, id::Id};
+use crate::utils::glob::GlobPattern;
 use jmap_tools::{Element, JsonPointer, JsonPointerItem, Key, Property};
 use std::{borrow::Cow, fmt::Display, str::FromStr};
-use types::{acl::Acl, blob::BlobId, id::Id};
-use utils::glob::GlobPattern;
 
 #[derive(Debug, Clone, Default)]
 pub struct FileNode;

@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::config::smtp::session::Milter;
+use crate::common::config::smtp::session::Milter;
+use crate::trc::MilterEvent;
 use rustls_pki_types::ServerName;
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
-use trc::MilterEvent;
 
 use super::{
     protocol::{SMFIC_CONNECT, SMFIC_HELO, SMFIC_MAIL, SMFIC_RCPT},
@@ -309,7 +309,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> MilterClient<T> {
     }
 
     async fn write(&mut self, action: Command<'_>) -> super::Result<()> {
-        trc::event!(
+        crate::trc::event!(
             Milter(MilterEvent::Write),
             SpanId = self.session_id,
             Id = self.id.to_string(),
@@ -329,7 +329,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> MilterClient<T> {
             match self.receiver.read_frame(&self.buf[..self.bytes_read]) {
                 FrameResult::Frame(frame) => {
                     if let Some(response) = Response::deserialize(&frame) {
-                        trc::event!(
+                        crate::trc::event!(
                             Milter(MilterEvent::Read),
                             SpanId = self.session_id,
                             Id = self.id.to_string(),

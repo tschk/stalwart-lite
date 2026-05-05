@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::write::{AnyClass, AnyKey, BatchBuilder, ValueClass};
+use crate::store::{Deserialize, IterateParams, SUBSPACE_INDEXES, Store};
 use base64::Engine;
 use base64::engine::general_purpose;
 use std::env;
 use std::io::{self, Write};
-use store::write::{AnyClass, AnyKey, BatchBuilder, ValueClass};
-use store::{Deserialize, IterateParams, SUBSPACE_INDEXES, Store};
 
 const HELP: &str = concat!(
     "Stalwart Server v",
@@ -308,7 +308,7 @@ fn print_help() {
 struct RawValue(Vec<u8>);
 
 impl Deserialize for RawValue {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(RawValue(bytes.to_vec()))
     }
 }

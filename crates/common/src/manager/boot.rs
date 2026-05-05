@@ -10,7 +10,7 @@ use super::{
     config::{ConfigManager, Patterns},
     console::store_console,
 };
-use crate::{
+use crate::common::{
     Caches, Core, Data, IPC_CHANNEL_BUFFER, Inner, Ipc,
     config::{network::AsnGeoLookupConfig, server::Listeners, telemetry::Telemetry},
     core::BuildServer,
@@ -19,6 +19,15 @@ use crate::{
         TrainTaskController,
     },
 };
+use crate::store::{
+    Stores,
+    rand::{Rng, distr::Alphanumeric, rng},
+};
+use crate::utils::{
+    UnwrapFailure,
+    config::{Config, ConfigKey},
+    failed,
+};
 use arc_swap::ArcSwap;
 use pwhash::sha512_crypt;
 use std::{
@@ -26,16 +35,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use store::{
-    Stores,
-    rand::{Rng, distr::Alphanumeric, rng},
-};
 use tokio::sync::{Notify, mpsc};
-use utils::{
-    UnwrapFailure,
-    config::{Config, ConfigKey},
-    failed,
-};
 
 pub struct BootManager {
     pub config: Config,
@@ -350,8 +350,8 @@ impl BootManager {
                 if config.value("version.spam-filter").is_none() {
                     match manager.fetch_spam_rules().await {
                         Ok(external_config) => {
-                            trc::event!(
-                                Config(trc::ConfigEvent::ImportExternal),
+                            crate::trc::event!(
+                                Config(crate::trc::ConfigEvent::ImportExternal),
                                 Version = external_config.version.to_string(),
                                 Id = "spam-filter"
                             );
@@ -416,8 +416,8 @@ impl BootManager {
                 #[cfg(not(feature = "enterprise"))]
                 telemetry.enable(false);
 
-                trc::event!(
-                    Server(trc::ServerEvent::Startup),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::Startup),
                     Version = env!("CARGO_PKG_VERSION"),
                 );
 
@@ -428,8 +428,8 @@ impl BootManager {
                     .unwrap_or_default()
                 {
                     if let Err(err) = data.webadmin.update(&core).await {
-                        trc::event!(
-                            Resource(trc::ResourceEvent::Error),
+                        crate::trc::event!(
+                            Resource(crate::trc::ResourceEvent::Error),
                             Details = "Failed to update webadmin",
                             CausedBy = err
                         );
@@ -442,8 +442,8 @@ impl BootManager {
                     .unwrap_or_default()
                     && let Err(err) = core.storage.config.update_spam_rules(false, false).await
                 {
-                    trc::event!(
-                        Resource(trc::ResourceEvent::Error),
+                    crate::trc::event!(
+                        Resource(crate::trc::ResourceEvent::Error),
                         Details = "Failed to update spam-filter",
                         CausedBy = err
                     );
@@ -464,9 +464,9 @@ impl BootManager {
 
                 // Load spam model
                 if let Err(err) = inner.build_server().spam_model_reload().await {
-                    trc::error!(
+                    crate::trc::error!(
                         err.details("Failed to load spam filter model")
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                     );
                 }
 

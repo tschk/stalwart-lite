@@ -6,13 +6,13 @@
 
 use std::{sync::Arc, time::SystemTime};
 
-use common::listener::SessionStream;
+use crate::common::listener::SessionStream;
 
 use mail_auth::common::resolver::ToReverseName;
 use sieve::{Envelope, Sieve, runtime::Variable};
 use smtp_proto::*;
 
-use crate::{core::Session, inbound::AuthResult};
+use crate::smtp::{core::Session, inbound::AuthResult};
 
 use super::{ScriptParameters, ScriptResult, event_loop::RunScript};
 

@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{AnyId, JmapObject, JmapObjectId},
     request::{MaybeInvalid, deserialize::DeserializeArguments},
     types::date::UTCDate,
 };
+use crate::types::{blob::BlobId, id::Id};
 use calcard::jscontact::{JSContactProperty, JSContactValue};
 use jmap_tools::{JsonPointerItem, Key};
 use std::borrow::Cow;
-use types::{blob::BlobId, id::Id};
 
 #[derive(Debug, Clone, Default)]
 pub struct ContactCard;

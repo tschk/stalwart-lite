@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::{Permission, QueryParams, Type, backend::internal::manage::ManageDirectory};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{Permission, QueryParams, Type, backend::internal::manage::ManageDirectory};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::principal::{Principal, PrincipalProperty, PrincipalType, PrincipalValue},
     request::capability::Capability,
     types::state::State,
 };
+use crate::store::roaring::RoaringBitmap;
+use crate::trc::AddContext;
 use jmap_tools::{Key, Map, Value};
 use std::future::Future;
-use store::roaring::RoaringBitmap;
-use trc::AddContext;
 
 pub trait PrincipalGet: Sync + Send {
     fn principal_get(
         &self,
         request: GetRequest<Principal>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<Principal>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Principal>>> + Send;
 }
 
 impl PrincipalGet for Server {
@@ -30,11 +30,11 @@ impl PrincipalGet for Server {
         &self,
         mut request: GetRequest<Principal>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<Principal>> {
+    ) -> crate::trc::Result<GetResponse<Principal>> {
         if !self.core.groupware.allow_directory_query
             && !access_token.has_permission(Permission::IndividualList)
         {
-            return Err(trc::JmapEvent::Forbidden
+            return Err(crate::trc::JmapEvent::Forbidden
                 .into_err()
                 .details("The administrator has disabled directory queries.".to_string()));
         }
@@ -65,7 +65,7 @@ impl PrincipalGet for Server {
                 0,
             )
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .items
             .into_iter()
             .map(|p| p.id())

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::classifier::{Optimizer, model::FhClassifier};
+use crate::nlp::classifier::{Optimizer, model::FhClassifier};
 
 pub struct Adam {
     parameters: Vec<f32>,

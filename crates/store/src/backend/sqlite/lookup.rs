@@ -6,7 +6,7 @@
 
 use rusqlite::{Row, Rows, ToSql, types::FromSql};
 
-use crate::{IntoRows, QueryResult, QueryType, Value};
+use crate::store::{IntoRows, QueryResult, QueryType, Value};
 
 use super::{SqliteStore, into_error};
 
@@ -15,7 +15,7 @@ impl SqliteStore {
         &self,
         query: &str,
         params_: &[Value<'_>],
-    ) -> trc::Result<T> {
+    ) -> crate::trc::Result<T> {
         let conn = self.conn_pool.get().map_err(into_error)?;
         self.spawn_worker(move || {
             let mut s = conn.prepare_cached(query).map_err(into_error)?;

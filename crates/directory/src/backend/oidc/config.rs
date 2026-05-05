@@ -6,9 +6,9 @@
 
 use std::time::Duration;
 
+use crate::store::Store;
+use crate::utils::config::{Config, utils::AsKey};
 use base64::{Engine, engine::general_purpose};
-use store::Store;
-use utils::config::{Config, utils::AsKey};
 
 use super::{Authentication, EndpointType, OpenIdConfig, OpenIdDirectory};
 

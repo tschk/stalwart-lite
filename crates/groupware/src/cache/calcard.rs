@@ -5,7 +5,12 @@
  */
 
 use super::GroupwareCache;
-use crate::{
+use crate::common::{
+    DavName, DavPath, DavResource, DavResourceMetadata, DavResources, Server,
+    TinyCalendarPreferences, auth::AccessToken,
+};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::groupware::{
     DavResourceName, RFC_3986,
     calendar::{
         ArchivedCalendar, ArchivedCalendarEvent, Calendar, CalendarEvent, SCHEDULE_INBOX_ID,
@@ -13,21 +18,16 @@ use crate::{
     },
     contact::{AddressBook, ArchivedAddressBook, ArchivedContactCard, ContactCard},
 };
-use calcard::common::timezone::Tz;
-use common::{
-    DavName, DavPath, DavResource, DavResourceMetadata, DavResources, Server,
-    TinyCalendarPreferences, auth::AccessToken,
-};
-use directory::backend::internal::manage::ManageDirectory;
-use std::sync::Arc;
-use store::ahash::{AHashMap, AHashSet};
-use tokio::sync::Semaphore;
-use trc::AddContext;
-use types::{
+use crate::store::ahash::{AHashMap, AHashSet};
+use crate::trc::AddContext;
+use crate::types::{
     acl::AclGrant,
     collection::{Collection, SyncCollection},
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use calcard::common::timezone::Tz;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub(super) async fn build_calcard_resources(
     server: &Server,
@@ -37,13 +37,13 @@ pub(super) async fn build_calcard_resources(
     container_collection: Collection,
     item_collection: Collection,
     update_lock: Arc<Semaphore>,
-) -> trc::Result<DavResources> {
+) -> crate::trc::Result<DavResources> {
     let is_calendar = matches!(sync_collection, SyncCollection::Calendar);
     let name = server
         .store()
         .get_principal_name(account_id)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_else(|| format!("_{account_id}"));
     let mut cache = DavResources {
         base_path: format!(
@@ -73,7 +73,7 @@ pub(super) async fn build_calcard_resources(
             .data
             .get_last_change_id(account_id, sync_collection.into())
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .unwrap_or_default();
         cache.item_change_id = last_change_id;
         cache.container_change_id = last_change_id;
@@ -107,7 +107,7 @@ pub(super) async fn build_calcard_resources(
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if cache.paths.is_empty() {
             if is_first_check {
@@ -162,7 +162,7 @@ pub(super) async fn build_calcard_resources(
                 Ok(true)
             })
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         return Ok(cache);
     }
@@ -172,27 +172,27 @@ pub(super) async fn build_scheduling_resources(
     server: &Server,
     account_id: u32,
     update_lock: Arc<Semaphore>,
-) -> trc::Result<DavResources> {
+) -> crate::trc::Result<DavResources> {
     let last_change_id = server
         .core
         .storage
         .data
         .get_last_change_id(account_id, SyncCollection::CalendarEventNotification.into())
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
 
     let name = server
         .store()
         .get_principal_name(account_id)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_else(|| format!("_{account_id}"));
 
     let item_ids = server
         .itip_ids(account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let mut cache = DavResources {
         base_path: format!(

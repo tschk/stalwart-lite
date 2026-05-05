@@ -6,10 +6,11 @@
 
 use self::throttle::parse_queue_rate_limiter;
 use super::*;
-use crate::{
+use crate::common::{
     config::server::ServerProtocol,
     expr::{if_block::IfBlock, *},
 };
+use crate::utils::config::{Config, utils::ParseValue};
 use ahash::AHashMap;
 use mail_auth::IpLookupStrategy;
 use mail_send::Credentials;
@@ -20,7 +21,6 @@ use std::{
     time::Duration,
 };
 use throttle::parse_queue_rate_limiter_key;
-use utils::config::{Config, utils::ParseValue};
 
 #[derive(
     Debug,
@@ -785,7 +785,7 @@ impl From<RequireOptional> for Constant {
 }
 
 impl ConstantValue for RequireOptional {
-    fn add_constants(token_map: &mut crate::expr::tokenizer::TokenMap) {
+    fn add_constants(token_map: &mut crate::common::expr::tokenizer::TokenMap) {
         token_map
             .add_constant("optional", RequireOptional::Optional)
             .add_constant("require", RequireOptional::Require)
@@ -829,7 +829,7 @@ impl From<IpLookupStrategy> for Constant {
 }
 
 impl ConstantValue for IpLookupStrategy {
-    fn add_constants(token_map: &mut crate::expr::tokenizer::TokenMap) {
+    fn add_constants(token_map: &mut crate::common::expr::tokenizer::TokenMap) {
         token_map
             .add_constant("ipv4_only", IpLookupStrategy::Ipv4Only)
             .add_constant("ipv6_only", IpLookupStrategy::Ipv6Only)

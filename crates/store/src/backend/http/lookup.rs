@@ -10,12 +10,12 @@ use std::{
     time::Instant,
 };
 
+use crate::utils::HttpLimitResponse;
 use ahash::AHashMap;
 use compact_str::ToCompactString;
 use rand::seq::IndexedRandom;
-use utils::HttpLimitResponse;
 
-use crate::{Value, backend::http::HttpStoreFormat, write::now};
+use crate::store::{Value, backend::http::HttpStoreFormat, write::now};
 
 use super::HttpStore;
 
@@ -74,7 +74,7 @@ impl HttpStoreGet for Arc<HttpStore> {
                             this.config.refresh
                         }
                         Err(err) => {
-                            trc::error!(err);
+                            crate::trc::error!(err);
                             this.config.retry
                         }
                     };
@@ -88,7 +88,7 @@ impl HttpStoreGet for Arc<HttpStore> {
 }
 
 impl HttpStore {
-    async fn try_refresh(&self) -> trc::Result<AHashMap<String, Value<'static>>> {
+    async fn try_refresh(&self) -> crate::trc::Result<AHashMap<String, Value<'static>>> {
         let time = Instant::now();
         let agent = BROWSER_USER_AGENTS.choose(&mut rand::rng()).unwrap();
         let response = reqwest::Client::builder()
@@ -100,20 +100,20 @@ impl HttpStore {
             .send()
             .await
             .map_err(|err| {
-                trc::StoreEvent::HttpStoreError
+                crate::trc::StoreEvent::HttpStoreError
                     .into_err()
                     .reason(err)
-                    .ctx(trc::Key::Url, self.config.url.to_compact_string())
+                    .ctx(crate::trc::Key::Url, self.config.url.to_compact_string())
                     .details("Failed to build request")
             })?;
 
         if !response.status().is_success() {
-            trc::bail!(
-                trc::StoreEvent::HttpStoreError
+            crate::trc::bail!(
+                crate::trc::StoreEvent::HttpStoreError
                     .into_err()
-                    .ctx(trc::Key::Code, response.status().as_u16())
-                    .ctx(trc::Key::Url, self.config.url.to_compact_string())
-                    .ctx(trc::Key::Elapsed, time.elapsed())
+                    .ctx(crate::trc::Key::Code, response.status().as_u16())
+                    .ctx(crate::trc::Key::Url, self.config.url.to_compact_string())
+                    .ctx(crate::trc::Key::Elapsed, time.elapsed())
                     .details("Failed to fetch HTTP list")
             );
         }
@@ -122,18 +122,18 @@ impl HttpStore {
             .bytes_with_limit(self.config.max_size)
             .await
             .map_err(|err| {
-                trc::StoreEvent::HttpStoreError
+                crate::trc::StoreEvent::HttpStoreError
                     .into_err()
                     .reason(err)
-                    .ctx(trc::Key::Url, self.config.url.to_compact_string())
-                    .ctx(trc::Key::Elapsed, time.elapsed())
+                    .ctx(crate::trc::Key::Url, self.config.url.to_compact_string())
+                    .ctx(crate::trc::Key::Elapsed, time.elapsed())
                     .details("Failed to fetch resource")
             })?
             .ok_or_else(|| {
-                trc::StoreEvent::HttpStoreError
+                crate::trc::StoreEvent::HttpStoreError
                     .into_err()
-                    .ctx(trc::Key::Url, self.config.url.to_compact_string())
-                    .ctx(trc::Key::Elapsed, time.elapsed())
+                    .ctx(crate::trc::Key::Url, self.config.url.to_compact_string())
+                    .ctx(crate::trc::Key::Elapsed, time.elapsed())
                     .details("Resource is too large")
             })?;
 
@@ -146,11 +146,11 @@ impl HttpStore {
         let mut entries = AHashMap::new();
         for (pos, line) in BufReader::new(reader).lines().enumerate() {
             let line_ = line.map_err(|err| {
-                trc::StoreEvent::HttpStoreError
+                crate::trc::StoreEvent::HttpStoreError
                     .into_err()
                     .reason(err)
-                    .ctx(trc::Key::Url, self.config.url.to_compact_string())
-                    .ctx(trc::Key::Elapsed, time.elapsed())
+                    .ctx(crate::trc::Key::Url, self.config.url.to_compact_string())
+                    .ctx(crate::trc::Key::Elapsed, time.elapsed())
                     .details("Failed to read line")
             })?;
 
@@ -221,8 +221,8 @@ impl HttpStore {
             }
         }
 
-        trc::event!(
-            Store(trc::StoreEvent::HttpStoreFetch),
+        crate::trc::event!(
+            Store(crate::trc::StoreEvent::HttpStoreFetch),
             Url = self.config.url.to_compact_string(),
             Total = entries.len(),
             Elapsed = time.elapsed(),

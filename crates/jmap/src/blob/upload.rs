@@ -7,18 +7,18 @@
 use std::sync::Arc;
 
 use super::{UploadResponse, download::BlobDownload};
-use common::{Server, auth::AccessToken};
-use directory::Permission;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::jmap_proto::{
     error::set::SetError,
     method::upload::{
         BlobUploadRequest, BlobUploadResponse, BlobUploadResponseObject, DataSourceObject,
     },
     request::reference::MaybeIdReference,
 };
+use crate::trc::AddContext;
+use crate::types::id::Id;
 use std::future::Future;
-use trc::AddContext;
-use types::id::Id;
 
 #[cfg(feature = "test_mode")]
 pub static DISABLE_UPLOAD_QUOTA: std::sync::atomic::AtomicBool =
@@ -29,7 +29,7 @@ pub trait BlobUpload: Sync + Send {
         &self,
         request: BlobUploadRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<BlobUploadResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<BlobUploadResponse>> + Send;
 
     fn blob_upload(
         &self,
@@ -37,7 +37,7 @@ pub trait BlobUpload: Sync + Send {
         content_type: &str,
         data: &[u8],
         access_token: Arc<AccessToken>,
-    ) -> impl Future<Output = trc::Result<UploadResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<UploadResponse>> + Send;
 }
 
 impl BlobUpload for Server {
@@ -45,7 +45,7 @@ impl BlobUpload for Server {
         &self,
         request: BlobUploadRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<BlobUploadResponse> {
+    ) -> crate::trc::Result<BlobUploadResponse> {
         let mut response = BlobUploadResponse {
             account_id: request.account_id,
             created: Default::default(),
@@ -54,7 +54,7 @@ impl BlobUpload for Server {
         let account_id = request.account_id.document_id();
 
         if request.create.len() > self.core.jmap.set_max_objects {
-            return Err(trc::JmapEvent::RequestTooLarge.into_err());
+            return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
         }
 
         'outer: for (create_id, upload_object) in request.create {
@@ -172,7 +172,7 @@ impl BlobUpload for Server {
                 .data
                 .blob_quota(account_id)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if ((self.core.jmap.upload_tmp_quota_size > 0
                 && used.bytes + data.len() > self.core.jmap.upload_tmp_quota_size)
@@ -211,11 +211,11 @@ impl BlobUpload for Server {
         content_type: &str,
         data: &[u8],
         access_token: Arc<AccessToken>,
-    ) -> trc::Result<UploadResponse> {
+    ) -> crate::trc::Result<UploadResponse> {
         // Limit concurrent uploads
         let _in_flight = self
             .is_upload_allowed(&access_token)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         #[cfg(feature = "test_mode")]
         {
@@ -232,7 +232,7 @@ impl BlobUpload for Server {
             .data
             .blob_quota(account_id.document_id())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if ((self.core.jmap.upload_tmp_quota_size > 0
             && used.bytes + data.len() > self.core.jmap.upload_tmp_quota_size)
@@ -240,10 +240,13 @@ impl BlobUpload for Server {
                 && used.count + 1 > self.core.jmap.upload_tmp_quota_amount))
             && !access_token.has_permission(Permission::UnlimitedUploads)
         {
-            let err = Err(trc::LimitEvent::BlobQuota
+            let err = Err(crate::trc::LimitEvent::BlobQuota
                 .into_err()
-                .ctx(trc::Key::Size, self.core.jmap.upload_tmp_quota_size)
-                .ctx(trc::Key::Total, self.core.jmap.upload_tmp_quota_amount));
+                .ctx(crate::trc::Key::Size, self.core.jmap.upload_tmp_quota_size)
+                .ctx(
+                    crate::trc::Key::Total,
+                    self.core.jmap.upload_tmp_quota_amount,
+                ));
 
             #[cfg(feature = "test_mode")]
             if !DISABLE_UPLOAD_QUOTA.load(std::sync::atomic::Ordering::Relaxed) {
@@ -259,7 +262,7 @@ impl BlobUpload for Server {
             blob_id: self
                 .put_jmap_blob(account_id.document_id(), data)
                 .await
-                .caused_by(trc::location!())?,
+                .caused_by(crate::trc::location!())?,
             c_type: content_type.to_string(),
             size: data.len(),
         })

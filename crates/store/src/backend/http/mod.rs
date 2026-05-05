@@ -15,7 +15,7 @@ use std::{
 use ahash::AHashMap;
 use arc_swap::ArcSwap;
 
-use crate::Value;
+use crate::store::Value;
 
 #[derive(Debug, Clone)]
 pub struct HttpStoreConfig {

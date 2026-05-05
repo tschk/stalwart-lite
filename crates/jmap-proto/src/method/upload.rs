@@ -7,7 +7,7 @@
 use std::borrow::Cow;
 
 use super::ahash_is_empty;
-use crate::{
+use crate::jmap_proto::{
     error::set::SetError,
     object::{AnyId, blob::BlobProperty},
     request::{
@@ -16,11 +16,11 @@ use crate::{
     },
     response::Response,
 };
+use crate::types::{blob::BlobId, id::Id};
+use crate::utils::map::vec_map::VecMap;
 use ahash::AHashMap;
 use mail_parser::decoders::base64::base64_decode;
 use serde::{Deserialize, Deserializer};
-use types::{blob::BlobId, id::Id};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct BlobUploadRequest {

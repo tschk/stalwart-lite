@@ -4,12 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use calcard::{
-    icalendar::{ICalendarComponentType, ICalendarParameterName, ICalendarProperty},
-    vcard::{VCardParameterName, VCardVersion},
-};
-use common::auth::AccessToken;
-use dav_proto::{
+use crate::common::auth::AccessToken;
+use crate::dav_proto::{
     Depth, RequestHeaders, Return,
     schema::{
         Namespace,
@@ -20,7 +16,7 @@ use dav_proto::{
         },
     },
 };
-use groupware::{
+use crate::groupware::{
     calendar::{
         ArchivedCalendar, ArchivedCalendarEvent, ArchivedCalendarEventNotification, Calendar,
         CalendarEvent, CalendarEventNotification,
@@ -28,13 +24,17 @@ use groupware::{
     contact::{AddressBook, ArchivedAddressBook, ArchivedContactCard, ContactCard},
     file::{ArchivedFileNode, FileNode},
 };
-use propfind::PropFindItem;
-use rkyv::vec::ArchivedVec;
-use store::write::{AlignedBytes, Archive, BatchBuilder, Operation, ValueClass, ValueOp};
-use types::{
+use crate::store::write::{AlignedBytes, Archive, BatchBuilder, Operation, ValueClass, ValueOp};
+use crate::types::{
     TimeRange, acl::ArchivedAclGrant, collection::Collection, dead_property::ArchivedDeadProperty,
     field::Field,
 };
+use calcard::{
+    icalendar::{ICalendarComponentType, ICalendarParameterName, ICalendarProperty},
+    vcard::{VCardParameterName, VCardVersion},
+};
+use propfind::PropFindItem;
+use rkyv::vec::ArchivedVec;
 use uri::{OwnedUri, Urn};
 
 pub mod acl;
@@ -329,7 +329,7 @@ impl<'x> ArchivedResource<'x> {
     pub fn from_archive(
         archive: &'x Archive<AlignedBytes>,
         collection: Collection,
-    ) -> trc::Result<Self> {
+    ) -> crate::trc::Result<Self> {
         match collection {
             Collection::Calendar => archive
                 .to_unarchived::<Calendar>()

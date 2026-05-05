@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::{AddContext, AuthEvent, EventType};
 use serde::{Deserialize, Serialize};
-use trc::{AddContext, AuthEvent, EventType};
 
-use crate::{Server, auth::AccessToken};
+use crate::common::{Server, auth::AccessToken};
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Deserialize, Serialize)]
 pub struct OAuthIntrospect {
@@ -52,7 +52,7 @@ impl Server {
         &self,
         token: &str,
         access_token: &AccessToken,
-    ) -> trc::Result<OAuthIntrospect> {
+    ) -> crate::trc::Result<OAuthIntrospect> {
         match self.validate_access_token(None, token).await {
             Ok(token_info) => Ok(OAuthIntrospect {
                 active: true,
@@ -62,7 +62,7 @@ impl Server {
                 } else {
                     self.get_access_token(token_info.account_id)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .name
                         .clone()
                 }

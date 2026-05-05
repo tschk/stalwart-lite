@@ -13,9 +13,9 @@ pub mod property;
 pub mod propstat;
 pub mod schedule;
 
-use types::dead_property::{DeadProperty, DeadPropertyTag};
+use crate::types::dead_property::{DeadProperty, DeadPropertyTag};
 
-use crate::schema::{
+use crate::dav_proto::schema::{
     Namespaces,
     property::{Comp, ResourceType, SupportedCollation},
     response::{Href, List, Location, ResponseDescription, Status, SyncToken},
@@ -205,12 +205,12 @@ impl DeadPropertyFormat for DeadProperty {
 mod tests {
     use std::fmt::Display;
 
+    use crate::types::dead_property::{DeadElementTag, DeadProperty, DeadPropertyTag};
     use calcard::{icalendar::ICalendar, vcard::VCard};
     use hyper::StatusCode;
     use mail_parser::DateTime;
-    use types::dead_property::{DeadElementTag, DeadProperty, DeadPropertyTag};
 
-    use crate::{
+    use crate::dav_proto::{
         Depth,
         parser::{Token, tokenizer::Tokenizer},
         responses::XmlCdataEscape,
@@ -250,6 +250,12 @@ mod tests {
 
     #[test]
     fn parse_responses() {
+        let resources = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("crates")
+            .join("dav-proto")
+            .join("resources")
+            .join("responses");
+
         for (num, test) in [
             // 001.xml
             ErrorResponse::new(BaseCondition::LockTokenSubmitted(List::new([Href(
@@ -682,7 +688,7 @@ END:VCARD
         .enumerate()
         {
             let xml =
-                std::fs::read_to_string(format!("resources/responses/{:03}.xml", num + 1)).unwrap();
+                std::fs::read_to_string(resources.join(format!("{:03}.xml", num + 1))).unwrap();
             let mut output_token = Tokenizer::new(test.as_bytes());
             let mut expected_token = Tokenizer::new(xml.as_bytes());
             let mut output_tokens = Vec::new();

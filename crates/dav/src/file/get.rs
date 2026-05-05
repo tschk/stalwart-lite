@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ETag,
@@ -13,20 +14,19 @@ use crate::{
     },
     file::DavFileResource,
 };
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use dav_proto::{RequestHeaders, schema::property::Rfc1123DateTime};
-use groupware::{cache::GroupwareCache, file::FileNode};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::{
+use crate::dav_proto::{RequestHeaders, schema::property::Rfc1123DateTime};
+use crate::groupware::{cache::GroupwareCache, file::FileNode};
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait FileGetRequestHandler: Sync + Send {
     fn handle_file_get_request(
@@ -34,7 +34,7 @@ pub(crate) trait FileGetRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl FileGetRequestHandler for Server {
@@ -43,7 +43,7 @@ impl FileGetRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -53,7 +53,7 @@ impl FileGetRequestHandler for Server {
         let files = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = files.map_resource(&resource_)?;
 
         // Fetch node
@@ -65,9 +65,11 @@ impl FileGetRequestHandler for Server {
                 resource.resource,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
-        let node = node_.unarchive::<FileNode>().caused_by(trc::location!())?;
+        let node = node_
+            .unarchive::<FileNode>()
+            .caused_by(crate::trc::location!())?;
 
         // Validate ACL
         if !access_token.is_member(account_id)
@@ -114,7 +116,7 @@ impl FileGetRequestHandler for Server {
                 self.blob_store()
                     .get_blob(hash, 0..usize::MAX)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .ok_or(DavError::Code(StatusCode::NOT_FOUND))?,
             ))
         } else {

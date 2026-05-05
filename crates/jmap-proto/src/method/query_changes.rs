@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     method::query::{Comparator, Filter, FilterWrapper, QueryRequest},
     object::JmapObject,
     request::deserialize::{DeserializeArguments, deserialize_request},
     types::state::State,
 };
+use crate::types::id::Id;
 use serde::{Deserialize, Deserializer};
-use types::id::Id;
 
 #[derive(Debug, Clone)]
 pub struct QueryChangesRequest<T: JmapObject> {

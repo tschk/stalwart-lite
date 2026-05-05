@@ -6,12 +6,12 @@
 
 use std::time::Instant;
 
-use crate::core::{Session, State};
-use common::listener::SessionStream;
-use imap_proto::{Command, StatusResponse, receiver::Request};
+use crate::common::listener::SessionStream;
+use crate::imap::core::{Session, State};
+use crate::imap_proto::{Command, StatusResponse, receiver::Request};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_noop(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_noop(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         let op_start = Instant::now();
 
         if let State::Selected { data, mailbox, .. } = &self.state {
@@ -26,8 +26,8 @@ impl<T: SessionStream> Session<T> {
             .await?;
         }
 
-        trc::event!(
-            Imap(trc::ImapEvent::Noop),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Noop),
             SpanId = self.session_id,
             Elapsed = op_start.elapsed()
         );

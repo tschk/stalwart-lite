@@ -7,7 +7,7 @@
 pub mod index;
 pub mod storage;
 
-use types::{acl::AclGrant, blob_hash::BlobHash, dead_property::DeadProperty};
+use crate::types::{acl::AclGrant, blob_hash::BlobHash, dead_property::DeadProperty};
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,

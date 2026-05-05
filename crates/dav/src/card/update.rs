@@ -5,7 +5,8 @@
  */
 
 use super::assert_is_unique_uid;
-use crate::{
+use crate::common::{DavName, Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavErrorCondition, DavMethod,
     common::{
         ETag, ExtractETag,
@@ -15,25 +16,24 @@ use crate::{
     file::DavFileResource,
     fix_percent_encoding,
 };
-use calcard::{Entry, Parser};
-use common::{DavName, Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{property::Rfc1123DateTime, response::CardCondition},
 };
-use groupware::{cache::GroupwareCache, contact::ContactCard};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::BatchBuilder;
-use store::{
+use crate::groupware::{cache::GroupwareCache, contact::ContactCard};
+use crate::http_proto::HttpResponse;
+use crate::store::write::BatchBuilder;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use calcard::{Entry, Parser};
+use hyper::StatusCode;
 
 pub(crate) trait CardUpdateRequestHandler: Sync + Send {
     fn handle_card_update_request(
@@ -42,7 +42,7 @@ pub(crate) trait CardUpdateRequestHandler: Sync + Send {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         is_patch: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CardUpdateRequestHandler for Server {
@@ -52,7 +52,7 @@ impl CardUpdateRequestHandler for Server {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         _is_patch: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -62,7 +62,7 @@ impl CardUpdateRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource_name = fix_percent_encoding(
             resource
                 .resource
@@ -121,11 +121,11 @@ impl CardUpdateRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
             let card = card_
                 .to_unarchived::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate headers
             match self
@@ -187,7 +187,7 @@ impl CardUpdateRequestHandler for Server {
             // Build node
             let mut new_card = card
                 .deserialize::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             new_card.size = bytes.len() as u32;
             new_card.card = vcard;
 
@@ -195,9 +195,11 @@ impl CardUpdateRequestHandler for Server {
             let mut batch = BatchBuilder::new();
             let etag = new_card
                 .update(access_token, card, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .etag();
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             Ok(HttpResponse::new(StatusCode::NO_CONTENT).with_etag_opt(etag))
@@ -269,12 +271,14 @@ impl CardUpdateRequestHandler for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::ContactCard, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let etag = card
                 .insert(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .etag();
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))

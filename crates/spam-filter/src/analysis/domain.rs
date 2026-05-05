@@ -5,7 +5,12 @@
  */
 
 use super::{ElementLocation, is_trusted_domain};
-use crate::{
+use crate::common::{
+    Server,
+    config::spamfilter::{Element, Location},
+};
+use crate::nlp::tokenizers::types::TokenType;
+use crate::spam_filter::{
     Email, Hostname, Recipient, SpamFilterContext, TextPart,
     modules::{
         dnsbl::check_dnsbl,
@@ -13,13 +18,8 @@ use crate::{
         html::{A, HREF, HtmlToken},
     },
 };
-use common::{
-    Server,
-    config::spamfilter::{Element, Location},
-};
 use mail_auth::DkimResult;
 use mail_parser::{HeaderName, HeaderValue, Host, parsers::MessageStream};
-use nlp::tokenizers::types::TokenType;
 use std::{collections::HashSet, future::Future};
 
 pub trait SpamFilterAnalyzeDomain: Sync + Send {

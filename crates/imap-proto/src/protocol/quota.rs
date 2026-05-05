@@ -79,7 +79,7 @@ impl ImapResponse for Response {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::{ImapResponse, capability::QuotaResourceName};
+    use crate::imap_proto::protocol::{ImapResponse, capability::QuotaResourceName};
 
     use super::{QuotaItem, QuotaResource};
 

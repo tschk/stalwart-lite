@@ -4,27 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{auth::AccessToken, sharing::notification::ShareNotification};
-use rkyv::{
-    option::ArchivedOption,
-    primitive::{ArchivedU32, ArchivedU64},
-    string::ArchivedString,
-};
-use std::{borrow::Cow, fmt::Debug};
-use store::{
+use crate::common::{auth::AccessToken, sharing::notification::ShareNotification};
+use crate::store::{
     Serialize, SerializeInfallible,
     write::{
         Archive, Archiver, BatchBuilder, BlobLink, BlobOp, DirectoryClass, IntoOperations, Params,
         SearchIndex, TaskEpoch, TaskQueueClass, ValueClass,
     },
 };
-use types::{
+use crate::types::{
     acl::AclGrant,
     blob_hash::BlobHash,
     collection::{Collection, SyncCollection},
     field::Field,
 };
-use utils::{cheeky_hash::CheekyHash, map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
+use crate::utils::{cheeky_hash::CheekyHash, map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
+use rkyv::{
+    option::ArchivedOption,
+    primitive::{ArchivedU32, ArchivedU64},
+    string::ArchivedString,
+};
+use std::{borrow::Cow, fmt::Debug};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IndexValue<'x> {
@@ -314,7 +314,7 @@ impl<C: IndexableObject, N: IndexableAndSerializableObject> ObjectIndexBuilder<C
 impl<C: IndexableObject, N: IndexableAndSerializableObject> IntoOperations
     for ObjectIndexBuilder<C, N>
 {
-    fn build(self, batch: &mut BatchBuilder) -> trc::Result<()> {
+    fn build(self, batch: &mut BatchBuilder) -> crate::trc::Result<()> {
         match (self.current, self.changes) {
             (None, Some(changes)) => {
                 // Insertion
@@ -541,7 +541,7 @@ fn merge_index(
     change: IndexValue<'_>,
     changed_by: u32,
     tenant_id: Option<u32>,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     match (current, change) {
         (
             IndexValue::Index {

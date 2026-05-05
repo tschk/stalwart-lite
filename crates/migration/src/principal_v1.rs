@@ -4,35 +4,35 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::Server;
+use crate::directory::{
+    Permission, Principal, PrincipalData, ROLE_ADMIN, ROLE_USER, Type,
+    backend::internal::{PrincipalField, PrincipalSet, SpecialSecrets},
+};
+use crate::migration::{
     email_v1::migrate_emails_v011, encryption_v1::migrate_encryption_params_v011, get_document_ids,
     identity_v1::migrate_identities_v011, mailbox::migrate_mailboxes,
     push_v1::migrate_push_subscriptions_v011, sieve_v1::migrate_sieve_v011,
     submission::migrate_email_submissions, threads::migrate_threads,
 };
-use common::Server;
-use directory::{
-    Permission, Principal, PrincipalData, ROLE_ADMIN, ROLE_USER, Type,
-    backend::internal::{PrincipalField, PrincipalSet, SpecialSecrets},
-};
-use nlp::tokenizers::word::WordTokenizer;
-use std::{slice::Iter, time::Instant};
-use store::{
+use crate::nlp::tokenizers::word::WordTokenizer;
+use crate::store::{
     Deserialize, Serialize, ValueKey,
     ahash::{AHashMap, AHashSet},
     backend::MAX_TOKEN_LENGTH,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, DirectoryClass, ValueClass},
 };
-use trc::AddContext;
-use types::collection::Collection;
-use utils::codec::leb128::Leb128Iterator;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
+use crate::utils::codec::leb128::Leb128Iterator;
+use std::{slice::Iter, time::Instant};
 
-pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<RoaringBitmap> {
+pub(crate) async fn migrate_principals_v0_11(server: &Server) -> crate::trc::Result<RoaringBitmap> {
     // Obtain email ids
     let principal_ids = get_document_ids(server, u32::MAX, Collection::Principal)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_principals = principal_ids.len();
     if num_principals == 0 {
@@ -66,7 +66,7 @@ pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<Roa
                     ValueClass::Directory(DirectoryClass::Principal(principal_id)),
                     Archiver::new(principal)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
                 num_migrated += 1;
 
@@ -74,7 +74,7 @@ pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<Roa
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => (),
             Err(err) => {
@@ -89,7 +89,9 @@ pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<Roa
                     .await
                     .is_err()
                 {
-                    return Err(err.account_id(principal_id).caused_by(trc::location!()));
+                    return Err(err
+                        .account_id(principal_id)
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -109,10 +111,10 @@ pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<Roa
                     + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!("Migrated {num_migrated} principals",)
         );
     }
@@ -120,32 +122,35 @@ pub(crate) async fn migrate_principals_v0_11(server: &Server) -> trc::Result<Roa
     Ok(principal_ids)
 }
 
-pub(crate) async fn migrate_principal_v0_11(server: &Server, account_id: u32) -> trc::Result<()> {
+pub(crate) async fn migrate_principal_v0_11(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<()> {
     let start_time = Instant::now();
     let num_emails = migrate_emails_v011(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_mailboxes = migrate_mailboxes(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_params = migrate_encryption_params_v011(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_subscriptions = migrate_push_subscriptions_v011(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_sieve = migrate_sieve_v011(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_submissions = migrate_email_submissions(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_threads = migrate_threads(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_identities = migrate_identities_v011(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if num_emails > 0
         || num_mailboxes > 0
@@ -156,8 +161,8 @@ pub(crate) async fn migrate_principal_v0_11(server: &Server, account_id: u32) ->
         || num_threads > 0
         || num_identities > 0
     {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!(
                 "Migrated accountId {account_id} with {num_emails} emails, {num_mailboxes} mailboxes, {num_params} encryption params, {num_submissions} email submissions, {num_sieve} sieve scripts, {num_subscriptions} push subscriptions, {num_threads} threads, and {num_identities} identities"
             ),
@@ -276,11 +281,11 @@ impl FromLegacy for Principal {
 pub struct LegacyPrincipal(PrincipalSet);
 
 impl Deserialize for LegacyPrincipal {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         deserialize(bytes).ok_or_else(|| {
-            trc::StoreEvent::DataCorruption
-                .caused_by(trc::location!())
-                .ctx(trc::Key::Value, bytes)
+            crate::trc::StoreEvent::DataCorruption
+                .caused_by(crate::trc::location!())
+                .ctx(crate::trc::Key::Value, bytes)
         })
     }
 }

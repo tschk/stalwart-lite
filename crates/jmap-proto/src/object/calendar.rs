@@ -4,13 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{
         AnyId, JmapObject, JmapObjectId, JmapRight, JmapSharedObject, MaybeReference, parse_ref,
     },
     request::{deserialize::DeserializeArguments, reference::MaybeIdReference},
     types::date::UTCDate,
 };
+use crate::types::{acl::Acl, id::Id};
 use calcard::{
     common::{IanaParse, timezone::Tz},
     icalendar::ICalendarDuration,
@@ -18,7 +19,6 @@ use calcard::{
 };
 use jmap_tools::{Element, JsonPointer, JsonPointerItem, Key, Property};
 use std::{borrow::Cow, fmt::Display, str::FromStr};
-use types::{acl::Acl, id::Id};
 
 #[derive(Debug, Clone, Default)]
 pub struct Calendar;

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use store::{
+use crate::common::Server;
+use crate::store::{
     IterateParams, SUBSPACE_TASK_QUEUE, U64_LEN, ValueKey,
     write::{
         AnyClass, BatchBuilder, ValueClass,
@@ -13,9 +13,9 @@ use store::{
         now,
     },
 };
-use trc::AddContext;
+use crate::trc::AddContext;
 
-pub(crate) async fn migrate_tasks_v011(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_tasks_v011(server: &Server) -> crate::trc::Result<()> {
     let from_key = ValueKey::<ValueClass> {
         account_id: 0,
         collection: 0,
@@ -54,7 +54,7 @@ pub(crate) async fn migrate_tasks_v011(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if !migrate_tasks.is_empty() {
         let num_migrated = migrate_tasks.len();
@@ -80,10 +80,10 @@ pub(crate) async fn migrate_tasks_v011(server: &Server) -> trc::Result<()> {
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!("Migrated {num_migrated} tasks")
         );
     }

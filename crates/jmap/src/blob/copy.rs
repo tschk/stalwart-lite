@@ -5,25 +5,25 @@
  */
 
 use super::download::BlobDownload;
-use common::{Server, auth::AccessToken};
-use directory::Permission;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::copy::{CopyBlobRequest, CopyBlobResponse},
     request::IntoValid,
 };
+use crate::store::write::{BatchBuilder, BlobLink, BlobOp, now};
+use crate::trc::AddContext;
+use crate::types::blob::{BlobClass, BlobId};
+use crate::utils::map::vec_map::VecMap;
 use std::future::Future;
-use store::write::{BatchBuilder, BlobLink, BlobOp, now};
-use trc::AddContext;
-use types::blob::{BlobClass, BlobId};
-use utils::map::vec_map::VecMap;
 
 pub trait BlobCopy: Sync + Send {
     fn blob_copy(
         &self,
         request: CopyBlobRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<CopyBlobResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<CopyBlobResponse>> + Send;
 }
 
 impl BlobCopy for Server {
@@ -31,7 +31,7 @@ impl BlobCopy for Server {
         &self,
         request: CopyBlobRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<CopyBlobResponse> {
+    ) -> crate::trc::Result<CopyBlobResponse> {
         let mut response = CopyBlobResponse {
             from_account_id: request.from_account_id,
             account_id: request.account_id,
@@ -49,7 +49,7 @@ impl BlobCopy for Server {
                     .data
                     .blob_quota(account_id)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if ((self.core.jmap.upload_tmp_quota_size > 0
                     && used.bytes >= self.core.jmap.upload_tmp_quota_size)
@@ -80,7 +80,7 @@ impl BlobCopy for Server {
                 self.store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 let dest_blob_id = BlobId {
                     hash: blob_id.hash.clone(),

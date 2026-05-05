@@ -4,27 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         lock::{LockRequestHandler, ResourceState},
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::RequestHeaders;
-use groupware::{DestroyArchive, cache::GroupwareCache};
-use http_proto::HttpResponse;
+use crate::dav_proto::RequestHeaders;
+use crate::groupware::{DestroyArchive, cache::GroupwareCache};
+use crate::http_proto::HttpResponse;
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::SyncCollection};
 use hyper::StatusCode;
-use trc::AddContext;
-use types::{acl::Acl, collection::SyncCollection};
 
 pub(crate) trait FileDeleteRequestHandler: Sync + Send {
     fn handle_file_delete_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl FileDeleteRequestHandler for Server {
@@ -32,7 +32,7 @@ impl FileDeleteRequestHandler for Server {
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -46,7 +46,7 @@ impl FileDeleteRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Find ids to delete
         let mut ids = resources.subtree(delete_path).collect::<Vec<_>>();

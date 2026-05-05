@@ -4,30 +4,30 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use email::push::{Keys, PushSubscription, PushSubscriptions};
-use store::{
+use crate::common::Server;
+use crate::email::push::{Keys, PushSubscription, PushSubscriptions};
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, now},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::Collection,
     field::{Field, PrincipalField},
     type_state::DataType,
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
 
-use crate::get_document_ids;
+use crate::migration::get_document_ids;
 
 pub(crate) async fn migrate_push_subscriptions_v013(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let push_ids = get_document_ids(server, account_id, Collection::PushSubscription)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_pushes = push_ids.len();
     if num_pushes == 0 {
@@ -60,12 +60,12 @@ pub(crate) async fn migrate_push_subscriptions_v013(
                     });
                 }
                 Err(err) => {
-                    return Err(err.account_id(push_id).caused_by(trc::location!()));
+                    return Err(err.account_id(push_id).caused_by(crate::trc::location!()));
                 }
             },
             Ok(None) => (),
             Err(err) => {
-                return Err(err.account_id(push_id).caused_by(trc::location!()));
+                return Err(err.account_id(push_id).caused_by(crate::trc::location!()));
             }
         }
     }
@@ -99,14 +99,14 @@ pub(crate) async fn migrate_push_subscriptions_v013(
                     PrincipalField::PushSubscriptions,
                     Archiver::new(PushSubscriptions { subscriptions })
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
         }
 
         server
             .commit_batch(batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(num_push_subscriptions)
     } else {

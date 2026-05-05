@@ -5,7 +5,7 @@
  */
 
 use super::server::tls::{build_self_signed_cert, parse_certificates};
-use crate::{
+use crate::common::{
     CacheSwap, Caches, Data, DavResource, DavResources, MailboxCache, MessageStoreCache,
     MessageUidCache, TlsConnectors,
     auth::{AccessToken, roles::RolePermissions},
@@ -16,6 +16,11 @@ use crate::{
     listener::blocked::BlockedIps,
     manager::webadmin::WebAdminManager,
 };
+use crate::utils::{
+    cache::{Cache, CacheWithTtl},
+    config::Config,
+    snowflake::SnowflakeIdGenerator,
+};
 use ahash::{AHashMap, AHashSet};
 use arc_swap::ArcSwap;
 use mail_auth::{MX, Parameters, Txt};
@@ -24,11 +29,6 @@ use parking_lot::RwLock;
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
     sync::Arc,
-};
-use utils::{
-    cache::{Cache, CacheWithTtl},
-    config::Config,
-    snowflake::SnowflakeIdGenerator,
 };
 
 impl Data {
@@ -44,7 +44,7 @@ impl Data {
         // Build and test snowflake id generator
         let node_id = config
             .property::<u64>("cluster.node-id")
-            .unwrap_or_else(store::rand::random);
+            .unwrap_or_else(crate::store::rand::random);
         let id_generator = SnowflakeIdGenerator::with_node_id(node_id);
         if !id_generator.is_valid() {
             panic!("Invalid system time, panicking to avoid data corruption");

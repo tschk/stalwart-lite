@@ -8,11 +8,11 @@ use std::fmt;
 
 use biscuit::{ClaimsSet, JWT, RegisteredClaims, SingleOrMultiple, jws::RegisteredHeader};
 
+use crate::store::write::now;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{self, Visitor},
 };
-use store::write::now;
 
 use crate::Server;
 
@@ -105,7 +105,7 @@ impl Server {
         issuer: impl Into<String>,
         audience: impl Into<String>,
         claims: StandardClaims,
-    ) -> trc::Result<String> {
+    ) -> crate::trc::Result<String> {
         let now = now() as i64;
 
         JWT::new_decoded(
@@ -130,7 +130,7 @@ impl Server {
         .into_encoded(&self.core.oauth.oidc_signing_secret)
         .map(|token| token.unwrap_encoded().to_string())
         .map_err(|err| {
-            trc::AuthEvent::Error
+            crate::trc::AuthEvent::Error
                 .into_err()
                 .reason(err)
                 .details("Failed to encode ID token")

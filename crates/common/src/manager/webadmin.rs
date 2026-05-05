@@ -10,11 +10,11 @@ use std::{
     path::PathBuf,
 };
 
+use crate::store::BlobStore;
 use ahash::AHashMap;
 use arc_swap::ArcSwap;
-use store::BlobStore;
 
-use crate::Core;
+use crate::common::Core;
 
 use super::WEBADMIN_KEY;
 
@@ -46,7 +46,7 @@ impl WebAdminManager {
         }
     }
 
-    pub async fn get(&self, path: &str) -> trc::Result<Resource<Vec<u8>>> {
+    pub async fn get(&self, path: &str) -> crate::trc::Result<Resource<Vec<u8>>> {
         let routes = self.routes.load();
         if let Some(resource) = routes.get(path).or_else(|| routes.get("index.html")) {
             tokio::fs::read(&resource.contents)
@@ -56,17 +56,17 @@ impl WebAdminManager {
                     contents,
                 })
                 .map_err(|err| {
-                    trc::ResourceEvent::Error
+                    crate::trc::ResourceEvent::Error
                         .reason(err)
-                        .ctx(trc::Key::Path, path.to_string())
-                        .caused_by(trc::location!())
+                        .ctx(crate::trc::Key::Path, path.to_string())
+                        .caused_by(crate::trc::location!())
                 })
         } else {
             Ok(Resource::default())
         }
     }
 
-    pub async fn unpack(&self, blob_store: &BlobStore) -> trc::Result<()> {
+    pub async fn unpack(&self, blob_store: &BlobStore) -> crate::trc::Result<()> {
         // Delete any existing bundles
         self.bundle_path.clean().await.map_err(unpack_error)?;
 
@@ -75,15 +75,15 @@ impl WebAdminManager {
             .get_blob(WEBADMIN_KEY, 0..usize::MAX)
             .await?
             .ok_or_else(|| {
-                trc::ResourceEvent::NotFound
-                    .caused_by(trc::location!())
+                crate::trc::ResourceEvent::NotFound
+                    .caused_by(crate::trc::location!())
                     .details("Webadmin bundle not found")
             })?;
 
         // Uncompress
         let mut bundle = zip::ZipArchive::new(Cursor::new(bundle)).map_err(|err| {
-            trc::ResourceEvent::Error
-                .caused_by(trc::location!())
+            crate::trc::ResourceEvent::Error
+                .caused_by(crate::trc::location!())
                 .reason(err)
                 .details("Failed to decompress webadmin bundle")
         })?;
@@ -91,8 +91,8 @@ impl WebAdminManager {
         for i in 0..bundle.len() {
             let (file_name, contents) = {
                 let mut file = bundle.by_index(i).map_err(|err| {
-                    trc::ResourceEvent::Error
-                        .caused_by(trc::location!())
+                    crate::trc::ResourceEvent::Error
+                        .caused_by(crate::trc::location!())
                         .reason(err)
                         .details("Failed to read file from webadmin bundle")
                 })?;
@@ -135,30 +135,30 @@ impl WebAdminManager {
         // Update routes
         self.routes.store(routes.into());
 
-        trc::event!(
-            Resource(trc::ResourceEvent::WebadminUnpacked),
+        crate::trc::event!(
+            Resource(crate::trc::ResourceEvent::WebadminUnpacked),
             Path = self.bundle_path.path.to_string_lossy().into_owned(),
         );
 
         Ok(())
     }
 
-    pub async fn update(&self, core: &Core) -> trc::Result<()> {
+    pub async fn update(&self, core: &Core) -> crate::trc::Result<()> {
         let bytes = core
             .storage
             .config
             .fetch_resource("webadmin")
             .await
             .map_err(|err| {
-                trc::ResourceEvent::Error
-                    .caused_by(trc::location!())
+                crate::trc::ResourceEvent::Error
+                    .caused_by(crate::trc::location!())
                     .reason(err)
                     .details("Failed to download webadmin")
             })?;
         core.storage.blob.put_blob(WEBADMIN_KEY, &bytes).await
     }
 
-    pub async fn update_and_unpack(&self, core: &Core) -> trc::Result<()> {
+    pub async fn update_and_unpack(&self, core: &Core) -> crate::trc::Result<()> {
         self.update(core).await?;
         self.unpack(&core.storage.blob).await
     }
@@ -189,8 +189,8 @@ impl TempDir {
     }
 }
 
-fn unpack_error(err: std::io::Error) -> trc::Error {
-    trc::ResourceEvent::Error
+fn unpack_error(err: std::io::Error) -> crate::trc::Error {
+    crate::trc::ResourceEvent::Error
         .reason(err)
         .details("Failed to unpack webadmin bundle")
 }

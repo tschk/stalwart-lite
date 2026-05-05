@@ -4,10 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     config::smtp::queue::{QueueExpiry, QueueName},
     expr::{self, functions::ResolveVariable, *},
 };
+use crate::store::write::now;
+use crate::types::blob_hash::BlobHash;
+use crate::utils::DomainPart;
 use compact_str::ToCompactString;
 use smtp_proto::Response;
 use std::{
@@ -15,9 +18,6 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     time::{Duration, Instant, SystemTime},
 };
-use store::write::now;
-use types::blob_hash::BlobHash;
-use utils::DomainPart;
 
 pub mod dsn;
 pub mod manager;

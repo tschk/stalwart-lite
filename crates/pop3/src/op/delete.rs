@@ -6,16 +6,16 @@
 
 use std::time::Instant;
 
-use common::listener::SessionStream;
-use directory::Permission;
-use email::message::delete::EmailDeletion;
-use store::{roaring::RoaringBitmap, write::BatchBuilder};
-use trc::AddContext;
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::message::delete::EmailDeletion;
+use crate::store::{roaring::RoaringBitmap, write::BatchBuilder};
+use crate::trc::AddContext;
 
-use crate::{Session, State, protocol::response::Response};
+use crate::pop3::{Session, State, protocol::response::Response};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_dele(&mut self, msgs: Vec<u32>) -> trc::Result<()> {
+    pub async fn handle_dele(&mut self, msgs: Vec<u32>) -> crate::trc::Result<()> {
         // Validate access
         self.state
             .access_token()
@@ -40,8 +40,8 @@ impl<T: SessionStream> Session<T> {
             }
         }
 
-        trc::event!(
-            Pop3(trc::Pop3Event::Delete),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Delete),
             SpanId = self.session_id,
             Total = msgs.len(),
             Elapsed = op_start.elapsed()
@@ -50,7 +50,7 @@ impl<T: SessionStream> Session<T> {
         self.write_bytes(response).await
     }
 
-    pub async fn handle_rset(&mut self) -> trc::Result<()> {
+    pub async fn handle_rset(&mut self) -> crate::trc::Result<()> {
         let op_start = Instant::now();
         let mut count = 0;
         let mailbox = self.state.mailbox_mut();
@@ -61,8 +61,8 @@ impl<T: SessionStream> Session<T> {
             }
         }
 
-        trc::event!(
-            Pop3(trc::Pop3Event::Reset),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Reset),
             SpanId = self.session_id,
             Total = count as u64,
             Elapsed = op_start.elapsed()
@@ -71,7 +71,7 @@ impl<T: SessionStream> Session<T> {
         self.write_ok(format!("{count} messages undeleted")).await
     }
 
-    pub async fn handle_quit(&mut self) -> trc::Result<()> {
+    pub async fn handle_quit(&mut self) -> crate::trc::Result<()> {
         let op_start = Instant::now();
         let mut deleted_docs = Vec::new();
 
@@ -80,7 +80,7 @@ impl<T: SessionStream> Session<T> {
             for message in &mailbox.messages {
                 if message.deleted {
                     deleted.insert(message.id);
-                    deleted_docs.push(trc::Value::from(message.id));
+                    deleted_docs.push(crate::trc::Value::from(message.id));
                 }
             }
 
@@ -96,13 +96,13 @@ impl<T: SessionStream> Session<T> {
                         deleted,
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if !batch.is_empty() {
                     self.server
                         .commit_batch(batch)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     self.server.notify_task_queue();
                 }
                 if not_deleted.is_empty() {
@@ -125,8 +125,8 @@ impl<T: SessionStream> Session<T> {
             self.write_ok("Stalwart POP3 bids you farewell.").await?;
         }
 
-        trc::event!(
-            Pop3(trc::Pop3Event::Quit),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Quit),
             SpanId = self.session_id,
             DocumentId = deleted_docs,
             Elapsed = op_start.elapsed()

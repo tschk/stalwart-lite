@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::acl::{JmapAcl, JmapRights};
+use crate::jmap::api::acl::{JmapAcl, JmapRights};
 use calcard::jscalendar::{JSCalendarAlertAction, JSCalendarRelativeTo, JSCalendarType};
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     calendar::{
@@ -16,8 +16,8 @@ use groupware::{
         CALENDAR_SUBSCRIBED, Calendar, CalendarEvent, CalendarPreferences, DefaultAlert, Timezone,
     },
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::calendar::{self, CalendarProperty, CalendarValue, IncludeInAvailability},
@@ -26,13 +26,13 @@ use jmap_proto::{
 };
 use jmap_tools::{JsonPointerItem, Key, Map, Value};
 use rand::{Rng, distr::Alphanumeric};
-use store::{
+use crate::store::{
     SerializeInfallible, ValueKey,
     ahash::AHashSet,
     write::{AlignedBytes, Archive, BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     field::PrincipalField,
@@ -44,7 +44,7 @@ pub trait CalendarSet: Sync + Send {
         request: SetRequest<'_, calendar::Calendar>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<calendar::Calendar>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<calendar::Calendar>>> + Send;
 }
 
 impl CalendarSet for Server {
@@ -53,7 +53,7 @@ impl CalendarSet for Server {
         mut request: SetRequest<'_, calendar::Calendar>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<calendar::Calendar>> {
+    ) -> crate::trc::Result<SetResponse<calendar::Calendar>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
@@ -110,10 +110,10 @@ impl CalendarSet for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::Calendar, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             calendar
                 .insert(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if let Some(MaybeIdReference::Reference(id_ref)) =
                 &request.arguments.on_success_set_is_default
@@ -151,10 +151,10 @@ impl CalendarSet for Server {
             };
             let calendar = calendar_
                 .to_unarchived::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_calendar = calendar
                 .deserialize::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Apply changes
             let has_acl_changes = match update_calendar(object, &mut new_calendar, access_token) {
@@ -189,7 +189,7 @@ impl CalendarSet for Server {
             // Update record
             new_calendar
                 .update(access_token, calendar, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.updated.append(id, None);
         }
 
@@ -207,7 +207,7 @@ impl CalendarSet for Server {
                     class: ValueClass::Property(PrincipalField::DefaultCalendarId.into()),
                 })
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let on_destroy_remove_events =
                 request.arguments.on_destroy_remove_events.unwrap_or(false);
             for id in will_destroy {
@@ -226,7 +226,7 @@ impl CalendarSet for Server {
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 else {
                     response.not_destroyed.append(id, SetError::not_found());
                     continue;
@@ -234,7 +234,7 @@ impl CalendarSet for Server {
 
                 let calendar = calendar_
                     .to_unarchived::<Calendar>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 // Validate ACLs
                 if is_shared
@@ -266,7 +266,7 @@ impl CalendarSet for Server {
                 // Delete record
                 DestroyArchive(calendar)
                     .delete(access_token, account_id, document_id, None, &mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if default_calendar_id == Some(document_id) {
                     reset_default_calendar = true;
@@ -289,7 +289,7 @@ impl CalendarSet for Server {
                     {
                         let event = event_
                             .to_unarchived::<CalendarEvent>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         if event
                             .inner
@@ -309,7 +309,7 @@ impl CalendarSet for Server {
                             // Unlink calendar id from event
                             let mut new_event = event
                                 .deserialize::<CalendarEvent>()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             new_event
                                 .names
                                 .retain(|n| !destroy_parents.contains(&n.parent_id));
@@ -357,7 +357,7 @@ impl CalendarSet for Server {
             && let Ok(change_id) = self
                 .commit_batch(batch)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .last_change_id(account_id)
         {
             self.notify_task_queue();

@@ -6,14 +6,14 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::login,
     receiver::{Request, bad},
 };
 
 impl Request<Command> {
-    pub fn parse_login(self) -> trc::Result<login::Arguments> {
+    pub fn parse_login(self) -> crate::trc::Result<login::Arguments> {
         match self.tokens.len() {
             2 => {
                 let mut tokens = self.tokens.into_iter();
@@ -39,7 +39,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::login, receiver::Receiver};
+    use crate::imap_proto::{protocol::login, receiver::Receiver};
 
     #[test]
     fn parse_login() {

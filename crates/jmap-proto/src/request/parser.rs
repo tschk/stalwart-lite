@@ -8,7 +8,7 @@ use super::{
     Call, Request, RequestMethod,
     method::{MethodFunction, MethodName, MethodObject},
 };
-use crate::request::{
+use crate::jmap_proto::request::{
     CopyRequestMethod, GetRequestMethod, ParseRequestMethod, QueryChangesRequestMethod,
     QueryRequestMethod, SetRequestMethod,
     deserialize::{DeserializeArguments, deserialize_request},
@@ -20,22 +20,22 @@ use serde::{
 use std::fmt::{self, Display};
 
 impl<'x> Request<'x> {
-    pub fn parse(json: &'x [u8], max_calls: usize, max_size: usize) -> trc::Result<Self> {
+    pub fn parse(json: &'x [u8], max_calls: usize, max_size: usize) -> crate::trc::Result<Self> {
         if json.len() <= max_size {
             match serde_json::from_slice::<Request>(json) {
                 Ok(request) => {
                     if request.method_calls.len() <= max_calls {
                         Ok(request)
                     } else {
-                        Err(trc::LimitEvent::CallsIn.into_err())
+                        Err(crate::trc::LimitEvent::CallsIn.into_err())
                     }
                 }
-                Err(err) => Err(trc::JmapEvent::NotRequest
+                Err(err) => Err(crate::trc::JmapEvent::NotRequest
                     .into_err()
                     .details(err.to_string())),
             }
         } else {
-            Err(trc::LimitEvent::SizeRequest.into_err())
+            Err(crate::trc::LimitEvent::SizeRequest.into_err())
         }
     }
 }
@@ -94,7 +94,7 @@ impl<'de> Visitor<'de> for CallVisitor {
                 return Ok(Call {
                     id,
                     method: RequestMethod::Error(
-                        trc::JmapEvent::UnknownMethod
+                        crate::trc::JmapEvent::UnknownMethod
                             .into_err()
                             .details(method_name.to_string()),
                     ),
@@ -667,7 +667,7 @@ impl<'de> Visitor<'de> for CallVisitor {
 impl RequestMethod<'_> {
     fn invalid(err: impl Display) -> Self {
         RequestMethod::Error(
-            trc::JmapEvent::InvalidArguments
+            crate::trc::JmapEvent::InvalidArguments
                 .into_err()
                 .details(err.to_string()),
         )
@@ -694,7 +694,7 @@ impl<'de> Deserialize<'de> for Call<RequestMethod<'de>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::request::Request;
+    use crate::jmap_proto::request::Request;
 
     const TEST: &str = r#"
     {

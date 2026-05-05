@@ -4,46 +4,46 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::StateManager;
-use common::{Server, storage::index::ObjectIndexBuilder};
-use directory::{PrincipalData, QueryParams};
-use email::identity::{ArchivedEmailAddress, Identity};
-use jmap_proto::{
+use crate::common::{Server, storage::index::ObjectIndexBuilder};
+use crate::directory::{PrincipalData, QueryParams};
+use crate::email::identity::{ArchivedEmailAddress, Identity};
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::identity::{self, IdentityProperty, IdentityValue},
 };
-use jmap_tools::{Map, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     rkyv::{option::ArchivedOption, vec::ArchivedVec},
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::IdentityField,
 };
-use utils::sanitize_email;
+use crate::utils::sanitize_email;
+use jmap_tools::{Map, Value};
+use std::future::Future;
 
 pub trait IdentityGet: Sync + Send {
     fn identity_get(
         &self,
         request: GetRequest<identity::Identity>,
-    ) -> impl Future<Output = trc::Result<GetResponse<identity::Identity>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<identity::Identity>>> + Send;
 
     fn identity_get_or_create(
         &self,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<RoaringBitmap>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<RoaringBitmap>> + Send;
 }
 
 impl IdentityGet for Server {
     async fn identity_get(
         &self,
         mut request: GetRequest<identity::Identity>,
-    ) -> trc::Result<GetResponse<identity::Identity>> {
+    ) -> crate::trc::Result<GetResponse<identity::Identity>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             IdentityProperty::Id,
@@ -99,7 +99,7 @@ impl IdentityGet for Server {
             };
             let identity = _identity
                 .unarchive::<Identity>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = Map::with_capacity(properties.len());
             for property in &properties {
                 match property {
@@ -149,7 +149,7 @@ impl IdentityGet for Server {
         Ok(response)
     }
 
-    async fn identity_get_or_create(&self, account_id: u32) -> trc::Result<RoaringBitmap> {
+    async fn identity_get_or_create(&self, account_id: u32) -> crate::trc::Result<RoaringBitmap> {
         let mut identity_ids = self
             .document_ids(account_id, Collection::Identity, IdentityField::DocumentId)
             .await?;
@@ -164,7 +164,7 @@ impl IdentityGet for Server {
             .directory
             .query(QueryParams::id(account_id).with_return_member_of(false))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             principal
         } else {
@@ -197,7 +197,7 @@ impl IdentityGet for Server {
             .store()
             .assign_document_ids(account_id, Collection::Identity, num_emails as u64)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         for email in &emails {
             let email = sanitize_email(email).unwrap_or_default();
             if email.is_empty() || email.starts_with('@') {
@@ -218,10 +218,12 @@ impl IdentityGet for Server {
                     email,
                     ..Default::default()
                 }))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             identity_ids.insert(document_id);
         }
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
 
         Ok(identity_ids)
     }

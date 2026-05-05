@@ -4,17 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::Server;
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::email::submission::EmailSubmission;
+use crate::groupware::{calendar::CalendarEventNotification, contact::ContactCard};
+use crate::migration::{
     blob::migrate_blobs_v014, email_v2::migrate_emails_v014,
     encryption_v2::migrate_encryption_params_v014, queue_v2::migrate_queue_v014,
     tasks_v2::migrate_tasks_v014,
 };
-use common::Server;
-use directory::backend::internal::manage::ManageDirectory;
-use email::submission::EmailSubmission;
-use groupware::{calendar::CalendarEventNotification, contact::ContactCard};
-use std::sync::Arc;
-use store::{
+use crate::store::{
     SUBSPACE_INDEXES, SerializeInfallible, U32_LEN, U64_LEN,
     rand::{self, seq::SliceRandom},
     write::{
@@ -22,12 +21,13 @@ use store::{
         key::KeySerializer,
     },
 };
-use tokio::sync::Semaphore;
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::Collection,
     field::{CalendarNotificationField, ContactField, EmailSubmissionField, IdentityField},
 };
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub const SUBSPACE_BITMAP_ID: u8 = b'b';
 pub const SUBSPACE_BITMAP_TAG: u8 = b'c';
@@ -35,7 +35,7 @@ pub const SUBSPACE_BITMAP_TEXT: u8 = b'v';
 pub const SUBSPACE_FTS_INDEX: u8 = b'g';
 pub const SUBSPACE_TELEMETRY_INDEX: u8 = b'w';
 
-pub async fn migrate_v0_14(server: &Server) -> trc::Result<()> {
+pub async fn migrate_v0_14(server: &Server) -> crate::trc::Result<()> {
     // Migrate global data
     let mut tasks = Vec::new();
     let _server = server.clone();
@@ -53,11 +53,11 @@ pub async fn migrate_v0_14(server: &Server) -> trc::Result<()> {
     futures::future::join_all(tasks)
         .await
         .into_iter()
-        .collect::<Result<trc::Result<()>, _>>()
+        .collect::<Result<crate::trc::Result<()>, _>>()
         .map_err(|err| {
-            trc::EventType::Server(trc::ServerEvent::ThreadError)
+            crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
                 .details("Join Error")
         })??;
 
@@ -90,16 +90,16 @@ pub async fn migrate_v0_14(server: &Server) -> trc::Result<()> {
     futures::future::join_all(tasks)
         .await
         .into_iter()
-        .collect::<Result<trc::Result<()>, _>>()
+        .collect::<Result<crate::trc::Result<()>, _>>()
         .map_err(|err| {
-            trc::EventType::Server(trc::ServerEvent::ThreadError)
+            crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
                 .details("Join Error")
         })??;
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migrated {num_principals} accounts")
     );
 
@@ -124,25 +124,28 @@ pub async fn migrate_v0_14(server: &Server) -> trc::Result<()> {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migration to v0.15 completed")
     );
 
     Ok(())
 }
 
-pub(crate) async fn migrate_principal_v0_14(server: &Server, account_id: u32) -> trc::Result<()> {
+pub(crate) async fn migrate_principal_v0_14(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<()> {
     let emails = migrate_emails_v014(server, account_id).await?;
     let params = migrate_encryption_params_v014(server, account_id).await?;
     let (num_contacts, num_calendars, num_email_submissions, num_identities) =
         migrate_indexes(server, account_id).await?;
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!(
             "Migrated account {account_id}: {emails} emails, {params} encryption params, {num_contacts} contacts, {num_calendars} calendars, {num_email_submissions} submissions, and {num_identities} identities"
         )
@@ -154,7 +157,7 @@ pub(crate) async fn migrate_principal_v0_14(server: &Server, account_id: u32) ->
 pub(crate) async fn migrate_indexes(
     server: &Server,
     account_id: u32,
-) -> trc::Result<(usize, usize, usize, usize)> {
+) -> crate::trc::Result<(usize, usize, usize, usize)> {
     /*
 
            EmailSubmissionField::UndoStatus => 41,
@@ -230,7 +233,7 @@ pub(crate) async fn migrate_indexes(
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
     }
 
@@ -251,7 +254,7 @@ pub(crate) async fn migrate_indexes(
                     Collection::ContactCard => {
                         let data = archive
                             .unarchive_untrusted::<ContactCard>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         if let Some(email) = data.emails().next() {
                             indexes.push((
@@ -280,7 +283,7 @@ pub(crate) async fn migrate_indexes(
                     Collection::CalendarEventNotification => {
                         let data = archive
                             .unarchive_untrusted::<CalendarEventNotification>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         num_calendars += 1;
                         indexes.push((
                             collection,
@@ -303,7 +306,7 @@ pub(crate) async fn migrate_indexes(
                     Collection::EmailSubmission => {
                         let data = archive
                             .unarchive_untrusted::<EmailSubmission>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         num_email_submissions += 1;
                         indexes.push((
                             collection,
@@ -342,7 +345,7 @@ pub(crate) async fn migrate_indexes(
                 Ok(true)
             })
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     let mut batch = BatchBuilder::new();
@@ -357,7 +360,7 @@ pub(crate) async fn migrate_indexes(
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             batch = BatchBuilder::new();
         }
     }
@@ -367,7 +370,7 @@ pub(crate) async fn migrate_indexes(
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     Ok((

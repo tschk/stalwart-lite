@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap::{
     api::acl::{JmapAcl, JmapRights},
     blob::download::BlobDownload,
 };
-use common::{DavResourceMetadata, DavResources, Server, auth::AccessToken, sharing::EffectiveAcl};
-use groupware::{DestroyArchive, cache::GroupwareCache, file::FileNode};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::common::{DavResourceMetadata, DavResources, Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::groupware::{DestroyArchive, cache::GroupwareCache, file::FileNode};
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::file_node::{self, FileNodeProperty, FileNodeValue},
@@ -20,13 +20,13 @@ use jmap_proto::{
     types::state::State,
 };
 use jmap_tools::{JsonPointerItem, Key, Value};
-use store::{
+use crate::store::{
     ValueKey,
     ahash::{AHashMap, AHashSet},
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant},
     blob::BlobId,
     collection::{Collection, SyncCollection},
@@ -39,7 +39,7 @@ pub trait FileNodeSet: Sync + Send {
         request: SetRequest<'_, file_node::FileNode>,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<SetResponse<file_node::FileNode>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<file_node::FileNode>>> + Send;
 }
 
 impl FileNodeSet for Server {
@@ -48,7 +48,7 @@ impl FileNodeSet for Server {
         mut request: SetRequest<'_, file_node::FileNode>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<file_node::FileNode>> {
+    ) -> crate::trc::Result<SetResponse<file_node::FileNode>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
@@ -167,13 +167,13 @@ impl FileNodeSet for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::FileNode, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if file_node.file.is_none() {
                 created_folders.insert(document_id, file_node.acls.clone());
             }
             file_node
                 .insert(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.created(id, document_id);
         }
 
@@ -203,10 +203,10 @@ impl FileNodeSet for Server {
             };
             let file_node = file_node_
                 .to_unarchived::<FileNode>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_file_node = file_node
                 .deserialize::<FileNode>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Apply changes
             let has_acl_changes = match update_file_node(object, &mut new_file_node, &mut response)
@@ -296,7 +296,7 @@ impl FileNodeSet for Server {
             // Update record
             new_file_node
                 .update(access_token, file_node, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.updated.append(id, None);
         }
 
@@ -384,7 +384,7 @@ impl FileNodeSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.new_state = State::Exact(change_id).into();
         }

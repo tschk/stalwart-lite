@@ -8,35 +8,35 @@ use super::{
     ArchivedOAuthStatus, ErrorType, FormData, MAX_POST_LEN, OAuthCode, OAuthResponse, OAuthStatus,
     TokenResponse, registration::ClientRegistrationHandler,
 };
-use common::{
+use crate::common::{
     KV_OAUTH, Server,
     auth::{
         AccessToken,
         oauth::{GrantType, oidc::StandardClaims},
     },
 };
-use http_proto::*;
-use hyper::StatusCode;
-use std::future::Future;
-use store::{
+use crate::http_proto::*;
+use crate::store::{
     dispatch::lookup::KeyValue,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
+use crate::trc::AddContext;
+use hyper::StatusCode;
+use std::future::Future;
 
 pub trait TokenHandler: Sync + Send {
     fn handle_token_request(
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_token_introspect(
         &self,
         req: &mut HttpRequest,
         access_token: &AccessToken,
         session_id: u64,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn issue_token(
         &self,
@@ -46,7 +46,7 @@ pub trait TokenHandler: Sync + Send {
         nonce: Option<String>,
         with_refresh_token: bool,
         with_id_token: bool,
-    ) -> impl Future<Output = trc::Result<OAuthResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<OAuthResponse>> + Send;
 }
 
 impl TokenHandler for Server {
@@ -55,7 +55,7 @@ impl TokenHandler for Server {
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Parse form
         let params = FormData::from_request(req, MAX_POST_LEN, session.session_id).await?;
         let grant_type = params.get("grant_type").unwrap_or_default();
@@ -86,7 +86,7 @@ impl TokenHandler for Server {
                     Some(auth_code_) => {
                         let oauth = auth_code_
                             .unarchive::<OAuthCode>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         if client_id != oauth.client_id || redirect_uri != oauth.params {
                             TokenResponse::error(ErrorType::InvalidClient)
                         } else if oauth.status == OAuthStatus::Authorized {
@@ -123,10 +123,10 @@ impl TokenHandler for Server {
                                 .await
                                 .map(TokenResponse::Granted)
                                 .map_err(|err| {
-                                    trc::AuthEvent::Error
+                                    crate::trc::AuthEvent::Error
                                         .into_err()
                                         .details(err)
-                                        .caused_by(trc::location!())
+                                        .caused_by(crate::trc::location!())
                                 })?
                             }
                         } else {
@@ -157,7 +157,7 @@ impl TokenHandler for Server {
                 {
                     let oauth = auth_code_
                         .unarchive::<OAuthCode>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     response = if oauth.client_id != client_id {
                         TokenResponse::error(ErrorType::InvalidClient)
                     } else {
@@ -195,10 +195,10 @@ impl TokenHandler for Server {
                                     .await
                                     .map(TokenResponse::Granted)
                                     .map_err(|err| {
-                                        trc::AuthEvent::Error
+                                        crate::trc::AuthEvent::Error
                                             .into_err()
                                             .details(err)
-                                            .caused_by(trc::location!())
+                                            .caused_by(crate::trc::location!())
                                     })?
                                 }
                             }
@@ -231,14 +231,14 @@ impl TokenHandler for Server {
                         .await
                         .map(TokenResponse::Granted)
                         .map_err(|err| {
-                            trc::AuthEvent::Error
+                            crate::trc::AuthEvent::Error
                                 .into_err()
                                 .details(err)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         })?,
                     Err(err) => {
-                        trc::error!(
-                            err.caused_by(trc::location!())
+                        crate::trc::error!(
+                            err.caused_by(crate::trc::location!())
                                 .details("Failed to validate refresh token")
                                 .span_id(session.session_id)
                         );
@@ -266,13 +266,13 @@ impl TokenHandler for Server {
         req: &mut HttpRequest,
         access_token: &AccessToken,
         session_id: u64,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Parse token
         let token = FormData::from_request(req, 1024, session_id)
             .await?
             .remove("token")
             .ok_or_else(|| {
-                trc::ResourceEvent::BadParameters
+                crate::trc::ResourceEvent::BadParameters
                     .into_err()
                     .details("Client ID is missing.")
             })?;
@@ -290,7 +290,7 @@ impl TokenHandler for Server {
         nonce: Option<String>,
         with_refresh_token: bool,
         with_id_token: bool,
-    ) -> trc::Result<OAuthResponse> {
+    ) -> crate::trc::Result<OAuthResponse> {
         Ok(OAuthResponse {
             access_token: self
                 .encode_access_token(
@@ -319,7 +319,7 @@ impl TokenHandler for Server {
                 let access_token = self
                     .get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 match self.issue_id_token(
                     account_id.to_string(),
@@ -334,7 +334,7 @@ impl TokenHandler for Server {
                 ) {
                     Ok(id_token) => Some(id_token),
                     Err(err) => {
-                        trc::error!(err);
+                        crate::trc::error!(err);
                         None
                     }
                 }

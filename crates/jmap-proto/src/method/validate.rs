@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     error::set::SetError,
     object::sieve::SieveProperty,
     request::{
@@ -12,8 +12,8 @@ use crate::{
         deserialize::{DeserializeArguments, deserialize_request},
     },
 };
+use crate::types::{blob::BlobId, id::Id};
 use serde::{Deserialize, Deserializer, Serialize};
-use types::{blob::BlobId, id::Id};
 
 #[derive(Debug, Clone, Default)]
 pub struct ValidateSieveScriptRequest {

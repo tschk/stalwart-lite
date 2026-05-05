@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::DomainPart;
 use sieve::Envelope;
 use smtp_proto::{
     MAIL_BY_NOTIFY, MAIL_BY_RETURN, MAIL_BY_TRACE, MAIL_RET_FULL, MAIL_RET_HDRS, RCPT_NOTIFY_DELAY,
     RCPT_NOTIFY_FAILURE, RCPT_NOTIFY_NEVER, RCPT_NOTIFY_SUCCESS,
 };
-use utils::DomainPart;
 
-use crate::core::{SessionAddress, SessionData};
+use crate::smtp::core::{SessionAddress, SessionData};
 
 impl SessionData {
     pub fn apply_envelope_modification(&mut self, envelope: Envelope, value: String) {

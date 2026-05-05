@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     auth::{
         AuthRequest,
         sasl::{sasl_decode_challenge_oauth, sasl_decode_challenge_plain},
@@ -12,13 +12,13 @@ use common::{
     listener::SessionStream,
 };
 
-use directory::Permission;
+use crate::directory::Permission;
+use crate::trc::{AuthEvent, SmtpEvent};
 use mail_parser::decoders::base64::base64_decode;
 use mail_send::Credentials;
 use smtp_proto::{AUTH_LOGIN, AUTH_OAUTHBEARER, AUTH_PLAIN, AUTH_XOAUTH2, IntoString};
-use trc::{AuthEvent, SmtpEvent};
 
-use crate::core::Session;
+use crate::smtp::core::Session;
 
 pub struct SaslToken {
     mechanism: u64,
@@ -129,25 +129,27 @@ impl<T: SessionStream> Session<T> {
                 Err(err) => {
                     let reason = *err.as_ref();
 
-                    trc::error!(err.span_id(self.data.session_id));
+                    crate::trc::error!(err.span_id(self.data.session_id));
 
                     match reason {
-                        trc::EventType::Auth(trc::AuthEvent::Failed) => {
+                        crate::trc::EventType::Auth(crate::trc::AuthEvent::Failed) => {
                             return self
                                 .auth_error(b"535 5.7.8 Authentication credentials invalid.\r\n")
                                 .await;
                         }
-                        trc::EventType::Auth(trc::AuthEvent::TokenExpired) => {
+                        crate::trc::EventType::Auth(crate::trc::AuthEvent::TokenExpired) => {
                             return self.auth_error(b"535 5.7.8 OAuth token expired.\r\n").await;
                         }
-                        trc::EventType::Auth(trc::AuthEvent::MissingTotp) => {
+                        crate::trc::EventType::Auth(crate::trc::AuthEvent::MissingTotp) => {
                             return self
                             .auth_error(
                                 b"334 5.7.8 Missing TOTP token, try with 'secret$totp_code'.\r\n",
                             )
                             .await;
                         }
-                        trc::EventType::Security(trc::SecurityEvent::Unauthorized) => {
+                        crate::trc::EventType::Security(
+                            crate::trc::SecurityEvent::Unauthorized,
+                        ) => {
                             self.write(
                                 concat!(
                                     "550 5.7.1 Your account is not authorized ",
@@ -158,7 +160,7 @@ impl<T: SessionStream> Session<T> {
                             .await?;
                             return Ok(false);
                         }
-                        trc::EventType::Security(_) => {
+                        crate::trc::EventType::Security(_) => {
                             return Err(());
                         }
                         _ => (),
@@ -166,7 +168,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MissingAuthDirectory),
                 SpanId = self.data.session_id,
             );
@@ -184,7 +186,7 @@ impl<T: SessionStream> Session<T> {
         if self.data.auth_errors < self.params.auth_errors_max {
             Ok(false)
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Auth(AuthEvent::TooManyAttempts),
                 SpanId = self.data.session_id,
             );

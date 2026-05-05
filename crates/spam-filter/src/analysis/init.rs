@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
+use crate::common::Server;
 
+use crate::nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use mail_auth::DmarcResult;
 use mail_parser::{HeaderName, PartType, parsers::fields::thread::thread_name};
-use nlp::tokenizers::types::{TokenType, TypesTokenizer};
 
-use crate::{
+use crate::spam_filter::{
     Email, Hostname, IpParts, Recipient, SpamFilterContext, SpamFilterInput, SpamFilterOutput,
     SpamFilterResult, TextPart,
     modules::html::{HEAD, HtmlToken, html_to_tokens},

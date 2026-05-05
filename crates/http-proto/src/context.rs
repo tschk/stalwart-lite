@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Server,
     expr::{functions::ResolveVariable, *},
 };
 use compact_str::{ToCompactString, format_compact};
 use hyper::StatusCode;
 
-use crate::{HttpContext, HttpRequest, HttpSessionData};
+use crate::http_proto::{HttpContext, HttpRequest, HttpSessionData};
 
 impl<'x> HttpContext<'x> {
     pub fn new(session: &'x HttpSessionData, req: &'x HttpRequest) -> Self {

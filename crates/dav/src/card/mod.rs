@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{DavError, DavErrorCondition};
-use common::{DavResources, Server};
-use dav_proto::schema::{
+use crate::common::{DavResources, Server};
+use crate::dav::{DavError, DavErrorCondition};
+use crate::dav_proto::schema::{
     property::{CardDavProperty, DavProperty, WebDavProperty},
     response::CardCondition,
 };
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::ContactField};
 use hyper::StatusCode;
-use trc::AddContext;
-use types::{collection::Collection, field::ContactField};
 
 pub mod copy_move;
 pub mod delete;
@@ -77,7 +77,7 @@ pub(crate) async fn assert_is_unique_uid(
     account_id: u32,
     addressbook_id: u32,
     uid: Option<&str>,
-) -> crate::Result<()> {
+) -> crate::dav::Result<()> {
     if let Some(uid) = uid {
         let hits = server
             .document_ids_matching(
@@ -87,7 +87,7 @@ pub(crate) async fn assert_is_unique_uid(
                 uid.as_bytes(),
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if !hits.is_empty() {
             for path in resources.children(addressbook_id) {
                 if hits.contains(path.document_id()) {

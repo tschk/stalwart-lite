@@ -5,8 +5,8 @@
  */
 
 use super::Mechanism;
+use crate::utils::chained_bytes::SliceRange;
 use std::{borrow::Cow, fmt::Display};
-use utils::chained_bytes::SliceRange;
 
 pub enum Response<'x, T> {
     Ok(Cow<'static, str>),
@@ -150,10 +150,10 @@ pub trait SerializeResponse {
     fn serialize(&self) -> Vec<u8>;
 }
 
-impl SerializeResponse for trc::Error {
+impl SerializeResponse for crate::trc::Error {
     fn serialize(&self) -> Vec<u8> {
         let message = self
-            .value_as_str(trc::Key::Details)
+            .value_as_str(crate::trc::Key::Details)
             .unwrap_or_else(|| self.as_ref().message());
         let mut buf = Vec::with_capacity(message.len() + 6);
         buf.extend_from_slice(b"-ERR ");
@@ -166,8 +166,8 @@ impl SerializeResponse for trc::Error {
 #[cfg(test)]
 mod tests {
     use super::Response;
-    use crate::protocol::Mechanism;
-    use utils::chained_bytes::SliceRange;
+    use crate::pop3::protocol::Mechanism;
+    use crate::utils::chained_bytes::SliceRange;
 
     #[test]
     fn serialize_response() {

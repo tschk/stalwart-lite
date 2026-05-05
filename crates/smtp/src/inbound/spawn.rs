@@ -6,16 +6,16 @@
 
 use std::time::Instant;
 
-use common::{
+use crate::common::{
     config::smtp::session::Stage,
     core::BuildServer,
     listener::{self, SessionManager, SessionStream},
 };
 
+use crate::trc::{SecurityEvent, SmtpEvent};
 use tokio_rustls::server::TlsStream;
-use trc::{SecurityEvent, SmtpEvent};
 
-use crate::{
+use crate::smtp::{
     core::{Session, SessionData, SessionParameters, SmtpSessionManager, State},
     scripts::ScriptResult,
 };
@@ -60,13 +60,13 @@ impl SessionManager for SmtpSessionManager {
                 .inner
                 .ipc
                 .queue_tx
-                .send(common::ipc::QueueEvent::Stop)
+                .send(crate::common::ipc::QueueEvent::Stop)
                 .await;
             let _ = self
                 .inner
                 .ipc
                 .report_tx
-                .send(common::ipc::ReportingEvent::Stop)
+                .send(crate::common::ipc::ReportingEvent::Stop)
                 .await;
         }
     }
@@ -119,7 +119,7 @@ impl<T: SessionStream> Session<T> {
             .await
             .unwrap_or_default();
         if self.hostname.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MissingLocalHostname),
                 SpanId = self.data.session_id,
             );
@@ -171,7 +171,7 @@ impl<T: SessionStream> Session<T> {
                                             .await
                                             .ok();
 
-                                        trc::event!(
+                                        crate::trc::event!(
                                             Smtp(SmtpEvent::TransferLimitExceeded),
                                             SpanId = self.data.session_id,
                                         );
@@ -187,22 +187,22 @@ impl<T: SessionStream> Session<T> {
                                             .await
                                         {
                                             Ok(true) => {
-                                                trc::event!(
+                                                crate::trc::event!(
                                                     Security(SecurityEvent::LoiterBan),
                                                     SpanId = self.data.session_id,
                                                     RemoteIp = self.data.remote_ip,
                                                 );
                                             }
                                             Ok(false) => {
-                                                trc::event!(
+                                                crate::trc::event!(
                                                     Smtp(SmtpEvent::TimeLimitExceeded),
                                                     SpanId = self.data.session_id,
                                                 );
                                             }
                                             Err(err) => {
-                                                trc::error!(err
+                                                crate::trc::error!(err
                                                     .span_id(self.data.session_id)
-                                                    .caused_by(trc::location!())
+                                                    .caused_by(crate::trc::location!())
                                                     .details("Failed to check if IP should be banned."));
                                             }
                                         }
@@ -210,10 +210,10 @@ impl<T: SessionStream> Session<T> {
                                         break;
                                     }
                                 } else {
-                                    trc::event!(
-                                        Network(trc::NetworkEvent::Closed),
+                                    crate::trc::event!(
+                                        Network(crate::trc::NetworkEvent::Closed),
                                         SpanId = self.data.session_id,
-                                        CausedBy = trc::location!()
+                                        CausedBy = crate::trc::location!()
                                     );
 
                                     break;
@@ -223,10 +223,10 @@ impl<T: SessionStream> Session<T> {
                                 break;
                             }
                             Err(_) => {
-                                trc::event!(
-                                    Network(trc::NetworkEvent::Timeout),
+                                crate::trc::event!(
+                                    Network(crate::trc::NetworkEvent::Timeout),
                                     SpanId = self.data.session_id,
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
 
                                 self
@@ -238,11 +238,11 @@ impl<T: SessionStream> Session<T> {
                         }
                 },
                 _ = shutdown_rx.changed() => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::Closed),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::Closed),
                         SpanId = self.data.session_id,
                         Reason = "Server shutting down",
-                        CausedBy = trc::location!()
+                        CausedBy = crate::trc::location!()
                     );
                     self.write(format!("421 4.3.0 {} Server shutting down.\r\n", self.hostname).as_bytes()).await.ok();
                     break;

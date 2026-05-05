@@ -9,14 +9,14 @@ pub mod session;
 
 use std::{borrow::Cow, net::IpAddr, sync::Arc};
 
-use common::{
+use crate::common::{
     Inner, Server,
     auth::AccessToken,
     listener::{ServerInstance, limiter::InFlight},
 };
 
+use crate::imap_proto::receiver::{CommandParser, Receiver};
 use compact_str::CompactString;
-use imap_proto::receiver::{CommandParser, Receiver};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 pub struct Session<T: AsyncRead + AsyncWrite> {
@@ -265,28 +265,34 @@ pub trait SerializeResponse {
     fn serialize(&self) -> Vec<u8>;
 }
 
-impl SerializeResponse for trc::Error {
+impl SerializeResponse for crate::trc::Error {
     fn serialize(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(64);
-        buf.extend_from_slice(self.value_as_str(trc::Key::Type).unwrap_or("NO").as_bytes());
-        if let Some(code) = self
-            .value_as_str(trc::Key::Code)
-            .or_else(|| match self.as_ref() {
-                trc::EventType::Store(trc::StoreEvent::NotFound) => {
-                    Some(ResponseCode::NonExistent.as_str())
-                }
-                trc::EventType::Store(_) => Some(ResponseCode::TryLater.as_str()),
-                trc::EventType::Limit(trc::LimitEvent::Quota) => Some(ResponseCode::Quota.as_str()),
-                trc::EventType::Limit(_) => Some(ResponseCode::TryLater.as_str()),
-                _ => None,
-            })
+        buf.extend_from_slice(
+            self.value_as_str(crate::trc::Key::Type)
+                .unwrap_or("NO")
+                .as_bytes(),
+        );
+        if let Some(code) =
+            self.value_as_str(crate::trc::Key::Code)
+                .or_else(|| match self.as_ref() {
+                    crate::trc::EventType::Store(crate::trc::StoreEvent::NotFound) => {
+                        Some(ResponseCode::NonExistent.as_str())
+                    }
+                    crate::trc::EventType::Store(_) => Some(ResponseCode::TryLater.as_str()),
+                    crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota) => {
+                        Some(ResponseCode::Quota.as_str())
+                    }
+                    crate::trc::EventType::Limit(_) => Some(ResponseCode::TryLater.as_str()),
+                    _ => None,
+                })
         {
             buf.extend_from_slice(b" (");
             buf.extend_from_slice(code.as_bytes());
             buf.push(b')');
         }
         let message = self
-            .value_as_str(trc::Key::Details)
+            .value_as_str(crate::trc::Key::Details)
             .unwrap_or_else(|| self.as_ref().message());
         buf.extend_from_slice(b" \"");
         for ch in message.as_bytes() {
@@ -301,14 +307,14 @@ impl SerializeResponse for trc::Error {
     }
 }
 
-impl From<ResponseCode> for trc::Value {
+impl From<ResponseCode> for crate::trc::Value {
     fn from(value: ResponseCode) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }
 
-impl From<ResponseType> for trc::Value {
+impl From<ResponseType> for crate::trc::Value {
     fn from(value: ResponseType) -> Self {
-        trc::Value::String(CompactString::const_new(value.as_str()))
+        crate::trc::Value::String(CompactString::const_new(value.as_str()))
     }
 }

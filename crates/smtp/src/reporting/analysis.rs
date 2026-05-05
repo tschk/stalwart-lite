@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::common::Server;
+use crate::store::{
+    Serialize,
+    write::{Archiver, BatchBuilder, ReportClass, ValueClass, now},
+};
+use crate::trc::IncomingReportEvent;
 use ahash::AHashMap;
-use common::Server;
 use mail_auth::{
     flate2::read::GzDecoder,
     report::{ActionDisposition, DmarcResult, Feedback, Report, tlsrpt::TlsReport},
@@ -17,11 +22,6 @@ use std::{
     collections::hash_map::Entry,
     io::{Cursor, Read},
 };
-use store::{
-    Serialize,
-    write::{Archiver, BatchBuilder, ReportClass, ValueClass, now},
-};
-use trc::IncomingReportEvent;
 
 enum Compression {
     None,
@@ -157,12 +157,12 @@ impl AnalyzeReport for Server {
                         let mut file = GzDecoder::new(report.data);
                         let mut buf = Vec::new();
                         if let Err(err) = file.read_to_end(&mut buf) {
-                            trc::event!(
+                            crate::trc::event!(
                                 IncomingReport(IncomingReportEvent::DecompressError),
                                 SpanId = session_id,
                                 From = from.to_string(),
                                 Reason = err.to_string(),
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
 
                             continue;
@@ -173,12 +173,12 @@ impl AnalyzeReport for Server {
                         let mut archive = match zip::ZipArchive::new(Cursor::new(report.data)) {
                             Ok(archive) => archive,
                             Err(err) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     IncomingReport(IncomingReportEvent::DecompressError),
                                     SpanId = session_id,
                                     From = from.to_string(),
                                     Reason = err.to_string(),
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
 
                                 continue;
@@ -190,23 +190,23 @@ impl AnalyzeReport for Server {
                                 Ok(mut file) => {
                                     buf = Vec::with_capacity(file.compressed_size() as usize);
                                     if let Err(err) = file.read_to_end(&mut buf) {
-                                        trc::event!(
+                                        crate::trc::event!(
                                             IncomingReport(IncomingReportEvent::DecompressError),
                                             SpanId = session_id,
                                             From = from.to_string(),
                                             Reason = err.to_string(),
-                                            CausedBy = trc::location!()
+                                            CausedBy = crate::trc::location!()
                                         );
                                     }
                                     break;
                                 }
                                 Err(err) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         IncomingReport(IncomingReportEvent::DecompressError),
                                         SpanId = session_id,
                                         From = from.to_string(),
                                         Reason = err.to_string(),
-                                        CausedBy = trc::location!()
+                                        CausedBy = crate::trc::location!()
                                     );
                                 }
                             }
@@ -223,12 +223,12 @@ impl AnalyzeReport for Server {
                             Format::Dmarc(report)
                         }
                         Err(err) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 IncomingReport(IncomingReportEvent::DmarcParseFailed),
                                 SpanId = session_id,
                                 From = from.to_string(),
                                 Reason = err,
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
 
                             continue;
@@ -241,12 +241,12 @@ impl AnalyzeReport for Server {
                             Format::Tls(report)
                         }
                         Err(err) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 IncomingReport(IncomingReportEvent::TlsRpcParseFailed),
                                 SpanId = session_id,
                                 From = from.to_string(),
                                 Reason = format!("{err:?}"),
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
 
                             continue;
@@ -259,11 +259,11 @@ impl AnalyzeReport for Server {
                             Format::Arf(report.into_owned())
                         }
                         None => {
-                            trc::event!(
+                            crate::trc::event!(
                                 IncomingReport(IncomingReportEvent::ArfParseFailed),
                                 SpanId = session_id,
                                 From = from.to_string(),
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
 
                             continue;
@@ -319,9 +319,9 @@ impl AnalyzeReport for Server {
                         }
                     }
                     if let Err(err) = core.core.storage.data.write(batch.build_all()).await {
-                        trc::error!(
+                        crate::trc::error!(
                             err.span_id(session_id)
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                                 .details("Failed to write report")
                         );
                     }
@@ -390,7 +390,7 @@ impl LogReport for Report {
             }
         }
 
-        trc::event!(
+        crate::trc::event!(
             IncomingReport(
                 if (dmarc_reject + dmarc_quarantine + dkim_fail + spf_fail) > 0 {
                     IncomingReportEvent::DmarcReportWithWarnings
@@ -398,8 +398,8 @@ impl LogReport for Report {
                     IncomingReportEvent::DmarcReport
                 }
             ),
-            RangeFrom = trc::Value::Timestamp(self.date_range_begin()),
-            RangeTo = trc::Value::Timestamp(self.date_range_end()),
+            RangeFrom = crate::trc::Value::Timestamp(self.date_range_begin()),
+            RangeTo = crate::trc::Value::Timestamp(self.date_range_end()),
             Domain = self.domain().to_string(),
             From = self.email().to_string(),
             Id = self.report_id().to_string(),
@@ -433,15 +433,18 @@ impl LogReport for TlsReport {
                 }
             }
 
-            trc::event!(
+            crate::trc::event!(
                 IncomingReport(if policy.summary.total_failure > 0 {
                     IncomingReportEvent::TlsReportWithWarnings
                 } else {
                     IncomingReportEvent::TlsReport
                 }),
-                RangeFrom =
-                    trc::Value::Timestamp(self.date_range.start_datetime.to_timestamp() as u64),
-                RangeTo = trc::Value::Timestamp(self.date_range.end_datetime.to_timestamp() as u64),
+                RangeFrom = crate::trc::Value::Timestamp(
+                    self.date_range.start_datetime.to_timestamp() as u64
+                ),
+                RangeTo = crate::trc::Value::Timestamp(
+                    self.date_range.end_datetime.to_timestamp() as u64
+                ),
                 Domain = policy.policy.policy_domain.clone(),
                 From = self.contact_info.as_deref().unwrap_or_default().to_string(),
                 Id = self.report_id.clone(),
@@ -456,7 +459,7 @@ impl LogReport for TlsReport {
 
 impl LogReport for Feedback<'_> {
     fn log(&self) {
-        trc::event!(
+        crate::trc::event!(
             IncomingReport(match self.feedback_type() {
                 mail_auth::report::FeedbackType::Abuse => IncomingReportEvent::AbuseReport,
                 mail_auth::report::FeedbackType::AuthFailure =>
@@ -466,7 +469,7 @@ impl LogReport for Feedback<'_> {
                 mail_auth::report::FeedbackType::Other => IncomingReportEvent::OtherReport,
                 mail_auth::report::FeedbackType::Virus => IncomingReportEvent::VirusReport,
             }),
-            RangeFrom = trc::Value::Timestamp(
+            RangeFrom = crate::trc::Value::Timestamp(
                 self.arrival_date()
                     .map(|d| d as u64)
                     .unwrap_or_else(|| { now() })
@@ -474,13 +477,15 @@ impl LogReport for Feedback<'_> {
             Domain = self
                 .reported_domain()
                 .iter()
-                .map(|d| trc::Value::String(d.as_ref().into()))
+                .map(|d| crate::trc::Value::String(d.as_ref().into()))
                 .collect::<Vec<_>>(),
-            Hostname = self.reporting_mta().map(|d| trc::Value::String(d.into())),
+            Hostname = self
+                .reporting_mta()
+                .map(|d| crate::trc::Value::String(d.into())),
             Url = self
                 .reported_uri()
                 .iter()
-                .map(|d| trc::Value::String(d.as_ref().into()))
+                .map(|d| crate::trc::Value::String(d.as_ref().into()))
                 .collect::<Vec<_>>(),
             RemoteIp = self.source_ip(),
             Total = self.incidents(),
@@ -488,7 +493,7 @@ impl LogReport for Feedback<'_> {
             Details = self
                 .authentication_results()
                 .iter()
-                .map(|d| trc::Value::String(d.as_ref().into()))
+                .map(|d| crate::trc::Value::String(d.as_ref().into()))
                 .collect::<Vec<_>>(),
         );
     }

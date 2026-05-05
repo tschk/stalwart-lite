@@ -6,10 +6,10 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
 use mail_auth::{DkimResult, DmarcResult, SpfResult, dmarc::Policy};
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeDmarc: Sync + Send {
     fn spam_filter_analyze_dmarc(

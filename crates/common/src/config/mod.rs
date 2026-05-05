@@ -8,20 +8,20 @@ use self::{
     imap::ImapConfig, jmap::settings::JmapConfig, scripts::Scripting, smtp::SmtpConfig,
     storage::Storage,
 };
-use crate::{
+use crate::common::GroupwareConfig;
+use crate::common::{
     Core, Network, Security, auth::oauth::config::OAuthConfig, expr::*,
     listener::tls::AcmeProviders, manager::config::ConfigManager,
 };
+use crate::directory::{Directories, Directory};
+use crate::store::{BlobBackend, BlobStore, InMemoryStore, SearchStore, Store, Stores};
+use crate::utils::config::{Config, utils::AsKey};
 use arc_swap::ArcSwap;
-use directory::{Directories, Directory};
-use groupware::GroupwareConfig;
 use hyper::HeaderMap;
 use ring::signature::{EcdsaKeyPair, RsaKeyPair};
 use spamfilter::SpamFilterConfig;
 use std::sync::Arc;
-use store::{BlobBackend, BlobStore, InMemoryStore, SearchStore, Store, Stores};
 use telemetry::Metrics;
-use utils::config::{Config, utils::AsKey};
 
 pub mod groupware;
 pub mod imap;
@@ -74,7 +74,8 @@ impl Core {
         // SPDX-License-Identifier: LicenseRef-SEL
         #[cfg(feature = "enterprise")]
         let enterprise =
-            crate::enterprise::Enterprise::parse(config, &config_manager, &stores, &data).await;
+            crate::common::enterprise::Enterprise::parse(config, &config_manager, &stores, &data)
+                .await;
 
         #[cfg(feature = "enterprise")]
         let is_enterprise = enterprise.is_some();

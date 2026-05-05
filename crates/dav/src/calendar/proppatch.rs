@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod, PropStatBuilder,
     common::{
         ETag, ExtractETag,
@@ -12,9 +13,7 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use calcard::common::timezone::Tz;
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{
         Namespace,
@@ -23,24 +22,25 @@ use dav_proto::{
         response::{BaseCondition, CalCondition, MultiStatus, Response},
     },
 };
-use groupware::{
+use crate::groupware::{
     cache::GroupwareCache,
     calendar::{Calendar, CalendarEvent, SupportedComponent, Timezone},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use std::str::FromStr;
-use store::write::BatchBuilder;
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::BatchBuilder;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use calcard::common::timezone::Tz;
+use hyper::StatusCode;
+use std::str::FromStr;
 
 pub(crate) trait CalendarPropPatchRequestHandler: Sync + Send {
     fn handle_calendar_proppatch_request(
@@ -48,7 +48,7 @@ pub(crate) trait CalendarPropPatchRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PropertyUpdate,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn apply_calendar_properties(
         &self,
@@ -74,7 +74,7 @@ impl CalendarPropPatchRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         mut request: PropertyUpdate,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -85,7 +85,7 @@ impl CalendarPropPatchRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resource_
             .resource
             .and_then(|r| resources.by_path(r))
@@ -123,7 +123,7 @@ impl CalendarPropPatchRequestHandler for Server {
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
         // Validate headers
@@ -151,10 +151,10 @@ impl CalendarPropPatchRequestHandler for Server {
             // Deserialize
             let calendar = archive
                 .to_unarchived::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_calendar = archive
                 .deserialize::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Remove properties
             if !request.set_first && !request.remove.is_empty() {
@@ -188,7 +188,7 @@ impl CalendarPropPatchRequestHandler for Server {
             if is_success {
                 new_calendar
                     .update(access_token, calendar, account_id, document_id, &mut batch)
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .etag()
             } else {
                 calendar.etag().into()
@@ -197,10 +197,10 @@ impl CalendarPropPatchRequestHandler for Server {
             // Deserialize
             let event = archive
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_event = archive
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Remove properties
             if !request.set_first && !request.remove.is_empty() {
@@ -222,7 +222,7 @@ impl CalendarPropPatchRequestHandler for Server {
             if is_success {
                 new_event
                     .update(access_token, event, account_id, document_id, &mut batch)
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .etag()
             } else {
                 event.etag().into()
@@ -230,7 +230,9 @@ impl CalendarPropPatchRequestHandler for Server {
         };
 
         if is_success {
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
         }
 
         if headers.ret != Return::Minimal || !is_success {

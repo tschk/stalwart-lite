@@ -6,12 +6,12 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
+use crate::nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use hyper::Uri;
 use mail_parser::MimeHeaders;
-use nlp::tokenizers::types::{TokenType, TypesTokenizer};
 
-use crate::{Hostname, SpamFilterContext, TextPart, modules::html::*};
+use crate::spam_filter::{Hostname, SpamFilterContext, TextPart, modules::html::*};
 
 pub trait SpamFilterAnalyzeHtml: Sync + Send {
     fn spam_filter_analyze_html(

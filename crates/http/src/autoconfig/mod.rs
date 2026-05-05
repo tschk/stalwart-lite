@@ -4,34 +4,37 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, manager::webadmin::Resource};
-use directory::QueryParams;
-use http_proto::*;
+use crate::common::{Server, manager::webadmin::Resource};
+use crate::directory::QueryParams;
+use crate::http_proto::*;
+use crate::trc::AddContext;
+use crate::utils::url_params::UrlParams;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use std::fmt::Write;
 use std::future::Future;
-use trc::AddContext;
-use utils::url_params::UrlParams;
 
 pub trait Autoconfig: Sync + Send {
     fn handle_autoconfig_request(
         &self,
         req: &HttpRequest,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
     fn handle_autodiscover_request(
         &self,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
     fn autoconfig_parameters<'x>(
         &'x self,
         emailaddress: &'x str,
         fail_if_invalid: bool,
-    ) -> impl Future<Output = trc::Result<(String, String, &'x str)>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<(String, String, &'x str)>> + Send;
 }
 
 impl Autoconfig for Server {
-    async fn handle_autoconfig_request(&self, req: &HttpRequest) -> trc::Result<HttpResponse> {
+    async fn handle_autoconfig_request(
+        &self,
+        req: &HttpRequest,
+    ) -> crate::trc::Result<HttpResponse> {
         // Obtain parameters
         let params = UrlParams::new(req.uri().query());
         let emailaddress = params
@@ -110,14 +113,14 @@ impl Autoconfig for Server {
     async fn handle_autodiscover_request(
         &self,
         body: Option<Vec<u8>>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Obtain parameters
         let emailaddress = parse_autodiscover_request(body.as_deref().unwrap_or_default())
             .map_err(|err| {
-                trc::ResourceEvent::BadParameters
+                crate::trc::ResourceEvent::BadParameters
                     .into_err()
                     .details("Failed to parse autodiscover request")
-                    .ctx(trc::Key::Reason, err)
+                    .ctx(crate::trc::Key::Reason, err)
             })?;
         let (account_name, server_name, _) =
             self.autoconfig_parameters(&emailaddress, true).await?;
@@ -197,7 +200,7 @@ impl Autoconfig for Server {
         &'x self,
         emailaddress: &'x str,
         fail_if_invalid: bool,
-    ) -> trc::Result<(String, String, &'x str)> {
+    ) -> crate::trc::Result<(String, String, &'x str)> {
         // Return EMAILADDRESS
         let Some((_, domain)) = emailaddress.rsplit_once('@') else {
             return if !fail_if_invalid {
@@ -207,7 +210,7 @@ impl Autoconfig for Server {
                     &self.core.network.report_domain,
                 ))
             } else {
-                Err(trc::ResourceEvent::BadParameters
+                Err(crate::trc::ResourceEvent::BadParameters
                     .into_err()
                     .details("Missing domain in email address"))
             };
@@ -221,7 +224,7 @@ impl Autoconfig for Server {
             .directory
             .email_to_id(emailaddress)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             && let Ok(Some(principal)) = self
                 .core
                 .storage

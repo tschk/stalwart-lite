@@ -6,17 +6,20 @@
 
 use std::time::Instant;
 
-use common::listener::SessionStream;
-use directory::Permission;
-use imap_proto::receiver::Request;
-use store::{SerializeInfallible, write::BatchBuilder};
-use trc::AddContext;
-use types::{collection::Collection, field::PrincipalField};
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::imap_proto::receiver::Request;
+use crate::store::{SerializeInfallible, write::BatchBuilder};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::PrincipalField};
 
-use crate::core::{Command, Session, StatusResponse};
+use crate::managesieve::core::{Command, Session, StatusResponse};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_setactive(&mut self, request: Request<Command>) -> trc::Result<Vec<u8>> {
+    pub async fn handle_setactive(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<Vec<u8>> {
         // Validate access
         self.assert_has_permission(Permission::SieveSetActive)?;
 
@@ -27,7 +30,7 @@ impl<T: SessionStream> Session<T> {
             .next()
             .and_then(|s| s.unwrap_string().ok())
             .ok_or_else(|| {
-                trc::ManageSieveEvent::Error
+                crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Expected script name as a parameter.")
             })?;
@@ -52,10 +55,10 @@ impl<T: SessionStream> Session<T> {
         self.server
             .commit_batch(batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::SetActive),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::SetActive),
             SpanId = self.session_id,
             Id = name,
             Elapsed = op_start.elapsed()

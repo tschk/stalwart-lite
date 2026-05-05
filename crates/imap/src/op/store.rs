@@ -5,18 +5,17 @@
  */
 
 use super::{FromModSeq, ImapContext};
-use crate::{
-    core::{SelectedMailbox, Session, SessionData},
-    spawn_op,
-};
-use ahash::AHashSet;
-use common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use email::{
+use crate::common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
+use crate::directory::Permission;
+use crate::email::{
     mailbox::TRASH_ID,
     message::{ingest::EmailIngest, metadata::MessageData},
 };
-use imap_proto::{
+use crate::imap::{
+    core::{SelectedMailbox, Session, SessionData},
+    spawn_op,
+};
+use crate::imap_proto::{
     Command, ResponseCode, ResponseType, StatusResponse,
     protocol::{
         Flag, ImapResponse,
@@ -25,25 +24,26 @@ use imap_proto::{
     },
     receiver::Request,
 };
-use std::{sync::Arc, time::Instant};
-use store::{
+use crate::store::{
     ValueKey,
     query::log::{Change, Query},
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     keyword::Keyword,
 };
+use ahash::AHashSet;
+use std::{sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_store(
         &mut self,
         request: Request<Command>,
         is_uid: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapStore)?;
 
@@ -70,18 +70,18 @@ impl<T: SessionStream> SessionData<T> {
         is_uid: bool,
         is_condstore: bool,
         op_start: Instant,
-    ) -> trc::Result<Vec<u8>> {
+    ) -> crate::trc::Result<Vec<u8>> {
         // Resync messages if needed
         let account_id = mailbox.id.account_id;
         self.synchronize_messages(&mailbox)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Convert IMAP ids to JMAP ids.
         let mut ids = mailbox
             .sequence_to_ids(&arguments.sequence_set, is_uid)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         if ids.is_empty() {
             return Ok(StatusResponse::completed(Command::Store(is_uid))
                 .with_tag(arguments.tag)
@@ -96,16 +96,16 @@ impl<T: SessionStream> SessionData<T> {
                 Acl::ModifyItems,
             )
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?
+            .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(
                     "You do not have the required permissions to modify messages in this mailbox.",
                 )
                 .id(arguments.tag)
                 .code(ResponseCode::NoPerm)
-                .caused_by(trc::location!()));
+                .caused_by(crate::trc::location!()));
         }
 
         // Filter out unchanged since ids
@@ -122,7 +122,7 @@ impl<T: SessionStream> SessionData<T> {
                     Query::from_modseq(unchanged_since),
                 )
                 .await
-                .imap_ctx(&arguments.tag, trc::location!())?;
+                .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
             let mut modified = mailbox
                 .sequence_expand_missing(&arguments.sequence_set, is_uid)
@@ -166,8 +166,8 @@ impl<T: SessionStream> SessionData<T> {
             response = response.with_code(response_code)
         }
         if ids.is_empty() {
-            trc::event!(
-                Imap(trc::ImapEvent::Store),
+            crate::trc::event!(
+                Imap(crate::trc::ImapEvent::Store),
                 SpanId = self.session_id,
                 AccountId = mailbox.id.account_id,
                 MailboxId = mailbox.id.mailbox_id,
@@ -175,7 +175,7 @@ impl<T: SessionStream> SessionData<T> {
                 Details = arguments
                     .keywords
                     .iter()
-                    .map(|c| trc::Value::from(format!("{c:?}")))
+                    .map(|c| crate::trc::Value::from(format!("{c:?}")))
                     .collect::<Vec<_>>(),
                 Elapsed = op_start.elapsed()
             );
@@ -206,7 +206,7 @@ impl<T: SessionStream> SessionData<T> {
                     *id,
                 ))
                 .await
-                .imap_ctx(response.tag.as_ref().unwrap(), trc::location!())?
+                .imap_ctx(response.tag.as_ref().unwrap(), crate::trc::location!())?
             {
                 data
             } else {
@@ -216,7 +216,7 @@ impl<T: SessionStream> SessionData<T> {
             // Deserialize
             let data = data_
                 .to_unarchived::<MessageData>()
-                .imap_ctx(response.tag.as_ref().unwrap(), trc::location!())?;
+                .imap_ctx(response.tag.as_ref().unwrap(), crate::trc::location!())?;
             let mut new_data = data.inner.to_builder();
 
             // Apply changes
@@ -299,7 +299,7 @@ impl<T: SessionStream> SessionData<T> {
                         .with_current(data)
                         .with_changes(new_data.seal()),
                 )
-                .imap_ctx(response.tag.as_ref().unwrap(), trc::location!())?;
+                .imap_ctx(response.tag.as_ref().unwrap(), crate::trc::location!())?;
 
             // Add spam train task
             if let Some(learn_spam) = train_spam {
@@ -312,7 +312,7 @@ impl<T: SessionStream> SessionData<T> {
                         self.session_id,
                     )
                     .await
-                    .imap_ctx(response.tag.as_ref().unwrap(), trc::location!())?;
+                    .imap_ctx(response.tag.as_ref().unwrap(), crate::trc::location!())?;
             }
 
             // Set commit point
@@ -354,7 +354,7 @@ impl<T: SessionStream> SessionData<T> {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(mailbox.id.account_id))
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
             {
                 Ok(change_id) => {
                     if is_condstore {
@@ -375,20 +375,20 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
 
-        trc::event!(
-            Imap(trc::ImapEvent::Store),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Store),
             SpanId = self.session_id,
             AccountId = mailbox.id.account_id,
             MailboxId = mailbox.id.mailbox_id,
             DocumentId = ids
                 .iter()
-                .map(|id| trc::Value::from(*id.0))
+                .map(|id| crate::trc::Value::from(*id.0))
                 .collect::<Vec<_>>(),
             Type = format!("{:?}", arguments.operation),
             Details = arguments
                 .keywords
                 .iter()
-                .map(|c| trc::Value::from(format!("{c:?}")))
+                .map(|c| crate::trc::Value::from(format!("{c:?}")))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );

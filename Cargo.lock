@@ -1135,83 +1135,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "common"
-version = "0.15.5"
-dependencies = [
- "aes-gcm-siv",
- "ahash",
- "arc-swap",
- "base64 0.22.1",
- "bincode 2.0.1",
- "biscuit",
- "calcard 0.3.2",
- "chrono",
- "compact_str",
- "decancer",
- "directory",
- "dns-update",
- "futures",
- "hashify",
- "hostname",
- "hyper 1.8.1",
- "idna",
- "imagesize",
- "indexmap 2.13.0",
- "infer 0.19.0",
- "jmap_proto",
- "libc",
- "lz4_flex 0.12.0",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "md5 0.8.0",
- "nlp",
- "num_cpus",
- "opentelemetry",
- "opentelemetry-otlp",
- "opentelemetry-semantic-conventions",
- "opentelemetry_sdk",
- "p256",
- "p384",
- "parking_lot",
- "pem",
- "privdrop",
- "prometheus",
- "proxy-header",
- "psl",
- "pwhash",
- "rcgen 0.12.1",
- "regex",
- "reqwest",
- "ring",
- "rkyv",
- "rsa",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "sieve-rs",
- "smtp-proto",
- "socket2 0.6.2",
- "store",
- "tinyvec",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "unicode-security",
- "utils",
- "whatlang",
- "x509-parser",
- "xxhash-rust",
- "zip",
-]
-
-[[package]]
 name = "compact_str"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1631,64 +1554,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7a1e2f27636f116493b8b860f5546edb47c8d8f8ea73e1d2a20be88e28d1fea"
 
 [[package]]
-name = "dav"
-version = "0.15.5"
-dependencies = [
- "calcard 0.3.2",
- "chrono",
- "common",
- "compact_str",
- "dav-proto",
- "directory",
- "groupware",
- "hashify",
- "http_proto",
- "hyper 1.8.1",
- "percent-encoding",
- "rkyv",
- "store",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
-name = "dav-proto"
-version = "0.15.5"
-dependencies = [
- "calcard 0.3.2",
- "chrono",
- "compact_str",
- "hashify",
- "hyper 1.8.1",
- "mail-parser",
- "quick-xml 0.38.4",
- "rkyv",
- "serde",
- "serde_json",
- "trc",
- "types",
-]
-
-[[package]]
 name = "dbl"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd2735a791158376708f9347fe8faba9667589d82427ef3aed6794a8981de3d9"
 dependencies = [
  "generic-array 0.14.7",
-]
-
-[[package]]
-name = "deadpool"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb84100978c1c7b37f09ed3ce3e5f843af02c2a2c431bae5b19230dad2c1b490"
-dependencies = [
- "async-trait",
- "deadpool-runtime",
- "num_cpus",
- "tokio",
 ]
 
 [[package]]
@@ -1710,7 +1581,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d697d376cbfa018c23eb4caab1fd1883dd9c906a8c034e8d9a3cb06a7e0bef9"
 dependencies = [
  "async-trait",
- "deadpool 0.12.3",
+ "deadpool",
  "getrandom 0.2.17",
  "tokio",
  "tokio-postgres",
@@ -1816,47 +1687,6 @@ dependencies = [
  "const-oid",
  "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "directory"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "argon2",
- "async-trait",
- "base64 0.22.1",
- "compact_str",
- "deadpool 0.10.0",
- "futures",
- "ldap3",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "md5 0.8.0",
- "nlp",
- "password-hash",
- "pbkdf2",
- "proc_macros",
- "pwhash",
- "regex",
- "reqwest",
- "rkyv",
- "rustls 0.23.36",
- "rustls-pki-types",
- "scrypt",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "smtp-proto",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "totp-rs",
- "trc",
- "types",
- "utils",
 ]
 
 [[package]]
@@ -2001,24 +1831,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ece"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2ea1d2f2cc974957a4e2575d8e5bb494549bab66338d6320c2789abcfff5746"
-dependencies = [
- "base64 0.21.7",
- "byteorder",
- "hex",
- "hkdf",
- "lazy_static",
- "once_cell",
- "openssl",
- "serde",
- "sha2 0.10.9",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "ed25519"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2069,41 +1881,6 @@ dependencies = [
  "sec1",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "email"
-version = "0.15.5"
-dependencies = [
- "aes",
- "aes-gcm",
- "aes-gcm-siv",
- "cbc",
- "common",
- "compact_str",
- "directory",
- "groupware",
- "hashify",
- "mail-builder",
- "mail-parser",
- "nlp",
- "rand 0.8.5",
- "rasn",
- "rasn-cms",
- "rasn-pkix",
- "rkyv",
- "rsa",
- "sequoia-openpgp",
- "serde",
- "serde_json",
- "sieve-rs",
- "smtp-proto",
- "spam-filter",
- "store",
- "tokio",
- "trc",
- "types",
- "utils",
 ]
 
 [[package]]
@@ -2189,15 +1966,6 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener 5.4.1",
  "pin-project-lite",
-]
-
-[[package]]
-name = "event_macro"
-version = "0.15.5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.115",
 ]
 
 [[package]]
@@ -2337,21 +2105,6 @@ name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
-
-[[package]]
-name = "foreign-types"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
-dependencies = [
- "foreign-types-shared",
-]
-
-[[package]]
-name = "foreign-types-shared"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
 name = "form-data"
@@ -2687,27 +2440,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "groupware"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "calcard 0.3.2",
- "chrono",
- "common",
- "compact_str",
- "directory",
- "hashify",
- "nlp",
- "percent-encoding",
- "rkyv",
- "store",
- "tokio",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "h2"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2993,49 +2725,6 @@ dependencies = [
 
 [[package]]
 name = "http"
-version = "0.15.5"
-dependencies = [
- "async-stream",
- "base64 0.22.1",
- "chrono",
- "common",
- "compact_str",
- "directory",
- "email",
- "form-data",
- "http-body-util",
- "http_proto",
- "hyper 1.8.1",
- "hyper-util",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "mime",
- "pkcs8",
- "quick-xml 0.38.4",
- "rev_lines",
- "rkyv",
- "rsa",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "services",
- "sha1",
- "sha2 0.10.9",
- "smtp",
- "smtp-proto",
- "spam-filter",
- "store",
- "tokio",
- "trc",
- "types",
- "utils",
- "x509-parser",
-]
-
-[[package]]
-name = "http"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3ba2a386d7f85a81f119ad7498ebe444d2e22c2af0b86b069416ace48b3311a"
@@ -3096,22 +2785,6 @@ dependencies = [
  "serde_qs",
  "serde_urlencoded",
  "url",
-]
-
-[[package]]
-name = "http_proto"
-version = "0.15.5"
-dependencies = [
- "common",
- "compact_str",
- "form_urlencoded",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
- "percent-encoding",
- "serde",
- "serde_json",
- "trc",
 ]
 
 [[package]]
@@ -3405,48 +3078,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09e54e57b4c48b40f7aec75635392b12b3421fa26fe8b4332e63138ed278459c"
 
 [[package]]
-name = "imap"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "common",
- "compact_str",
- "directory",
- "email",
- "imap_proto",
- "indexmap 2.13.0",
- "mail-parser",
- "mail-send",
- "md5 0.8.0",
- "nlp",
- "parking_lot",
- "rand 0.9.2",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
-name = "imap_proto"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "chrono",
- "compact_str",
- "hashify",
- "mail-parser",
- "tokio",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "include-flate"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3684,83 +3315,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "jmap"
-version = "0.15.5"
-dependencies = [
- "aes-gcm",
- "aes-gcm-siv",
- "async-stream",
- "base64 0.22.1",
- "chrono",
- "common",
- "compact_str",
- "directory",
- "email",
- "futures-util",
- "hashify",
- "hkdf",
- "http-body-util",
- "http_proto",
- "hyper 1.8.1",
- "hyper-util",
- "jmap-tools",
- "jmap_proto",
- "lz4_flex 0.12.0",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "nlp",
- "p256",
- "pkcs8",
- "rand 0.9.2",
- "reqwest",
- "rkyv",
- "rsa",
- "serde",
- "serde_json",
- "services",
- "sha1",
- "sha2 0.10.9",
- "sieve-rs",
- "smtp",
- "smtp-proto",
- "store",
- "tokio",
- "tokio-tungstenite",
- "trc",
- "tungstenite",
- "types",
- "utils",
-]
-
-[[package]]
 name = "jmap-client"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c99dea3753873e0017ea5eecc09b1f06ac6a96d180d1ff5c9f38be83b85eb1ee"
-dependencies = [
- "ahash",
- "async-stream",
- "base64 0.13.1",
- "chrono",
- "futures-util",
- "maybe-async",
- "parking_lot",
- "reqwest",
- "rustls 0.23.36",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
-]
-
-[[package]]
-name = "jmap-client"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0a269c4668bc7c12c61bf142f4f30c8d568d5afa8472f9dd881d83d2551323a"
 dependencies = [
  "ahash",
  "async-stream",
@@ -3788,25 +3346,6 @@ dependencies = [
  "rkyv",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "jmap_proto"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "calcard 0.3.2",
- "compact_str",
- "hashify",
- "jmap-tools",
- "mail-parser",
- "rkyv",
- "serde",
- "serde_json",
- "tokio",
- "trc",
- "types",
- "utils",
 ]
 
 [[package]]
@@ -4248,34 +3787,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "managesieve"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "common",
- "compact_str",
- "directory",
- "email",
- "imap",
- "imap_proto",
- "jmap_proto",
- "mail-parser",
- "mail-send",
- "md5 0.8.0",
- "parking_lot",
- "rkyv",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "sieve-rs",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4357,54 +3868,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c797b9d6bb23aab2fc369c65f871be49214f5c759af65bde26ffaaa2b646b492"
 
 [[package]]
-name = "migration"
-version = "0.15.5"
-dependencies = [
- "base64 0.22.1",
- "bincode 1.3.3",
- "calcard 0.1.3",
- "calcard 0.3.2",
- "common",
- "compact_str",
- "dav-proto",
- "directory",
- "email",
- "futures",
- "groupware",
- "lz4_flex 0.12.0",
- "mail-auth",
- "mail-parser",
- "nlp",
- "num_cpus",
- "proc_macros",
- "rkyv",
- "serde",
- "serde_json",
- "sieve-rs",
- "smtp",
- "smtp-proto",
- "store",
- "tokio",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
-
-[[package]]
-name = "mime_guess"
-version = "2.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e"
-dependencies = [
- "mime",
- "unicase",
-]
 
 [[package]]
 name = "minimal-lexical"
@@ -4596,29 +4063,6 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "signatory",
-]
-
-[[package]]
-name = "nlp"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "bincode 1.3.3",
- "hashify",
- "jieba-rs",
- "lru-cache",
- "maplit",
- "nohash",
- "parking_lot",
- "psl",
- "rand 0.9.2",
- "rkyv",
- "rust-stemmers",
- "serde",
- "tokio",
- "utils",
- "whatlang",
- "xxhash-rust",
 ]
 
 [[package]]
@@ -4847,32 +4291,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
-name = "openssl"
-version = "0.10.76"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "951c002c75e16ea2c65b8c7e4d3d51d5530d8dfa7d060b4776828c88cfb18ecf"
-dependencies = [
- "bitflags",
- "cfg-if",
- "foreign-types",
- "libc",
- "once_cell",
- "openssl-macros",
- "openssl-sys",
-]
-
-[[package]]
-name = "openssl-macros"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.115",
-]
-
-[[package]]
 name = "openssl-probe"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4883,18 +4301,6 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
-
-[[package]]
-name = "openssl-sys"
-version = "0.9.112"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57d55af3b3e226502be1526dfdba67ab0e9c96fc293004e79576b2b9edb0dbdb"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
-]
 
 [[package]]
 name = "opentelemetry"
@@ -5366,25 +4772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pop3"
-version = "0.15.5"
-dependencies = [
- "common",
- "directory",
- "email",
- "imap",
- "mail-parser",
- "mail-send",
- "rustls 0.23.36",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "portable-atomic"
 version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5562,15 +4949,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "proc_macros"
-version = "0.15.5"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.115",
 ]
 
 [[package]]
@@ -6014,20 +5392,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rcgen"
-version = "0.14.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10b99e0098aa4082912d4c649628623db6aba77335e4f4569ff5083a6448b32e"
-dependencies = [
- "pem",
- "ring",
- "rustls-pki-types",
- "time",
- "x509-parser",
- "yasna",
-]
-
-[[package]]
 name = "rdkafka"
 version = "0.38.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6197,7 +5561,6 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
- "mime_guess",
  "percent-encoding",
  "pin-project-lite",
  "quinn",
@@ -6703,15 +6066,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ece8e78b2f38ec51c51f5d475df0a7187ba5111b2a28bdc761ee05b075d40a71"
 
 [[package]]
-name = "scc"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46e6f046b7fef48e2660c57ed794263155d713de679057f2d0c169bfc6e756cc"
-dependencies = [
- "sdd",
-]
-
-[[package]]
 name = "schannel"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6794,12 +6148,6 @@ dependencies = [
  "ring",
  "untrusted",
 ]
-
-[[package]]
-name = "sdd"
-version = "3.0.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "490dcfcbfef26be6800d11870ff2df8774fa6e86d047e3e8c8a76b25655e41ca"
 
 [[package]]
 name = "sec1"
@@ -7079,67 +6427,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serial_test"
-version = "3.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "911bd979bf1070a3f3aa7b691a3b3e9968f339ceeec89e08c280a8a22207a32f"
-dependencies = [
- "futures-executor",
- "futures-util",
- "log",
- "once_cell",
- "parking_lot",
- "scc",
- "serial_test_derive",
-]
-
-[[package]]
-name = "serial_test_derive"
-version = "3.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a7d91949b85b0d2fb687445e448b40d322b6b3e4af6b44a29b21d9a5f33e6d9"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.115",
-]
-
-[[package]]
-name = "services"
-version = "0.15.5"
-dependencies = [
- "aes-gcm",
- "aes-gcm-siv",
- "base64 0.22.1",
- "calcard 0.3.2",
- "chrono",
- "common",
- "compact_str",
- "directory",
- "email",
- "groupware",
- "hkdf",
- "jmap_proto",
- "mail-builder",
- "mail-parser",
- "memory-stats",
- "p256",
- "reqwest",
- "rsa",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "smtp",
- "smtp-proto",
- "spam-filter",
- "store",
- "tokio",
- "trc",
- "types",
- "utils",
-]
-
-[[package]]
 name = "sha-1"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7323,55 +6610,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
-name = "smtp"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "blake3",
- "chrono",
- "common",
- "compact_str",
- "directory",
- "email",
- "form_urlencoded",
- "http-body-util",
- "hyper 1.8.1",
- "hyper-util",
- "lru-cache",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "md5 0.8.0",
- "nlp",
- "num_cpus",
- "parking_lot",
- "rand 0.9.2",
- "rayon",
- "regex",
- "reqwest",
- "rkyv",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "sha1",
- "sha2 0.10.9",
- "sieve-rs",
- "smtp-proto",
- "spam-filter",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
- "webpki-roots 1.0.6",
- "x509-parser",
-]
-
-[[package]]
 name = "smtp-proto"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7422,38 +6660,6 @@ checksum = "86f4aa3ad99f2088c990dfa82d367e19cb29268ed67c574d10d0a4bfe71f07e0"
 dependencies = [
  "libc",
  "windows-sys 0.60.2",
-]
-
-[[package]]
-name = "spam-filter"
-version = "0.15.5"
-dependencies = [
- "common",
- "compact_str",
- "decancer",
- "hyper 1.8.1",
- "idna",
- "infer 0.19.0",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "nlp",
- "psl",
- "reqwest",
- "rkyv",
- "serde",
- "sha1",
- "sha2 0.10.9",
- "smtp-proto",
- "store",
- "tokio",
- "trc",
- "types",
- "unicode-general-category",
- "unicode-normalization",
- "unicode-security",
- "utils",
 ]
 
 [[package]]
@@ -7523,27 +6729,151 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
-name = "stalwart"
+name = "stalwart-lite"
 version = "0.15.5"
 dependencies = [
- "common",
- "directory",
- "email",
- "http 0.15.5",
- "imap",
+ "aes",
+ "aes-gcm",
+ "aes-gcm-siv",
+ "ahash",
+ "arc-swap",
+ "argon2",
+ "async-nats",
+ "async-stream",
+ "async-trait",
+ "azure_core",
+ "azure_storage",
+ "azure_storage_blobs",
+ "base64 0.22.1",
+ "bincode 1.3.3",
+ "bincode 2.0.1",
+ "biscuit",
+ "bitpacking",
+ "blake3",
+ "bytes",
+ "calcard 0.1.3",
+ "calcard 0.3.2",
+ "cbc",
+ "chrono",
+ "compact_str",
+ "deadpool",
+ "deadpool-postgres",
+ "decancer",
+ "dns-update",
+ "farmhash",
+ "fast-float",
+ "flate2",
+ "form-data",
+ "form_urlencoded",
+ "foundationdb",
+ "futures",
+ "futures-util",
+ "hashify",
+ "hkdf",
+ "hostname",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "idna",
+ "imagesize",
+ "indexmap 2.13.0",
+ "infer 0.19.0",
  "jemallocator",
- "migration",
- "services",
- "smtp",
- "store",
+ "jieba-rs",
+ "jmap-tools",
+ "ldap3",
+ "libc",
+ "lru-cache",
+ "lz4_flex 0.12.0",
+ "mail-auth",
+ "mail-builder",
+ "mail-parser",
+ "mail-send",
+ "maplit",
+ "md5 0.8.0",
+ "memchr",
+ "memory-stats",
+ "mime",
+ "mysql_async",
+ "nohash",
+ "nohash-hasher",
+ "num_cpus",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-semantic-conventions",
+ "opentelemetry_sdk",
+ "p256",
+ "p384",
+ "parking_lot",
+ "password-hash",
+ "pbkdf2",
+ "pem",
+ "percent-encoding",
+ "pkcs8",
+ "privdrop",
+ "prometheus",
+ "proxy-header",
+ "psl",
+ "pwhash",
+ "quick-xml 0.38.4",
+ "quick_cache",
+ "r2d2",
+ "rand 0.8.5",
+ "rand 0.9.2",
+ "rasn",
+ "rasn-cms",
+ "rasn-pkix",
+ "rayon",
+ "rcgen",
+ "rdkafka",
+ "redis",
+ "regex",
+ "reqwest",
+ "rev_lines",
+ "ring",
+ "rkyv",
+ "roaring",
+ "rocksdb",
+ "rsa",
+ "rtrb",
+ "rusqlite",
+ "rust-s3",
+ "rust-stemmers",
+ "rustls 0.21.12",
+ "rustls 0.23.36",
+ "rustls-pemfile 2.2.0",
+ "rustls-pki-types",
+ "scrypt",
+ "sequoia-openpgp",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2 0.10.9",
+ "sieve-rs",
+ "smtp-proto",
+ "socket2 0.6.2",
+ "stalwart-lite-event-macro",
+ "stalwart-lite-proc-macros",
+ "tinyvec",
  "tokio",
- "trc",
- "types",
- "utils",
+ "tokio-postgres",
+ "tokio-rustls 0.26.4",
+ "tokio-tungstenite",
+ "totp-rs",
+ "tungstenite",
+ "unicode-general-category",
+ "unicode-normalization",
+ "unicode-security",
+ "webpki-roots 1.0.6",
+ "whatlang",
+ "x509-parser",
+ "xxhash-rust",
+ "zenoh",
+ "zip",
 ]
 
 [[package]]
-name = "stalwart-cli"
+name = "stalwart-lite-cli"
 version = "0.15.5"
 dependencies = [
  "clap",
@@ -7553,7 +6883,7 @@ dependencies = [
  "futures",
  "human-size",
  "indicatif",
- "jmap-client 0.3.3",
+ "jmap-client",
  "mail-auth",
  "mail-parser",
  "num_cpus",
@@ -7568,65 +6898,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "stalwart-lite-event-macro"
+version = "0.15.5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.115",
+]
+
+[[package]]
+name = "stalwart-lite-proc-macros"
+version = "0.15.5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.115",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
-
-[[package]]
-name = "store"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "arc-swap",
- "async-nats",
- "azure_core",
- "azure_storage",
- "azure_storage_blobs",
- "bitpacking",
- "blake3",
- "bytes",
- "compact_str",
- "deadpool 0.12.3",
- "deadpool-postgres",
- "farmhash",
- "flate2",
- "foundationdb",
- "futures",
- "lru-cache",
- "lz4_flex 0.12.0",
- "memchr",
- "mysql_async",
- "nlp",
- "num_cpus",
- "parking_lot",
- "r2d2",
- "rand 0.9.2",
- "rayon",
- "rdkafka",
- "redis",
- "regex",
- "reqwest",
- "ring",
- "rkyv",
- "roaring",
- "rocksdb",
- "rusqlite",
- "rust-s3",
- "rustls 0.21.12",
- "rustls 0.23.36",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "tokio",
- "tokio-postgres",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
- "xxhash-rust",
- "zenoh",
-]
 
 [[package]]
 name = "string_cache"
@@ -7744,73 +7037,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "tests"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "async-trait",
- "base64 0.22.1",
- "biscuit",
- "bytes",
- "calcard 0.3.2",
- "chrono",
- "common",
- "compact_str",
- "csv",
- "dav",
- "dav-proto",
- "directory",
- "ece",
- "email",
- "flate2",
- "form_urlencoded",
- "futures",
- "groupware",
- "http 0.15.5",
- "http-body-util",
- "http_proto",
- "hyper 1.8.1",
- "hyper-util",
- "imap",
- "imap_proto",
- "jemallocator",
- "jmap",
- "jmap-client 0.4.0",
- "jmap_proto",
- "mail-auth",
- "mail-builder",
- "mail-parser",
- "mail-send",
- "managesieve",
- "migration",
- "nlp",
- "num_cpus",
- "pop3",
- "quick-xml 0.38.4",
- "rayon",
- "reqwest",
- "ring",
- "rkyv",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "serial_test",
- "services",
- "sieve-rs",
- "smtp",
- "smtp-proto",
- "spam-filter",
- "store",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "types",
- "utils",
 ]
 
 [[package]]
@@ -8303,25 +7529,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "trc"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "base64 0.22.1",
- "compact_str",
- "event_macro",
- "mail-auth",
- "mail-parser",
- "parking_lot",
- "reqwest",
- "rkyv",
- "rtrb",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8390,20 +7597,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 
 [[package]]
-name = "types"
-version = "0.15.5"
-dependencies = [
- "blake3",
- "compact_str",
- "hashify",
- "jmap-tools",
- "rkyv",
- "serde",
- "trc",
- "utils",
-]
-
-[[package]]
 name = "typewit"
 version = "1.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8437,12 +7630,6 @@ dependencies = [
  "serde",
  "spin 0.10.0",
 ]
-
-[[package]]
-name = "unicase"
-version = "2.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142"
 
 [[package]]
 name = "unicode-bidi"
@@ -8586,48 +7773,6 @@ name = "utf8parse"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
-
-[[package]]
-name = "utils"
-version = "0.15.5"
-dependencies = [
- "ahash",
- "base64 0.22.1",
- "blake3",
- "chrono",
- "compact_str",
- "farmhash",
- "fast-float",
- "form_urlencoded",
- "futures",
- "http-body-util",
- "mail-auth",
- "mail-send",
- "nohash-hasher",
- "parking_lot",
- "pem",
- "privdrop",
- "psl",
- "quick_cache",
- "rand 0.9.2",
- "rcgen 0.14.7",
- "regex",
- "reqwest",
- "ring",
- "rkyv",
- "rustls 0.23.36",
- "rustls-pemfile 2.2.0",
- "rustls-pki-types",
- "serde",
- "serde_json",
- "smtp-proto",
- "tokio",
- "tokio-rustls 0.26.4",
- "trc",
- "webpki-roots 1.0.6",
- "x509-parser",
- "xxhash-rust",
-]
 
 [[package]]
 name = "uuid"
@@ -9482,7 +8627,6 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry",
- "ring",
  "rusticata-macros",
  "thiserror 2.0.18",
  "time",

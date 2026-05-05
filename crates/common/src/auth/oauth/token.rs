@@ -6,16 +6,16 @@
 
 use super::{CLIENT_ID_MAX_LEN, GrantType, RANDOM_CODE_LEN, crypto::SymmetricEncrypt};
 use crate::Server;
-use directory::{PrincipalData, QueryParams};
-use mail_builder::encoders::base64::base64_encode;
-use mail_parser::decoders::base64::base64_decode;
-use std::time::SystemTime;
-use store::{
+use crate::directory::{PrincipalData, QueryParams};
+use crate::store::{
     blake3,
     rand::{Rng, rng},
 };
-use trc::AddContext;
-use utils::codec::leb128::{Leb128Iterator, Leb128Vec};
+use crate::trc::AddContext;
+use crate::utils::codec::leb128::{Leb128Iterator, Leb128Vec};
+use mail_builder::encoders::base64::base64_encode;
+use mail_parser::decoders::base64::base64_decode;
+use std::time::SystemTime;
 
 pub struct TokenInfo {
     pub grant_type: GrantType,
@@ -35,13 +35,13 @@ impl Server {
         account_id: u32,
         client_id: &str,
         expiry_in: u64,
-    ) -> trc::Result<String> {
+    ) -> crate::trc::Result<String> {
         // Build context
         let mut password_hash = String::new();
 
         if !matches!(grant_type, GrantType::Rsvp) {
             if client_id.len() > CLIENT_ID_MAX_LEN {
-                return Err(trc::AuthEvent::Error
+                return Err(crate::trc::AuthEvent::Error
                     .into_err()
                     .details("Client id too long"));
             }
@@ -51,7 +51,7 @@ impl Server {
                 password_hash = self
                     .password_hash(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
             }
         }
 
@@ -91,10 +91,10 @@ impl Server {
         let mut token = SymmetricEncrypt::new(key.as_bytes(), &context)
             .encrypt(&rng().random::<[u8; RANDOM_CODE_LEN]>(), &nonce)
             .map_err(|_| {
-                trc::AuthEvent::Error
+                crate::trc::AuthEvent::Error
                     .into_err()
-                    .ctx(trc::Key::Reason, "Failed to encrypt token")
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Reason, "Failed to encrypt token")
+                    .caused_by(crate::trc::location!())
             })?;
         token.push_leb128(account_id);
         token.push(grant_type.id());
@@ -109,13 +109,13 @@ impl Server {
         &self,
         expected_grant_type: Option<GrantType>,
         token_: &str,
-    ) -> trc::Result<TokenInfo> {
+    ) -> crate::trc::Result<TokenInfo> {
         // Base64 decode token
         let token = base64_decode(token_.as_bytes()).ok_or_else(|| {
-            trc::AuthEvent::Error
+            crate::trc::AuthEvent::Error
                 .into_err()
-                .ctx(trc::Key::Reason, "Failed to decode token")
-                .caused_by(trc::location!())
+                .ctx(crate::trc::Key::Reason, "Failed to decode token")
+                .caused_by(crate::trc::location!())
                 .details(token_.to_string())
         })?;
         let (account_id, grant_type, issued_at, expiry, client_id) = token
@@ -132,10 +132,10 @@ impl Server {
                     .into()
             })
             .ok_or_else(|| {
-                trc::AuthEvent::Error
+                crate::trc::AuthEvent::Error
                     .into_err()
-                    .ctx(trc::Key::Reason, "Failed to decode token")
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Reason, "Failed to decode token")
+                    .caused_by(crate::trc::location!())
                     .details(token_.to_string())
             })?;
 
@@ -145,21 +145,23 @@ impl Server {
             .map_or(0, |d| d.as_secs())
             .saturating_sub(OAUTH_EPOCH); // Jan 1, 2000
         if expiry <= now || issued_at > now {
-            return Err(trc::AuthEvent::TokenExpired.into_err());
+            return Err(crate::trc::AuthEvent::TokenExpired.into_err());
         }
 
         // Validate grant type
         if expected_grant_type.is_some_and(|g| g != grant_type) {
-            return Err(trc::AuthEvent::Error
+            return Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Invalid grant type"));
         }
 
         // Obtain password hash
         let password_hash = if !matches!(grant_type, GrantType::Rsvp) && expiry - issued_at > 3600 {
-            self.password_hash(account_id)
-                .await
-                .map_err(|err| trc::AuthEvent::Error.into_err().ctx(trc::Key::Details, err))?
+            self.password_hash(account_id).await.map_err(|err| {
+                crate::trc::AuthEvent::Error
+                    .into_err()
+                    .ctx(crate::trc::Key::Details, err)
+            })?
         } else {
             "".into()
         };
@@ -197,10 +199,10 @@ impl Server {
                 &nonce,
             )
             .map_err(|err| {
-                trc::AuthEvent::Error
+                crate::trc::AuthEvent::Error
                     .into_err()
-                    .ctx(trc::Key::Details, "Failed to decode token")
-                    .caused_by(trc::location!())
+                    .ctx(crate::trc::Key::Details, "Failed to decode token")
+                    .caused_by(crate::trc::location!())
                     .reason(err)
             })?;
 
@@ -215,16 +217,16 @@ impl Server {
         })
     }
 
-    pub async fn password_hash(&self, account_id: u32) -> trc::Result<String> {
+    pub async fn password_hash(&self, account_id: u32) -> crate::trc::Result<String> {
         if account_id != u32::MAX {
             self.core
                 .storage
                 .directory
                 .query(QueryParams::id(account_id).with_return_member_of(false))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or_else(|| {
-                    trc::AuthEvent::Error
+                    crate::trc::AuthEvent::Error
                         .into_err()
                         .details("Account no longer exists")
                 })?
@@ -239,18 +241,18 @@ impl Server {
                 })
                 .next()
                 .ok_or(
-                    trc::AuthEvent::Error
+                    crate::trc::AuthEvent::Error
                         .into_err()
                         .details("Account does not contain secrets")
-                        .caused_by(trc::location!()),
+                        .caused_by(crate::trc::location!()),
                 )
         } else if let Some((_, secret)) = &self.core.jmap.fallback_admin {
             Ok(secret.into())
         } else {
-            Err(trc::AuthEvent::Error
+            Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details("Invalid account ID")
-                .caused_by(trc::location!()))
+                .caused_by(crate::trc::location!()))
         }
     }
 }

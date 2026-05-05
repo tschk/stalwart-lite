@@ -9,7 +9,7 @@ pub mod lookup;
 
 use std::time::Duration;
 
-use store::Store;
+use crate::store::Store;
 
 pub struct OpenIdDirectory {
     config: OpenIdConfig,

@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::config::groupware::GroupwareConfig;
-use ahash::{AHashMap, AHashSet};
-use jmap_proto::request::capability::BaseCapabilities;
-use nlp::language::Language;
-use std::{str::FromStr, time::Duration};
-use store::{search::SearchField, write::SearchIndex};
-use types::{collection::Collection, special_use::SpecialUse};
-use utils::{
+use crate::common::config::groupware::GroupwareConfig;
+use crate::jmap_proto::request::capability::BaseCapabilities;
+use crate::nlp::language::Language;
+use crate::store::{search::SearchField, write::SearchIndex};
+use crate::types::{collection::Collection, special_use::SpecialUse};
+use crate::utils::{
     config::{Config, Rate, cron::SimpleCron, utils::ParseValue},
     map::bitmap::Bitmap,
 };
+use ahash::{AHashMap, AHashSet};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Default, Clone)]
 pub struct JmapConfig {

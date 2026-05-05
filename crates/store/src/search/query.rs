@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::{language::stemmer::Stemmer, tokenizers::space::SpaceTokenizer};
+use crate::store::{
     Store,
     backend::MAX_TOKEN_LENGTH,
     search::{
@@ -15,13 +16,12 @@ use crate::{
     },
     write::SEARCH_INDEX_MAX_FIELD_LEN,
 };
-use nlp::{language::stemmer::Stemmer, tokenizers::space::SpaceTokenizer};
+use crate::utils::cheeky_hash::CheekyHash;
 use roaring::{RoaringBitmap, RoaringTreemap};
 use std::ops::{BitAndAssign, BitOrAssign, BitXorAssign};
-use utils::cheeky_hash::CheekyHash;
 
 impl Store {
-    pub(crate) async fn query_account(&self, query: SearchQuery) -> trc::Result<Vec<u32>> {
+    pub(crate) async fn query_account(&self, query: SearchQuery) -> crate::trc::Result<Vec<u32>> {
         struct State {
             pub op: SearchFilter,
             pub bm: Option<RoaringBitmap>,
@@ -48,7 +48,7 @@ impl Store {
         }
 
         if account_id == u32::MAX {
-            return Err(trc::StoreEvent::UnexpectedError
+            return Err(crate::trc::StoreEvent::UnexpectedError
                 .into_err()
                 .details("Account ID must be specified before other filters"));
         }
@@ -69,7 +69,7 @@ impl Store {
                             let (value, language) = match value {
                                 SearchValue::Text { value, language } => (value, language),
                                 _ => {
-                                    return Err(trc::StoreEvent::UnexpectedError
+                                    return Err(crate::trc::StoreEvent::UnexpectedError
                                         .into_err()
                                         .details("Expected text value for text field"));
                                 }
@@ -135,7 +135,7 @@ impl Store {
                             let (key, value) = match value {
                                 SearchValue::KeyValues(kv) => kv.into_iter().next().unwrap(),
                                 _ => {
-                                    return Err(trc::StoreEvent::UnexpectedError
+                                    return Err(crate::trc::StoreEvent::UnexpectedError
                                         .into_err()
                                         .details("Expected text value for text field"));
                                 }
@@ -179,7 +179,7 @@ impl Store {
                                 SearchValue::Uint(v) => v.to_be_bytes().to_vec(),
                                 SearchValue::Boolean(v) => vec![v as u8],
                                 SearchValue::KeyValues(_) => {
-                                    return Err(trc::StoreEvent::UnexpectedError
+                                    return Err(crate::trc::StoreEvent::UnexpectedError
                                         .into_err()
                                         .details("Expected non key-value for non-text field"));
                                 }
@@ -195,7 +195,7 @@ impl Store {
                             )
                             .await?
                         } else {
-                            return Err(trc::StoreEvent::UnexpectedError
+                            return Err(crate::trc::StoreEvent::UnexpectedError
                                 .into_err()
                                 .details(format!("Field {field:?} is not indexed")));
                         }
@@ -289,7 +289,7 @@ impl Store {
         }
     }
 
-    pub(crate) async fn query_global(&self, query: SearchQuery) -> trc::Result<Vec<u64>> {
+    pub(crate) async fn query_global(&self, query: SearchQuery) -> crate::trc::Result<Vec<u64>> {
         struct State {
             pub op: SearchFilter,
             pub bm: Option<RoaringTreemap>,
@@ -309,7 +309,7 @@ impl Store {
                         let value = match value {
                             SearchValue::Text { value, .. } => value,
                             _ => {
-                                return Err(trc::StoreEvent::UnexpectedError
+                                return Err(crate::trc::StoreEvent::UnexpectedError
                                     .into_err()
                                     .details("Expected text value for text field"));
                             }
@@ -332,7 +332,7 @@ impl Store {
                             SearchValue::Uint(v) => v.to_be_bytes().to_vec(),
                             SearchValue::Boolean(v) => vec![v as u8],
                             SearchValue::KeyValues(_) => {
-                                return Err(trc::StoreEvent::UnexpectedError
+                                return Err(crate::trc::StoreEvent::UnexpectedError
                                     .into_err()
                                     .details("Expected non key-value for non-text field"));
                             }
@@ -340,13 +340,13 @@ impl Store {
 
                         range_to_treemap(self, query.index, field.u8_id(), &value, op).await?
                     } else {
-                        return Err(trc::StoreEvent::UnexpectedError
+                        return Err(crate::trc::StoreEvent::UnexpectedError
                             .into_err()
                             .details(format!("Field {field:?} is not indexed")));
                     }
                 }
                 SearchFilter::DocumentSet(_) | SearchFilter::Not => {
-                    return Err(trc::StoreEvent::UnexpectedError
+                    return Err(crate::trc::StoreEvent::UnexpectedError
                         .into_err()
                         .details("Unsupported filter in global search"));
                 }

@@ -4,27 +4,27 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    blob::download::BlobDownload, changes::state::JmapCacheState, email::ingested_into_object,
-};
-use common::{Server, auth::AccessToken};
-use email::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::{
     cache::{MessageCacheFetch, mailbox::MailboxCacheAccess},
     mailbox::JUNK_ID,
     message::ingest::{EmailIngest, IngestEmail, IngestSource},
 };
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::http_proto::HttpSessionData;
+use crate::jmap::{
+    blob::download::BlobDownload, changes::state::JmapCacheState, email::ingested_into_object,
+};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::import::{ImportEmailRequest, ImportEmailResponse},
     object::email::EmailProperty,
     request::MaybeInvalid,
     types::state::State,
 };
+use crate::types::{acl::Acl, id::Id, keyword::Keyword};
+use crate::utils::map::vec_map::VecMap;
 use mail_parser::MessageParser;
 use std::future::Future;
-use types::{acl::Acl, id::Id, keyword::Keyword};
-use utils::map::vec_map::VecMap;
 
 pub trait EmailImport: Sync + Send {
     fn email_import(
@@ -32,7 +32,7 @@ pub trait EmailImport: Sync + Send {
         request: ImportEmailRequest,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<ImportEmailResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ImportEmailResponse>> + Send;
 }
 
 impl EmailImport for Server {
@@ -41,7 +41,7 @@ impl EmailImport for Server {
         request: ImportEmailRequest,
         access_token: &AccessToken,
         session: &HttpSessionData,
-    ) -> trc::Result<ImportEmailResponse> {
+    ) -> crate::trc::Result<ImportEmailResponse> {
         // Validate state
         let account_id = request.account_id.document_id();
         let cache = self.get_cached_messages(account_id).await?;
@@ -61,10 +61,10 @@ impl EmailImport for Server {
 
             #[cfg(not(feature = "test_mode"))]
             {
-                use trc::AddContext;
+                use crate::trc::AddContext;
                 self.get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .into()
             }
         } else {
@@ -170,18 +170,18 @@ impl EmailImport for Server {
                         .append(id, ingested_into_object(email).into());
                 }
                 Err(mut err) => match err.as_ref() {
-                    trc::EventType::Limit(trc::LimitEvent::Quota) => {
+                    crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota) => {
                         response.not_created.append(
                             id,
                             SetError::new(SetErrorType::OverQuota)
                                 .with_description("You have exceeded your disk quota."),
                         );
                     }
-                    trc::EventType::MessageIngest(trc::MessageIngestEvent::Error) => {
+                    crate::trc::EventType::MessageIngest(crate::trc::MessageIngestEvent::Error) => {
                         response.not_created.append(
                             id,
                             SetError::new(SetErrorType::InvalidEmail).with_description(
-                                err.take_value(trc::Key::Reason)
+                                err.take_value(crate::trc::Key::Reason)
                                     .and_then(|v| v.into_string())
                                     .unwrap(),
                             ),

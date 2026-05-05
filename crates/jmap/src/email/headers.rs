@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use email::message::metadata::{ArchivedMessageMetadataPart, ArchivedMetadataHeaderValue};
-use jmap_proto::{
+use crate::email::message::metadata::{ArchivedMessageMetadataPart, ArchivedMetadataHeaderValue};
+use crate::jmap_proto::{
     object::email::{EmailProperty, EmailValue, HeaderForm, HeaderProperty},
     types::date::UTCDate,
 };
+use crate::utils::chained_bytes::ChainedBytes;
 use jmap_tools::{Key, Map, Value};
 use mail_builder::{
     MessageBuilder,
@@ -22,7 +23,6 @@ use mail_builder::{
     },
 };
 use mail_parser::{Addr, DateTime, Group, Header, HeaderName, HeaderValue, parsers::MessageStream};
-use utils::chained_bytes::ChainedBytes;
 
 pub trait IntoForm {
     fn into_form(self, form: &HeaderForm) -> Value<'static, EmailProperty, EmailValue>;

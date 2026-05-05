@@ -5,18 +5,18 @@
  */
 
 use crate::Server;
+use crate::types::{blob::BlobSection, blob_hash::BlobHash};
 use mail_parser::{
     Encoding,
     decoders::{base64::base64_decode, quoted_printable::quoted_printable_decode},
 };
-use types::{blob::BlobSection, blob_hash::BlobHash};
 
 impl Server {
     pub async fn get_blob_section(
         &self,
         hash: &BlobHash,
         section: &BlobSection,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         Ok(self
             .blob_store()
             .get_blob(

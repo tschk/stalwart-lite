@@ -5,7 +5,8 @@
  */
 
 use super::assert_is_unique_uid;
-use crate::{
+use crate::common::{DavName, Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         lock::{LockRequestHandler, ResourceState},
@@ -13,26 +14,25 @@ use crate::{
     },
     file::DavFileResource,
 };
-use calcard::common::timezone::Tz;
-use common::{DavName, Server, auth::AccessToken};
-use dav_proto::{Depth, RequestHeaders};
-use groupware::{
+use crate::dav_proto::{Depth, RequestHeaders};
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     calendar::{Calendar, CalendarEvent, CalendarPreferences, Timezone},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::{BatchBuilder, now};
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, now};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection, VanishedCollection},
 };
+use calcard::common::timezone::Tz;
+use hyper::StatusCode;
 
 pub(crate) trait CalendarCopyMoveRequestHandler: Sync + Send {
     fn handle_calendar_copy_move_request(
@@ -40,7 +40,7 @@ pub(crate) trait CalendarCopyMoveRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_move: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarCopyMoveRequestHandler for Server {
@@ -49,7 +49,7 @@ impl CalendarCopyMoveRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_move: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate source
         let from_resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -59,7 +59,7 @@ impl CalendarCopyMoveRequestHandler for Server {
         let from_resources = self
             .fetch_dav_resources(access_token, from_account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let from_resource_name = from_resource_
             .resource
             .ok_or(DavError::Code(StatusCode::FORBIDDEN))?;
@@ -118,7 +118,7 @@ impl CalendarCopyMoveRequestHandler for Server {
         } else {
             self.fetch_dav_resources(access_token, to_account_id, SyncCollection::Calendar)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         };
 
         // Validate headers
@@ -456,7 +456,7 @@ async fn copy_event(
     to_document_id: Option<u32>,
     to_calendar_id: u32,
     new_name: &str,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     // Fetch event
     let event_ = server
         .store()
@@ -466,11 +466,11 @@ async fn copy_event(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let event = event_
         .to_unarchived::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let mut batch = BatchBuilder::new();
 
     // Validate UID
@@ -479,7 +479,7 @@ async fn copy_event(
         server
             .fetch_dav_resources(access_token, to_account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .as_ref(),
         to_account_id,
         to_calendar_id,
@@ -490,7 +490,7 @@ async fn copy_event(
     if from_account_id == to_account_id {
         let mut new_event = event
             .deserialize::<CalendarEvent>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event.names.push(DavName {
             name: new_name.to_string(),
             parent_id: to_calendar_id,
@@ -503,12 +503,12 @@ async fn copy_event(
                 from_document_id,
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     } else {
         let next_email_alarm = event.inner.data.next_alarm(now() as i64, Tz::Floating);
         let mut new_event = event
             .deserialize::<CalendarEvent>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event.names = vec![DavName {
             name: new_name.to_string(),
             parent_id: to_calendar_id,
@@ -517,7 +517,7 @@ async fn copy_event(
             .store()
             .assign_document_ids(to_account_id, Collection::CalendarEvent, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event
             .insert(
                 access_token,
@@ -526,7 +526,7 @@ async fn copy_event(
                 next_email_alarm,
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     let response = if let Some(to_document_id) = to_document_id {
@@ -539,11 +539,11 @@ async fn copy_event(
                 to_document_id,
             ))
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if let Some(event_) = event_ {
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             DestroyArchive(event)
                 .delete(
@@ -555,7 +555,7 @@ async fn copy_event(
                     false,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
@@ -566,7 +566,7 @@ async fn copy_event(
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server.notify_task_queue();
 
     response
@@ -585,7 +585,7 @@ async fn move_event(
     to_calendar_id: u32,
     new_name: &str,
     if_schedule_tag: Option<u32>,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     // Fetch event
     let event_ = server
         .store()
@@ -595,11 +595,11 @@ async fn move_event(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let event = event_
         .to_unarchived::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Validate headers
     if if_schedule_tag.is_some()
@@ -618,7 +618,7 @@ async fn move_event(
             server
                 .fetch_dav_resources(access_token, to_account_id, SyncCollection::Calendar)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .as_ref(),
             to_account_id,
             to_calendar_id,
@@ -645,7 +645,7 @@ async fn move_event(
 
         let mut new_event = event
             .deserialize::<CalendarEvent>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event.names.swap_remove(name_idx);
         new_event.names.push(DavName {
             name: new_name.to_string(),
@@ -659,13 +659,13 @@ async fn move_event(
                 from_document_id,
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         batch.log_vanished_item(VanishedCollection::Calendar, from_resource_path);
     } else {
         let next_email_alarm = event.inner.data.next_alarm(now() as i64, Tz::Floating);
         let mut new_event = event
             .deserialize::<CalendarEvent>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event.names = vec![DavName {
             name: new_name.to_string(),
             parent_id: to_calendar_id,
@@ -681,13 +681,13 @@ async fn move_event(
                 false,
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let to_document_id = server
             .store()
             .assign_document_ids(to_account_id, Collection::CalendarEvent, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         new_event
             .insert(
                 access_token,
@@ -696,7 +696,7 @@ async fn move_event(
                 next_email_alarm,
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     let response = if let Some(to_document_id) = to_document_id {
@@ -709,11 +709,11 @@ async fn move_event(
                 to_document_id,
             ))
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if let Some(event_) = event_ {
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             DestroyArchive(event)
                 .delete(
@@ -725,7 +725,7 @@ async fn move_event(
                     false,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
@@ -736,7 +736,7 @@ async fn move_event(
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server.notify_task_queue();
 
     response
@@ -751,7 +751,7 @@ async fn rename_event(
     calendar_id: u32,
     new_name: &str,
     from_resource_path: String,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     // Fetch event
     let event_ = server
         .store()
@@ -761,11 +761,11 @@ async fn rename_event(
             document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let event = event_
         .to_unarchived::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let name_idx = event
         .inner
@@ -775,18 +775,18 @@ async fn rename_event(
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let mut new_event = event
         .deserialize::<CalendarEvent>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     new_event.names[name_idx].name = new_name.to_string();
 
     let mut batch = BatchBuilder::new();
     new_event
         .update(access_token, event, account_id, document_id, &mut batch)
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     batch.log_vanished_item(VanishedCollection::Calendar, from_resource_path);
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server.notify_task_queue();
 
     Ok(HttpResponse::new(StatusCode::CREATED))
@@ -805,7 +805,7 @@ async fn copy_container(
     to_children_ids: Vec<u32>,
     new_name: &str,
     remove_source: bool,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     // Fetch calendar
     let calendar_ = server
         .store()
@@ -815,14 +815,14 @@ async fn copy_container(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let old_calendar = calendar_
         .to_unarchived::<Calendar>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let mut calendar = old_calendar
         .deserialize::<Calendar>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Prepare write batch
     let mut batch = BatchBuilder::new();
@@ -836,7 +836,7 @@ async fn copy_container(
                 from_resource_path.into(),
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     let preference = calendar.preferences.into_iter().next().unwrap();
@@ -864,11 +864,11 @@ async fn copy_container(
                 to_document_id,
             ))
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if let Some(calendar_) = calendar_ {
             let calendar = calendar_
                 .to_unarchived::<Calendar>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             DestroyArchive(calendar)
                 .delete_with_events(
@@ -882,7 +882,7 @@ async fn copy_container(
                     &mut batch,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         to_document_id
@@ -891,11 +891,11 @@ async fn copy_container(
             .store()
             .assign_document_ids(to_account_id, Collection::Calendar, 1)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
     };
     calendar
         .insert(access_token, to_account_id, to_document_id, &mut batch)
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Copy children
     let mut required_space = 0;
@@ -911,7 +911,7 @@ async fn copy_container(
         {
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_name = None;
 
             for name in event.inner.names.iter() {
@@ -931,10 +931,10 @@ async fn copy_container(
             };
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_event = event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             if from_account_id == to_account_id {
                 if remove_source {
@@ -952,7 +952,7 @@ async fn copy_container(
                         from_child_document_id,
                         &mut batch,
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             } else {
                 let next_email_alarm = event.inner.data.next_alarm(now() as i64, Tz::Floating);
                 if remove_source {
@@ -966,13 +966,13 @@ async fn copy_container(
                             false,
                             &mut batch,
                         )
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 let to_document_id = server
                     .store()
                     .assign_document_ids(to_account_id, Collection::CalendarEvent, 1)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 new_event.names = vec![new_name];
                 required_space += new_event.size as u64;
                 new_event
@@ -983,7 +983,7 @@ async fn copy_container(
                         next_email_alarm,
                         &mut batch,
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
     }
@@ -1002,7 +1002,7 @@ async fn copy_container(
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server.notify_task_queue();
 
     if !is_overwrite {
@@ -1020,7 +1020,7 @@ async fn rename_container(
     document_id: u32,
     new_name: &str,
     from_resource_path: String,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     // Fetch calendar
     let calendar_ = server
         .store()
@@ -1030,25 +1030,25 @@ async fn rename_container(
             document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let calendar = calendar_
         .to_unarchived::<Calendar>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let mut new_calendar = calendar
         .deserialize::<Calendar>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     new_calendar.name = new_name.to_string();
 
     let mut batch = BatchBuilder::new();
     new_calendar
         .update(access_token, calendar, account_id, document_id, &mut batch)
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     batch.log_vanished_item(VanishedCollection::Calendar, from_resource_path);
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server.notify_task_queue();
 
     Ok(HttpResponse::new(StatusCode::CREATED))

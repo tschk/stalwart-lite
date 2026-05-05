@@ -4,27 +4,29 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    listener::SessionStream, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
+};
+use crate::directory::Permission;
+use crate::imap::{
     core::{Session, SessionData},
     spawn_op,
 };
-use common::{listener::SessionStream, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse, protocol::rename::Arguments, receiver::Request,
 };
-use std::time::Instant;
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{acl::Acl, collection::Collection};
+use crate::trc::AddContext;
+use crate::types::{acl::Acl, collection::Collection};
+use std::time::Instant;
 
 use super::ImapContext;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_rename(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_rename(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapRename)?;
 
@@ -44,11 +46,11 @@ impl<T: SessionStream> SessionData<T> {
         &self,
         arguments: Arguments,
         op_start: Instant,
-    ) -> trc::Result<StatusResponse> {
+    ) -> crate::trc::Result<StatusResponse> {
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate mailbox name
         let mut params = self
@@ -66,7 +68,7 @@ impl<T: SessionStream> SessionData<T> {
                         mailbox_id = (*mailbox_id_).into();
                         break;
                     } else {
-                        return Err(trc::ImapEvent::Error
+                        return Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details("Cannot move mailboxes between accounts.")
                             .code(ResponseCode::Cannot)
@@ -77,7 +79,7 @@ impl<T: SessionStream> SessionData<T> {
             if let Some(mailbox_id) = mailbox_id {
                 mailbox_id
             } else {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details(format!("Mailbox '{}' not found.", arguments.mailbox_name))
                     .code(ResponseCode::NonExistent)
@@ -95,24 +97,24 @@ impl<T: SessionStream> SessionData<T> {
                 mailbox_id,
             ))
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?
+            .imap_ctx(&arguments.tag, crate::trc::location!())?
             .ok_or_else(|| {
-                trc::ImapEvent::Error
+                crate::trc::ImapEvent::Error
                     .into_err()
                     .details(format!("Mailbox '{}' not found.", arguments.mailbox_name))
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .code(ResponseCode::NonExistent)
                     .id(arguments.tag.clone())
             })?;
         let mailbox = mailbox_
-            .to_unarchived::<email::mailbox::Mailbox>()
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .to_unarchived::<crate::email::mailbox::Mailbox>()
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Validate ACL
         let access_token = self
             .get_access_token()
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         if access_token.is_shared(params.account_id)
             && !mailbox
                 .inner
@@ -120,7 +122,7 @@ impl<T: SessionStream> SessionData<T> {
                 .effective_acl(&access_token)
                 .contains(Acl::Modify)
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("You are not allowed to rename this mailbox.")
                 .code(ResponseCode::NoPerm)
@@ -142,7 +144,7 @@ impl<T: SessionStream> SessionData<T> {
                 params.path.len() as u64,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut batch = BatchBuilder::new();
 
         for &path_item in params.path.iter() {
@@ -154,9 +156,9 @@ impl<T: SessionStream> SessionData<T> {
                 .with_collection(Collection::Mailbox)
                 .with_document(mailbox_id)
                 .custom(ObjectIndexBuilder::<(), _>::new().with_changes(
-                    email::mailbox::Mailbox::new(path_item).with_parent_id(parent_id),
+                    crate::email::mailbox::Mailbox::new(path_item).with_parent_id(parent_id),
                 ))
-                .imap_ctx(&arguments.tag, trc::location!())?
+                .imap_ctx(&arguments.tag, crate::trc::location!())?
                 .commit_point();
 
             parent_id = mailbox_id + 1;
@@ -164,8 +166,8 @@ impl<T: SessionStream> SessionData<T> {
         }
 
         let mut new_mailbox = mailbox
-            .deserialize::<email::mailbox::Mailbox>()
-            .caused_by(trc::location!())?;
+            .deserialize::<crate::email::mailbox::Mailbox>()
+            .caused_by(crate::trc::location!())?;
         new_mailbox.name = new_mailbox_name.into();
         new_mailbox.parent_id = parent_id;
         new_mailbox.uid_validity = rand::random::<u32>();
@@ -178,14 +180,14 @@ impl<T: SessionStream> SessionData<T> {
                     .with_current(mailbox)
                     .with_changes(new_mailbox),
             )
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
         self.server
             .commit_batch(batch)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::RenameMailbox),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::RenameMailbox),
             SpanId = self.session_id,
             AccountId = params.account_id,
             MailboxName = arguments.new_mailbox_name,

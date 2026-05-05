@@ -6,15 +6,15 @@
 
 use std::fmt;
 
-use crate::{
+use crate::jmap_proto::{
     object::{email::EmailComparator, file_node::FileNodeComparator},
     response::serialize::serialize_hex,
     types::date::UTCDate,
 };
+use crate::types::{id::Id, type_state::DataType};
+use crate::utils::map::vec_map::VecMap;
 use ahash::AHashMap;
 use serde::{Deserialize, Deserializer};
-use types::{id::Id, type_state::DataType};
-use utils::map::vec_map::VecMap;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Session {

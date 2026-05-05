@@ -6,13 +6,13 @@
 
 use std::{io::SeekFrom, ops::Range, path::PathBuf};
 
+use crate::utils::{
+    codec::base32_custom::Base32Writer,
+    config::{Config, utils::AsKey},
+};
 use tokio::{
     fs::{self, File},
     io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
-};
-use utils::{
-    codec::base32_custom::Base32Writer,
-    config::{Config, utils::AsKey},
 };
 
 pub struct FsStore {
@@ -51,7 +51,7 @@ impl FsStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let blob_path = self.build_path(key);
         let blob_size = match fs::metadata(&blob_path).await {
             Ok(m) => m.len() as usize,
@@ -81,7 +81,7 @@ impl FsStore {
         }))
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let blob_path = self.build_path(key);
 
         if fs::metadata(&blob_path)
@@ -99,7 +99,7 @@ impl FsStore {
         Ok(())
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let blob_path = self.build_path(key);
         if fs::metadata(&blob_path).await.is_ok() {
             fs::remove_file(&blob_path).await.map_err(into_error)?;
@@ -120,6 +120,6 @@ impl FsStore {
     }
 }
 
-fn into_error(err: std::io::Error) -> trc::Error {
-    trc::StoreEvent::FilesystemError.reason(err)
+fn into_error(err: std::io::Error) -> crate::trc::Error {
+    crate::trc::StoreEvent::FilesystemError.reason(err)
 }

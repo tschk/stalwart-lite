@@ -8,30 +8,27 @@ use super::{
     body::{ToBodyPart, truncate_html, truncate_plain},
     headers::IntoForm,
 };
-use crate::{changes::state::JmapCacheState, email::headers::HeaderToValue};
-use common::{Server, auth::AccessToken};
-use email::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     message::metadata::{
         ArchivedMetadataPartType, MESSAGE_HAS_ATTACHMENT, MESSAGE_RECEIVED_MASK, MessageMetadata,
         MetadataHeaderName, PART_ENCODING_PROBLEM,
     },
 };
-use jmap_proto::{
+use crate::jmap::{changes::state::JmapCacheState, email::headers::HeaderToValue};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::email::{Email, EmailProperty, EmailValue, HeaderForm},
     request::IntoValid,
     types::date::UTCDate,
 };
-use jmap_tools::{Key, Map, Value};
-use mail_parser::HeaderValue;
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::{AddContext, StoreEvent};
-use types::{
+use crate::trc::{AddContext, StoreEvent};
+use crate::types::{
     acl::Acl,
     blob::{BlobClass, BlobId},
     blob_hash::BlobHash,
@@ -39,14 +36,17 @@ use types::{
     field::EmailField,
     id::Id,
 };
-use utils::chained_bytes::ChainedBytes;
+use crate::utils::chained_bytes::ChainedBytes;
+use jmap_tools::{Key, Map, Value};
+use mail_parser::HeaderValue;
+use std::future::Future;
 
 pub trait EmailGet: Sync + Send {
     fn email_get(
         &self,
         request: GetRequest<Email>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<Email>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Email>>> + Send;
 }
 
 impl EmailGet for Server {
@@ -54,7 +54,7 @@ impl EmailGet for Server {
         &self,
         mut request: GetRequest<Email>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<Email>> {
+    ) -> crate::trc::Result<GetResponse<Email>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             EmailProperty::Id,
@@ -109,7 +109,7 @@ impl EmailGet for Server {
         let cache = self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let message_ids = if access_token.is_member(account_id) {
             cache.email_document_ids()
         } else {
@@ -174,7 +174,7 @@ impl EmailGet for Server {
             };
             let metadata = metadata_
                 .unarchive::<MessageMetadata>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Obtain message data
             let data = match cache.email_by_id(&id.document_id()) {
@@ -202,14 +202,14 @@ impl EmailGet for Server {
                             .unwrap_or_default(),
                     );
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Store(StoreEvent::NotFound),
                         AccountId = account_id,
                         DocumentId = id.document_id(),
                         Collection = Collection::Email,
                         BlobId = blob_hash.to_hex(),
                         Details = "Blob not found.",
-                        CausedBy = trc::location!(),
+                        CausedBy = crate::trc::location!(),
                     );
 
                     response.not_found.push(id);
@@ -437,7 +437,7 @@ impl EmailGet for Server {
                     }
 
                     _ => {
-                        return Err(trc::JmapEvent::InvalidArguments
+                        return Err(crate::trc::JmapEvent::InvalidArguments
                             .into_err()
                             .details(format!("Invalid property {property:?}")));
                     }

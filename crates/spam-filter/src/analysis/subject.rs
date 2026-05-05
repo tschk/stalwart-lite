@@ -6,12 +6,12 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
+use crate::nlp::tokenizers::types::TokenType;
 use mail_parser::HeaderName;
-use nlp::tokenizers::types::TokenType;
 use smtp_proto::{MAIL_BODY_8BITMIME, MAIL_BODY_BINARYMIME, MAIL_SMTPUTF8};
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeSubject: Sync + Send {
     fn spam_filter_analyze_subject(

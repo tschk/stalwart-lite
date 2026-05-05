@@ -6,12 +6,12 @@
 
 use std::time::Duration;
 
+use crate::utils::config::{Config, utils::AsKey};
 use mysql_async::{
     Conn, OptsBuilder, Pool, PoolConstraints, PoolOpts, SslOpts, prelude::Queryable,
 };
-use utils::config::{Config, utils::AsKey};
 
-use crate::{
+use crate::store::{
     backend::mysql::MysqlSearchField,
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, SearchableField,
@@ -103,7 +103,7 @@ impl MysqlStore {
         Some(db)
     }
 
-    pub(crate) async fn create_storage_tables(&self) -> trc::Result<()> {
+    pub(crate) async fn create_storage_tables(&self) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
 
         for table in [
@@ -174,7 +174,7 @@ impl MysqlStore {
         Ok(())
     }
 
-    pub(crate) async fn create_search_tables(&self) -> trc::Result<()> {
+    pub(crate) async fn create_search_tables(&self) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
 
         create_search_tables::<EmailSearchField>(&mut conn).await?;
@@ -189,7 +189,7 @@ impl MysqlStore {
 
 async fn create_search_tables<T: SearchableField + MysqlSearchField + 'static>(
     conn: &mut Conn,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     let table_name = T::index().mysql_table();
     let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name);
 

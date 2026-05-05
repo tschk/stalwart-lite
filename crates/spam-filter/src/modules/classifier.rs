@@ -4,27 +4,38 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::analysis::domain::SpamFilterAnalyzeDomain;
-use crate::analysis::init::SpamFilterInit;
-use crate::analysis::is_trusted_domain;
-use crate::analysis::url::SpamFilterAnalyzeUrl;
-use crate::modules::html::{A, ALT, HREF, HtmlToken, IMG, SRC, TITLE};
-use crate::{Email, SpamFilterContext, TextPart};
-use crate::{Hostname, SpamFilterInput};
-use common::config::spamfilter;
-use common::manager::{SPAM_CLASSIFIER_KEY, SPAM_TRAINER_KEY};
-use common::{Server, config::spamfilter::Location, ipc::BroadcastEvent};
-use mail_auth::DmarcResult;
-use mail_parser::{MessageParser, MimeHeaders};
-use nlp::classifier::feature::{
+use crate::common::config::spamfilter;
+use crate::common::manager::{SPAM_CLASSIFIER_KEY, SPAM_TRAINER_KEY};
+use crate::common::{Server, config::spamfilter::Location, ipc::BroadcastEvent};
+use crate::nlp::classifier::feature::{
     CcfhFeature, CcfhFeatureBuilder, FeatureBuilder, FhFeature, FhFeatureBuilder, Sample,
     UnprocessedFeature,
 };
-use nlp::classifier::ftrl::Ftrl;
-use nlp::classifier::reservoir::SampleReservoir;
-use nlp::classifier::train::{CcfhTrainer, FhTrainer};
-use nlp::tokenizers::types::TypesTokenizer;
-use nlp::tokenizers::{stream::WordStemTokenizer, types::TokenType};
+use crate::nlp::classifier::ftrl::Ftrl;
+use crate::nlp::classifier::reservoir::SampleReservoir;
+use crate::nlp::classifier::train::{CcfhTrainer, FhTrainer};
+use crate::nlp::tokenizers::types::TypesTokenizer;
+use crate::nlp::tokenizers::{stream::WordStemTokenizer, types::TokenType};
+use crate::spam_filter::analysis::domain::SpamFilterAnalyzeDomain;
+use crate::spam_filter::analysis::init::SpamFilterInit;
+use crate::spam_filter::analysis::is_trusted_domain;
+use crate::spam_filter::analysis::url::SpamFilterAnalyzeUrl;
+use crate::spam_filter::modules::html::{A, ALT, HREF, HtmlToken, IMG, SRC, TITLE};
+use crate::spam_filter::{Email, SpamFilterContext, TextPart};
+use crate::spam_filter::{Hostname, SpamFilterInput};
+use crate::store::rand::seq::SliceRandom;
+use crate::store::write::{BlobLink, now};
+use crate::store::{
+    Deserialize, IterateParams, Serialize, U32_LEN, U64_LEN, ValueKey,
+    write::{
+        AlignedBytes, Archive, Archiver, BatchBuilder, BlobOp, ValueClass,
+        key::DeserializeBigEndian,
+    },
+};
+use crate::trc::{AddContext, SpamEvent};
+use crate::types::blob_hash::BlobHash;
+use mail_auth::DmarcResult;
+use mail_parser::{MessageParser, MimeHeaders};
 use std::time::Instant;
 use std::{
     borrow::Cow,
@@ -32,29 +43,18 @@ use std::{
     hash::{Hash, RandomState},
     sync::Arc,
 };
-use store::rand::seq::SliceRandom;
-use store::write::{BlobLink, now};
-use store::{
-    Deserialize, IterateParams, Serialize, U32_LEN, U64_LEN, ValueKey,
-    write::{
-        AlignedBytes, Archive, Archiver, BatchBuilder, BlobOp, ValueClass,
-        key::DeserializeBigEndian,
-    },
-};
 use tokio::sync::{mpsc, oneshot};
-use trc::{AddContext, SpamEvent};
-use types::blob_hash::BlobHash;
 use unicode_general_category::{GeneralCategory, get_general_category};
 use unicode_normalization::UnicodeNormalization;
 use unicode_security::mixed_script::AugmentedScriptSet;
 
 pub trait SpamClassifier {
-    fn spam_train(&self, retrain: bool) -> impl Future<Output = trc::Result<()>> + Send;
+    fn spam_train(&self, retrain: bool) -> impl Future<Output = crate::trc::Result<()>> + Send;
 
     fn spam_classify(
         &self,
         ctx: &mut SpamFilterContext<'_>,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 
     fn spam_build_tokens<'x>(
         &self,
@@ -89,7 +89,7 @@ pub enum SpamTrainerClass {
 }
 
 impl SpamClassifier for Server {
-    async fn spam_train(&self, retrain: bool) -> trc::Result<()> {
+    async fn spam_train(&self, retrain: bool) -> crate::trc::Result<()> {
         let Some(config) = &self.core.spam.classifier else {
             return Ok(());
         };
@@ -100,13 +100,13 @@ impl SpamClassifier for Server {
             .train_task_controller
             .try_run()
             .ok_or_else(|| {
-                trc::EventType::Spam(SpamEvent::TrainCompleted)
+                crate::trc::EventType::Spam(SpamEvent::TrainCompleted)
                     .reason("Spam training task is already running")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
 
         let started = Instant::now();
-        trc::event!(Spam(SpamEvent::TrainStarted));
+        crate::trc::event!(Spam(SpamEvent::TrainStarted));
 
         // Fetch or build trainer
         let mut trainer = if !retrain
@@ -120,7 +120,7 @@ impl SpamClassifier for Server {
                         .map(Some),
                     None => Ok(None),
                 })
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             trainer
         } else {
@@ -197,15 +197,19 @@ impl SpamClassifier for Server {
                     let account_id = key.deserialize_be_u32(U64_LEN + 1)?;
                     let hash = BlobHash::try_from_hash_slice(
                         key.get(U64_LEN + U32_LEN + 1..).ok_or_else(|| {
-                            trc::Error::corrupted_key(key, value.into(), trc::location!())
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
                         })?,
                     )
                     .unwrap();
                     let (Some(is_spam), Some(hold)) = (value.first(), value.get(1)) else {
-                        return Err(trc::Error::corrupted_key(
+                        return Err(crate::trc::Error::corrupted_key(
                             key,
                             value.into(),
-                            trc::location!(),
+                            crate::trc::location!(),
                         ));
                     };
 
@@ -245,10 +249,10 @@ impl SpamClassifier for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if samples.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Spam(SpamEvent::TrainCompleted),
                 Total = 0,
                 Elapsed = started.elapsed()
@@ -258,16 +262,16 @@ impl SpamClassifier for Server {
         } else if (trainer.reservoir.ham.total_seen < config.min_ham_samples)
             || (trainer.reservoir.spam.total_seen < config.min_spam_samples)
         {
-            trc::event!(
+            crate::trc::event!(
                 Spam(SpamEvent::ModelNotReady),
                 Reason = "Not enough samples for training",
                 Details = vec![
-                    trc::Value::from(trainer.reservoir.ham.total_seen),
-                    trc::Value::from(trainer.reservoir.spam.total_seen)
+                    crate::trc::Value::from(trainer.reservoir.ham.total_seen),
+                    crate::trc::Value::from(trainer.reservoir.spam.total_seen)
                 ],
                 Limit = vec![
-                    trc::Value::from(config.min_ham_samples),
-                    trc::Value::from(config.min_spam_samples)
+                    crate::trc::Value::from(config.min_ham_samples),
+                    crate::trc::Value::from(config.min_spam_samples)
                 ],
                 Elapsed = started.elapsed()
             );
@@ -305,7 +309,7 @@ impl SpamClassifier for Server {
         }
 
         let num_samples = samples.len();
-        samples.shuffle(&mut store::rand::rng());
+        samples.shuffle(&mut crate::store::rand::rng());
 
         // Spawn training task
         let epochs = match trainer
@@ -344,14 +348,14 @@ impl SpamClassifier for Server {
                     .blob_store()
                     .get_blob(sample.sample.hash.as_slice(), 0..usize::MAX)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 else {
                     if sample.is_replay {
                         trainer
                             .reservoir
                             .remove_sample(&sample.sample, sample.is_spam);
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             Spam(SpamEvent::TrainSampleNotFound),
                             Reason = "Blob not found",
                             AccountId = account_id,
@@ -368,7 +372,7 @@ impl SpamClassifier for Server {
                             .reservoir
                             .remove_sample(&sample.sample, sample.is_spam);
                     }
-                    trc::event!(
+                    crate::trc::event!(
                         Spam(SpamEvent::TrainSampleNotFound),
                         Reason = "Failed to parse message",
                         AccountId = account_id,
@@ -405,7 +409,7 @@ impl SpamClassifier for Server {
 
                 // Look for stop requests
                 if self.inner.ipc.train_task_controller.should_stop() {
-                    trc::event!(
+                    crate::trc::event!(
                         Spam(SpamEvent::TrainCompleted),
                         Reason = "Training task was stopped",
                         Total = fh_samples.len() + ccfh_samples.len(),
@@ -426,10 +430,10 @@ impl SpamClassifier for Server {
                         })
                         .await
                         .map_err(|err| {
-                            trc::EventType::Server(trc::ServerEvent::ThreadError)
+                            crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                                 .reason(err)
                                 .details("Spam train task failed")
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         })?;
                 }
                 TrainTask::Ccfh { batch_tx, .. } => {
@@ -440,19 +444,19 @@ impl SpamClassifier for Server {
                         })
                         .await
                         .map_err(|err| {
-                            trc::EventType::Server(trc::ServerEvent::ThreadError)
+                            crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                                 .reason(err)
                                 .details("Spam train task failed")
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         })?;
                 }
             }
 
             done_rx.await.map_err(|err| {
-                trc::EventType::Server(trc::ServerEvent::ThreadError)
+                crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                     .reason(err)
                     .details("Spam train task failed")
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
         }
 
@@ -465,10 +469,10 @@ impl SpamClassifier for Server {
             } => {
                 drop(batch_tx);
                 SpamTrainerClass::FtrlFh(trainer_rx.await.map_err(|err| {
-                    trc::EventType::Server(trc::ServerEvent::ThreadError)
+                    crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                         .reason(err)
                         .details("Spam train task failed")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?)
             }
             TrainTask::Ccfh {
@@ -478,10 +482,10 @@ impl SpamClassifier for Server {
             } => {
                 drop(batch_tx);
                 SpamTrainerClass::FtrlCfh(trainer_rx.await.map_err(|err| {
-                    trc::EventType::Server(trc::ServerEvent::ThreadError)
+                    crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                         .reason(err)
                         .details("Spam train task failed")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?)
             }
         };
@@ -504,17 +508,17 @@ impl SpamClassifier for Server {
                 SPAM_TRAINER_KEY,
                 &Archiver::new(trainer)
                     .serialize()
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         self.blob_store()
             .put_blob(
                 SPAM_CLASSIFIER_KEY,
-                &classifier.serialize().caused_by(trc::location!())?,
+                &classifier.serialize().caused_by(crate::trc::location!())?,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         self.inner
             .data
@@ -523,10 +527,13 @@ impl SpamClassifier for Server {
         self.cluster_broadcast(BroadcastEvent::ReloadSpamFilter)
             .await;
 
-        trc::event!(
+        crate::trc::event!(
             Spam(SpamEvent::TrainCompleted),
             Total = num_samples,
-            Details = vec![trc::Value::from(ham_count), trc::Value::from(spam_count)],
+            Details = vec![
+                crate::trc::Value::from(ham_count),
+                crate::trc::Value::from(spam_count)
+            ],
             Elapsed = started.elapsed()
         );
 
@@ -549,7 +556,7 @@ impl SpamClassifier for Server {
                         self.store()
                             .write(batch.build_all())
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         batch = BatchBuilder::new();
                     }
                 }
@@ -558,14 +565,14 @@ impl SpamClassifier for Server {
                 self.store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
 
         Ok(())
     }
 
-    async fn spam_classify(&self, ctx: &mut SpamFilterContext<'_>) -> trc::Result<()> {
+    async fn spam_classify(&self, ctx: &mut SpamFilterContext<'_>) -> crate::trc::Result<()> {
         let classifier = self.inner.data.spam_classifier.load_full();
         let Some(config) = &self.core.spam.classifier else {
             return Ok(());
@@ -587,7 +594,7 @@ impl SpamClassifier for Server {
                         .directory()
                         .email_to_id(rcpt)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         has_prediction = true;
                         classifier
@@ -630,7 +637,7 @@ impl SpamClassifier for Server {
                         .directory()
                         .email_to_id(rcpt)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         has_prediction = true;
                         classifier
@@ -664,16 +671,16 @@ impl SpamClassifier for Server {
             }
         }
 
-        trc::event!(
+        crate::trc::event!(
             Spam(SpamEvent::Classify),
             Result = ctx
                 .result
                 .classifier_confidence
                 .iter()
                 .zip(ctx.input.env_rcpt_to.iter())
-                .map(|(v, rcpt)| trc::Value::Array(vec![
-                    trc::Value::from(rcpt.to_string()),
-                    trc::Value::from(*v)
+                .map(|(v, rcpt)| crate::trc::Value::Array(vec![
+                    crate::trc::Value::from(rcpt.to_string()),
+                    crate::trc::Value::from(*v)
                 ]))
                 .collect::<Vec<_>>(),
             SpanId = ctx.input.span_id,
@@ -895,7 +902,7 @@ enum TrainTask {
 }
 
 impl SpamTrainerClass {
-    fn spawn(self, num_epochs: usize) -> trc::Result<TrainTask> {
+    fn spawn(self, num_epochs: usize) -> crate::trc::Result<TrainTask> {
         match self {
             SpamTrainerClass::FtrlFh(mut trainer) => {
                 let builder = trainer.feature_builder();
@@ -913,10 +920,10 @@ impl SpamTrainerClass {
                         let _ = trainer_tx.send(trainer);
                     })
                     .map_err(|err| {
-                        trc::EventType::Server(trc::ServerEvent::ThreadError)
+                        crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                             .reason(err)
                             .details("Failed to spawn spam train task")
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                     })?;
 
                 Ok(TrainTask::Fh {
@@ -941,10 +948,10 @@ impl SpamTrainerClass {
                         let _ = trainer_tx.send(trainer);
                     })
                     .map_err(|err| {
-                        trc::EventType::Server(trc::ServerEvent::ThreadError)
+                        crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
                             .reason(err)
                             .details("Failed to spawn spam train task")
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                     })?;
 
                 Ok(TrainTask::Ccfh {

@@ -8,7 +8,12 @@ use super::{
     AcmeProvider, StaticResolver,
     directory::{ACME_TLS_ALPN_NAME, SerializedCert},
 };
-use crate::{KV_ACME, Server};
+use crate::common::{KV_ACME, Server};
+use crate::store::{
+    dispatch::lookup::KeyValue,
+    write::{AlignedBytes, Archive},
+};
+use crate::trc::AcmeEvent;
 use rustls::{
     ServerConfig,
     crypto::ring::sign::any_ecdsa_type,
@@ -17,11 +22,6 @@ use rustls::{
 };
 use rustls_pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::sync::Arc;
-use store::{
-    dispatch::lookup::KeyValue,
-    write::{AlignedBytes, Archive},
-};
-use trc::AcmeEvent;
 
 impl Server {
     pub(crate) fn set_cert(&self, provider: &AcmeProvider, cert: Arc<CertifiedKey>) {
@@ -61,7 +61,7 @@ impl Server {
                             key,
                         ))),
                         Err(err) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 Acme(AcmeEvent::Error),
                                 Domain = domain.to_string(),
                                 Reason = err.to_string(),
@@ -73,7 +73,7 @@ impl Server {
                 }
 
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Acme(AcmeEvent::Error),
                         Domain = domain.to_string(),
                         CausedBy = err,
@@ -83,7 +83,7 @@ impl Server {
                 }
             },
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Acme(AcmeEvent::Error),
                     Domain = domain.to_string(),
                     CausedBy = err
@@ -91,7 +91,7 @@ impl Server {
                 None
             }
             Ok(None) => {
-                trc::event!(Acme(AcmeEvent::TokenNotFound), Domain = domain.to_string());
+                crate::trc::event!(Acme(AcmeEvent::TokenNotFound), Domain = domain.to_string());
                 None
             }
         }

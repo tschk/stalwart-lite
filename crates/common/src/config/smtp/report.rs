@@ -6,9 +6,11 @@
 
 use std::time::Duration;
 
-use utils::config::{Config, utils::ParseValue};
+use crate::utils::config::{Config, utils::ParseValue};
 
-use crate::expr::{Constant, ConstantValue, Variable, if_block::IfBlock, tokenizer::TokenMap};
+use crate::common::expr::{
+    Constant, ConstantValue, Variable, if_block::IfBlock, tokenizer::TokenMap,
+};
 
 use super::*;
 
@@ -251,7 +253,7 @@ impl<'x> TryFrom<Variable<'x>> for AggregateFrequency {
 }
 
 impl ConstantValue for AggregateFrequency {
-    fn add_constants(token_map: &mut crate::expr::tokenizer::TokenMap) {
+    fn add_constants(token_map: &mut crate::common::expr::tokenizer::TokenMap) {
         token_map
             .add_constant("never", AggregateFrequency::Never)
             .add_constant("hourly", AggregateFrequency::Hourly)

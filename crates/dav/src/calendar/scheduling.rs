@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavErrorCondition, DavMethod,
     calendar::freebusy::CalendarFreebusyRequestHandler,
     common::{
@@ -13,15 +14,7 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use calcard::{
-    Entry, Parser,
-    icalendar::{
-        ICalendarComponentType, ICalendarEntry, ICalendarMethod, ICalendarProperty, ICalendarValue,
-        Uri,
-    },
-};
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders,
     schema::{
         property::Rfc1123DateTime,
@@ -29,17 +22,26 @@ use dav_proto::{
         response::{CalCondition, Href, ScheduleResponse, ScheduleResponseItem},
     },
 };
-use groupware::{DestroyArchive, cache::GroupwareCache, calendar::CalendarEventNotification};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::{
+use crate::groupware::{
+    DestroyArchive, cache::GroupwareCache, calendar::CalendarEventNotification,
+};
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{ahash::AHashMap, write::BatchBuilder};
-use trc::AddContext;
-use types::collection::{Collection, SyncCollection};
-use utils::sanitize_email;
+use crate::store::{ahash::AHashMap, write::BatchBuilder};
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, SyncCollection};
+use crate::utils::sanitize_email;
+use calcard::{
+    Entry, Parser,
+    icalendar::{
+        ICalendarComponentType, ICalendarEntry, ICalendarMethod, ICalendarProperty, ICalendarValue,
+        Uri,
+    },
+};
+use hyper::StatusCode;
 
 pub(crate) trait CalendarEventNotificationHandler: Sync + Send {
     fn handle_scheduling_get_request(
@@ -47,20 +49,20 @@ pub(crate) trait CalendarEventNotificationHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn handle_scheduling_delete_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn handle_scheduling_post_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarEventNotificationHandler for Server {
@@ -69,7 +71,7 @@ impl CalendarEventNotificationHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_head: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -83,7 +85,7 @@ impl CalendarEventNotificationHandler for Server {
                 SyncCollection::CalendarEventNotification,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resources
             .by_path(
                 resource_
@@ -109,11 +111,11 @@ impl CalendarEventNotificationHandler for Server {
                 resource.document_id(),
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
         let event = event_
             .unarchive::<CalendarEventNotification>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Validate headers
         let etag = event_.etag();
@@ -151,7 +153,7 @@ impl CalendarEventNotificationHandler for Server {
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -169,7 +171,7 @@ impl CalendarEventNotificationHandler for Server {
                 SyncCollection::CalendarEventNotification,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Check resource type
         let resource = resources
@@ -193,7 +195,7 @@ impl CalendarEventNotificationHandler for Server {
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
         // Validate headers
@@ -215,15 +217,17 @@ impl CalendarEventNotificationHandler for Server {
 
         let event = event_
             .to_unarchived::<CalendarEventNotification>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Delete event
         let mut batch = BatchBuilder::new();
         DestroyArchive(event)
             .delete(access_token, account_id, document_id, &mut batch)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
 
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
     }
@@ -233,7 +237,7 @@ impl CalendarEventNotificationHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -366,12 +370,12 @@ impl CalendarEventNotificationHandler for Server {
                 .directory()
                 .email_to_id(&email)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let resources = self
                     .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 if let Some(resource) = self
                     .core
                     .groupware

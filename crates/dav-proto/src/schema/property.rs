@@ -9,14 +9,14 @@ use super::{
     request::DavPropertyValue,
     response::{Ace, AclRestrictions, Href, List, Response, SupportedPrivilege},
 };
-use crate::{Depth, Timeout};
+use crate::dav_proto::{Depth, Timeout};
+use crate::types::{
+    TimeRange,
+    dead_property::{DeadElementTag, DeadProperty},
+};
 use calcard::{
     icalendar::{ICalendar, ICalendarComponentType, ICalendarProperty},
     vcard::{VCard, VCardProperty},
-};
-use types::{
-    TimeRange,
-    dead_property::{DeadElementTag, DeadProperty},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]

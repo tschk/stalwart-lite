@@ -6,8 +6,8 @@
 
 use std::time::Duration;
 
+use crate::utils::config::{Config, utils::AsKey};
 use async_nats::Client;
-use utils::config::{Config, utils::AsKey};
 
 pub mod pubsub;
 

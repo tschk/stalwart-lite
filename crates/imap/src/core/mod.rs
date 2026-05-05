@@ -10,23 +10,23 @@ use std::{
     sync::{Arc, atomic::AtomicU32},
 };
 
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     Inner, Server,
     auth::AccessToken,
     listener::{ServerInstance, SessionStream, limiter::InFlight},
 };
+use ahash::AHashMap;
 
-use imap_proto::{
+use crate::imap_proto::{
     Command,
     protocol::{ProtocolVersion, list::Attribute},
     receiver::Receiver,
 };
+use crate::trc::AddContext;
 use tokio::{
     io::{ReadHalf, WriteHalf},
     sync::watch,
 };
-use trc::AddContext;
 
 pub mod client;
 pub mod mailbox;
@@ -198,11 +198,11 @@ impl<T: SessionStream> State<T> {
 }
 
 impl<T: SessionStream> SessionData<T> {
-    pub async fn get_access_token(&self) -> trc::Result<Arc<AccessToken>> {
+    pub async fn get_access_token(&self) -> crate::trc::Result<Arc<AccessToken>> {
         self.server
             .get_access_token(self.account_id)
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
     }
 
     pub fn replace_stream_tx<U: SessionStream>(

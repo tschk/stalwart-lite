@@ -5,14 +5,14 @@
  */
 
 use super::{FromModSeq, ToModSeq};
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::cache::{MessageCacheFetch, email::MessageCacheAccess};
+use crate::imap::{
     core::{ImapId, SavedSearch, SelectedMailbox, Session, SessionData},
     spawn_op,
 };
-use common::listener::SessionStream;
-use directory::Permission;
-use email::cache::{MessageCacheFetch, email::MessageCacheAccess};
-use imap_proto::{
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{
         Sequence,
@@ -20,10 +20,8 @@ use imap_proto::{
     },
     receiver::Request,
 };
-use mail_parser::HeaderName;
-use nlp::language::Language;
-use std::{str::FromStr, sync::Arc, time::Instant};
-use store::{
+use crate::nlp::language::Language;
+use crate::store::{
     query::log::Query,
     roaring::RoaringBitmap,
     search::{
@@ -31,10 +29,12 @@ use store::{
     },
     write::{SearchIndex, now},
 };
+use crate::trc::AddContext;
+use crate::types::{collection::SyncCollection, id::Id, keyword::Keyword};
+use crate::utils::map::vec_map::VecMap;
+use mail_parser::HeaderName;
+use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::watch;
-use trc::AddContext;
-use types::{collection::SyncCollection, id::Id, keyword::Keyword};
-use utils::map::vec_map::VecMap;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_search(
@@ -42,7 +42,7 @@ impl<T: SessionStream> Session<T> {
         request: Request<Command>,
         is_sort: bool,
         is_uid: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let op_start = Instant::now();
         let mut arguments = if !is_sort {
             // Validate access
@@ -114,7 +114,7 @@ impl<T: SessionStream> SessionData<T> {
         prev_saved_search: Option<Option<Arc<Vec<ImapId>>>>,
         is_uid: bool,
         op_start: Instant,
-    ) -> trc::Result<search::Response> {
+    ) -> crate::trc::Result<search::Response> {
         // Run query
         let is_sort = arguments.sort.is_some();
         let (result_set, include_highest_modseq) = self
@@ -171,11 +171,11 @@ impl<T: SessionStream> SessionData<T> {
             results_tx.send(saved_results).ok();
         }
 
-        trc::event!(
+        crate::trc::event!(
             Imap(if !is_sort {
-                trc::ImapEvent::Search
+                crate::trc::ImapEvent::Search
             } else {
-                trc::ImapEvent::Sort
+                crate::trc::ImapEvent::Sort
             }),
             SpanId = self.session_id,
             AccountId = mailbox.id.account_id,
@@ -213,14 +213,14 @@ impl<T: SessionStream> SessionData<T> {
         imap_comparator: Vec<Comparator>,
         mailbox: &SelectedMailbox,
         prev_saved_search: &Option<Option<Arc<Vec<ImapId>>>>,
-    ) -> trc::Result<(Vec<u32>, bool)> {
+    ) -> crate::trc::Result<(Vec<u32>, bool)> {
         // Obtain message ids
         let mut filters = Vec::with_capacity(imap_filter.len() + 1);
         let cache = self
             .server
             .get_cached_messages(mailbox.id.account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let message_ids = RoaringBitmap::from_iter(
             cache
                 .in_mailbox(mailbox.id.mailbox_id)
@@ -244,7 +244,7 @@ impl<T: SessionStream> SessionData<T> {
                                 }
                             }
                         } else {
-                            return Err(trc::ImapEvent::Error
+                            return Err(crate::trc::ImapEvent::Error
                                 .into_err()
                                 .details("No saved search found."));
                         }
@@ -422,7 +422,7 @@ impl<T: SessionStream> SessionData<T> {
                             RoaringBitmap::from_sorted_iter([id.document_id()]).unwrap(),
                         ));
                     } else {
-                        return Err(trc::ImapEvent::Error
+                        return Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details(format!("Failed to parse email id '{id}'.",)));
                     }
@@ -433,7 +433,7 @@ impl<T: SessionStream> SessionData<T> {
                             cache.in_thread(id.document_id()).map(|m| m.document_id),
                         )));
                     } else {
-                        return Err(trc::ImapEvent::Error
+                        return Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details(format!("Failed to parse thread id '{id}'.",)));
                     }
@@ -597,7 +597,7 @@ impl<T: SessionStream> SessionData<T> {
                     SearchComparator::field(EmailSearchField::ReceivedAt, comparator.ascending)
                 }
                 search::Sort::Cc => {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Sorting by CC is not supported."));
                 }
@@ -631,7 +631,7 @@ impl<T: SessionStream> SessionData<T> {
             )
             .await
             .map(|res| (res, include_highest_modseq))
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
     }
 }
 

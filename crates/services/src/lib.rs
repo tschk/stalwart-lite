@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use broadcast::publisher::spawn_broadcast_publisher;
-use common::{
+use crate::common::{
     Inner,
     manager::boot::{BootManager, IpcReceivers},
 };
+use broadcast::publisher::spawn_broadcast_publisher;
 use housekeeper::spawn_housekeeper;
 use state_manager::manager::spawn_push_router;
 use std::sync::Arc;
@@ -37,8 +37,8 @@ impl StartServices for BootManager {
             .unpack(&self.inner.shared_core.load().storage.blob)
             .await
         {
-            trc::event!(
-                Resource(trc::ResourceEvent::Error),
+            crate::trc::event!(
+                Resource(crate::trc::ResourceEvent::Error),
                 Reason = err,
                 Details = "Failed to unpack webadmin bundle"
             );

@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Server,
     config::smtp::queue::{QueueExpiry, QueueName},
 };
-use smtp::queue::{
+use crate::smtp::queue::{
     Error, ErrorDetails, HostResponse, Message, QuotaKey, Recipient, Schedule, Status,
     UnexpectedResponse,
 };
-use smtp_proto::Response;
-use std::net::IpAddr;
-use store::{
+use crate::store::{
     Deserialize, IterateParams, Serialize, ValueKey,
     write::{
         AlignedBytes, Archive, Archiver, BatchBuilder, QueueClass, ValueClass,
         key::DeserializeBigEndian,
     },
 };
-use trc::AddContext;
-use types::blob_hash::BlobHash;
+use crate::trc::AddContext;
+use crate::types::blob_hash::BlobHash;
+use smtp_proto::Response;
+use std::net::IpAddr;
 
 #[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive, Debug, Clone, PartialEq, Eq)]
 pub struct LegacyMessage {
@@ -151,7 +151,7 @@ pub enum LegacyQuotaKey {
     Count { key: Vec<u8>, id: u64 },
 }
 
-pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_queue_v014(server: &Server) -> crate::trc::Result<()> {
     let mut messages = Vec::new();
     server
         .store()
@@ -162,14 +162,14 @@ pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
             ),
             |key, value| {
                 let archive = <Archive<AlignedBytes> as Deserialize>::deserialize(value)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 match archive.deserialize_untrusted::<LegacyMessage>() {
                     Ok(message) => {
                         messages.push((key.deserialize_be_u64(0)?, Message::from(message)));
                     }
                     Err(err) => {
                         if archive.deserialize_untrusted::<Message>().is_err() {
-                            return Err(err.caused_by(trc::location!()));
+                            return Err(err.caused_by(crate::trc::location!()));
                         }
                     }
                 }
@@ -178,7 +178,7 @@ pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let mut batch = BatchBuilder::new();
     let count = messages.len();
@@ -187,7 +187,7 @@ pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
             ValueClass::Queue(QueueClass::Message(queue_id)),
             Archiver::new(message)
                 .serialize()
-                .caused_by(trc::location!())?,
+                .caused_by(crate::trc::location!())?,
         );
 
         if batch.is_large_batch() {
@@ -195,7 +195,7 @@ pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             batch = BatchBuilder::new();
         }
     }
@@ -205,11 +205,11 @@ pub(crate) async fn migrate_queue_v014(server: &Server) -> trc::Result<()> {
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migrated {count} queued messages",)
     );
 

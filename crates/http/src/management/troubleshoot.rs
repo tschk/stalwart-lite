@@ -10,7 +10,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use common::{
+use crate::common::{
     Server,
     auth::{AccessToken, oauth::GrantType},
     config::smtp::{
@@ -19,7 +19,14 @@ use common::{
     },
     psl,
 };
-use directory::backend::internal::manage;
+use crate::directory::backend::internal::manage;
+use crate::smtp::outbound::{
+    client::{SmtpClient, StartTlsResult},
+    dane::{dnssec::TlsaLookup, verify::TlsaVerify},
+    lookup::{DnsLookup, ToNextHop},
+    mta_sts::{lookup::MtaStsLookup, verify::VerifyPolicy},
+};
+use crate::utils::url_params::UrlParams;
 use http_body_util::{StreamBody, combinators::BoxBody};
 use hyper::{
     Method, StatusCode,
@@ -34,16 +41,9 @@ use mail_auth::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use smtp::outbound::{
-    client::{SmtpClient, StartTlsResult},
-    dane::{dnssec::TlsaLookup, verify::TlsaVerify},
-    lookup::{DnsLookup, ToNextHop},
-    mta_sts::{lookup::MtaStsLookup, verify::VerifyPolicy},
-};
 use tokio::{io::AsyncWriteExt, sync::mpsc};
-use utils::url_params::UrlParams;
 
-use http_proto::{request::decode_path_element, *};
+use crate::http_proto::{request::decode_path_element, *};
 
 pub trait TroubleshootApi: Sync + Send {
     fn handle_troubleshoot_api_request(
@@ -52,7 +52,7 @@ pub trait TroubleshootApi: Sync + Send {
         path: Vec<&str>,
         access_token: &AccessToken,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl TroubleshootApi for Server {
@@ -62,7 +62,7 @@ impl TroubleshootApi for Server {
         path: Vec<&str>,
         access_token: &AccessToken,
         body: Option<Vec<u8>>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let params = UrlParams::new(req.uri().query());
         let account_id = access_token.primary_id();
 
@@ -107,7 +107,8 @@ impl TroubleshootApi for Server {
                     body.as_deref().unwrap_or_default(),
                 )
                 .map_err(|err| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                        .from_json_error(err)
                 })?;
                 let response = dmarc_troubleshoot(self, request).await.ok_or_else(|| {
                     manage::error(
@@ -121,7 +122,7 @@ impl TroubleshootApi for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }
@@ -388,7 +389,7 @@ async fn delivery_troubleshoot(
         Err(err) => {
             if matches!(
                 &err,
-                smtp::outbound::mta_sts::Error::Dns(mail_auth::Error::DnsRecordNotFound(_))
+                crate::smtp::outbound::mta_sts::Error::Dns(mail_auth::Error::DnsRecordNotFound(_))
             ) {
                 tx.send(DeliveryStage::MtaStsNotFound {
                     elapsed: now.elapsed_ms(),

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::expr::Variable;
+use crate::common::expr::Variable;
 
 pub(crate) fn fn_count(v: Vec<Variable>) -> Variable {
     match &v[0] {

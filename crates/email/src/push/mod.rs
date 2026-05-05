@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use types::type_state::DataType;
-use utils::map::bitmap::Bitmap;
+use crate::types::type_state::DataType;
+use crate::utils::map::bitmap::Bitmap;
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Default, Debug, Clone, PartialEq, Eq,

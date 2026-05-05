@@ -5,7 +5,7 @@
  */
 
 use super::query::Filter;
-use crate::{
+use crate::jmap_proto::{
     method::query::FilterWrapper,
     object::email::EmailFilter,
     request::{
@@ -14,8 +14,8 @@ use crate::{
         reference::{MaybeResultReference, ResultReference},
     },
 };
+use crate::types::id::Id;
 use serde::{Deserialize, Deserializer};
-use types::id::Id;
 
 #[derive(Debug, Clone)]
 pub struct GetSearchSnippetRequest {

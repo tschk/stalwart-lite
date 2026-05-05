@@ -6,9 +6,9 @@
 
 use std::sync::Arc;
 
-use common::{Inner, ipc::BroadcastEvent};
+use crate::common::{Inner, ipc::BroadcastEvent};
+use crate::trc::ClusterEvent;
 use tokio::sync::mpsc;
-use trc::ClusterEvent;
 
 use super::{BROADCAST_TOPIC, BroadcastBatch};
 
@@ -25,7 +25,7 @@ pub fn spawn_broadcast_publisher(inner: Arc<Inner>, mut event_rx: mpsc::Receiver
     tokio::spawn(async move {
         let mut batch = BroadcastBatch::init();
 
-        trc::event!(Cluster(ClusterEvent::PublisherStart));
+        crate::trc::event!(Cluster(ClusterEvent::PublisherStart));
 
         while let Some(event) = event_rx.recv().await {
             batch.insert(event);
@@ -45,11 +45,11 @@ pub fn spawn_broadcast_publisher(inner: Arc<Inner>, mut event_rx: mpsc::Receiver
                 }
                 Err(err) => {
                     batch.clear();
-                    trc::event!(Cluster(ClusterEvent::PublisherError), CausedBy = err);
+                    crate::trc::event!(Cluster(ClusterEvent::PublisherError), CausedBy = err);
                 }
             }
         }
 
-        trc::event!(Cluster(ClusterEvent::PublisherStop));
+        crate::trc::event!(Cluster(ClusterEvent::PublisherStop));
     });
 }

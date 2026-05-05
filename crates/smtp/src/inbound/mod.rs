@@ -6,7 +6,7 @@
 
 use std::borrow::Cow;
 
-use common::config::smtp::auth::{ArcSealer, DkimSigner};
+use crate::common::config::smtp::auth::{ArcSealer, DkimSigner};
 use mail_auth::{
     ArcOutput, AuthenticatedMessage, AuthenticationResults, DkimResult, DmarcResult, IprevResult,
     SpfResult, arc::ArcSet, dkim::Signature, dmarc::Policy,

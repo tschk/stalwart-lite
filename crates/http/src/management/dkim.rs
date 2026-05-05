@@ -6,8 +6,9 @@
 
 use std::str::FromStr;
 
-use common::{Server, auth::AccessToken, config::smtp::auth::simple_pem_parse};
-use directory::{Permission, backend::internal::manage};
+use crate::common::{Server, auth::AccessToken, config::smtp::auth::simple_pem_parse};
+use crate::directory::{Permission, backend::internal::manage};
+use crate::store::write::now;
 use hyper::Method;
 use mail_auth::{
     common::crypto::{Ed25519Key, RsaKey, Sha256},
@@ -20,9 +21,8 @@ use rsa::pkcs1::DecodeRsaPublicKey;
 use rustls_pki_types::{PrivateKeyDer, PrivatePkcs1KeyDer};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use store::write::now;
 
-use http_proto::{request::decode_path_element, *};
+use crate::http_proto::{request::decode_path_element, *};
 use std::future::Future;
 
 #[derive(Debug, Serialize, Deserialize, Copy, Clone, PartialEq, Eq)]
@@ -46,17 +46,17 @@ pub trait DkimManagement: Sync + Send {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_get_public_key(
         &self,
         path: Vec<&str>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_create_signature(
         &self,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn create_dkim_key(
         &self,
@@ -64,7 +64,7 @@ pub trait DkimManagement: Sync + Send {
         id: impl AsRef<str> + Send,
         domain: impl Into<String> + Send,
         selector: impl Into<String> + Send,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 }
 
 impl DkimManagement for Server {
@@ -74,7 +74,7 @@ impl DkimManagement for Server {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match *req.method() {
             Method::GET => {
                 // Validate the access token
@@ -88,15 +88,15 @@ impl DkimManagement for Server {
 
                 self.handle_create_signature(body).await
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 
-    async fn handle_get_public_key(&self, path: Vec<&str>) -> trc::Result<HttpResponse> {
+    async fn handle_get_public_key(&self, path: Vec<&str>) -> crate::trc::Result<HttpResponse> {
         let signature_id = match path.get(1) {
             Some(signature_id) => decode_path_element(signature_id),
             None => {
-                return Err(trc::ResourceEvent::NotFound.into_err());
+                return Err(crate::trc::ResourceEvent::NotFound.into_err());
             }
         };
 
@@ -114,8 +114,8 @@ impl DkimManagement for Server {
                 .map(|algo| algo.and_then(|algo| algo.parse::<Algorithm>().ok())),
         ) {
             (Ok(Some(pk)), Ok(Some(algorithm))) => (pk, algorithm),
-            (Err(err), _) | (_, Err(err)) => return Err(err.caused_by(trc::location!())),
-            _ => return Err(trc::ResourceEvent::NotFound.into_err()),
+            (Err(err), _) | (_, Err(err)) => return Err(err.caused_by(crate::trc::location!())),
+            _ => return Err(crate::trc::ResourceEvent::NotFound.into_err()),
         };
 
         Ok(JsonResponse::new(json!({
@@ -124,14 +124,18 @@ impl DkimManagement for Server {
         .into_http_response())
     }
 
-    async fn handle_create_signature(&self, body: Option<Vec<u8>>) -> trc::Result<HttpResponse> {
+    async fn handle_create_signature(
+        &self,
+        body: Option<Vec<u8>>,
+    ) -> crate::trc::Result<HttpResponse> {
         let request =
             match serde_json::from_slice::<DkimSignature>(body.as_deref().unwrap_or_default()) {
                 Ok(request) => request,
                 Err(err) => {
-                    return Err(
-                        trc::EventType::Resource(trc::ResourceEvent::BadParameters).reason(err)
-                    );
+                    return Err(crate::trc::EventType::Resource(
+                        crate::trc::ResourceEvent::BadParameters,
+                    )
+                    .reason(err));
                 }
             };
 
@@ -186,7 +190,7 @@ impl DkimManagement for Server {
         id: impl AsRef<str>,
         domain: impl Into<String>,
         selector: impl Into<String>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let id = id.as_ref();
         let (algorithm, pk_type) = match algo {
             Algorithm::Rsa => ("rsa-sha256", "RSA PRIVATE KEY"),
@@ -201,7 +205,7 @@ impl DkimManagement for Server {
             }
             .map_err(|err| {
                 manage::error("Failed to generate key", err.to_string().into())
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?
             .private_key(),
         )
@@ -251,7 +255,7 @@ impl DkimManagement for Server {
     }
 }
 
-pub fn obtain_dkim_public_key(algo: Algorithm, pk: &str) -> trc::Result<String> {
+pub fn obtain_dkim_public_key(algo: Algorithm, pk: &str) -> crate::trc::Result<String> {
     match simple_pem_parse(pk) {
         Some(der) => match algo {
             Algorithm::Rsa => match RsaKey::<Sha256>::from_key_der(PrivateKeyDer::Pkcs1(

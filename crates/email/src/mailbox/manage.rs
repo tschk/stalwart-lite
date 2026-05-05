@@ -5,28 +5,28 @@
  */
 
 use super::*;
-use crate::cache::MessageCacheFetch;
-use common::{Server, storage::index::ObjectIndexBuilder};
+use crate::common::{Server, storage::index::ObjectIndexBuilder};
+use crate::email::cache::MessageCacheFetch;
+use crate::store::write::BatchBuilder;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 use std::future::Future;
-use store::write::BatchBuilder;
-use trc::AddContext;
-use types::collection::Collection;
 
 pub trait MailboxFnc: Sync + Send {
     fn create_system_folders(
         &self,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 
     fn mailbox_create_path(
         &self,
         account_id: u32,
         path: &str,
-    ) -> impl Future<Output = trc::Result<Option<u32>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<u32>>> + Send;
 }
 
 impl MailboxFnc for Server {
-    async fn create_system_folders(&self, account_id: u32) -> trc::Result<()> {
+    async fn create_system_folders(&self, account_id: u32) -> crate::trc::Result<()> {
         #[cfg(feature = "test_mode")]
         if account_id == 0 {
             return Ok(());
@@ -65,28 +65,32 @@ impl MailboxFnc for Server {
             batch
                 .with_document(document_id)
                 .custom(ObjectIndexBuilder::<(), _>::new().with_changes(object))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
         self.store()
             .assign_document_ids(account_id, Collection::Mailbox, (ARCHIVE_ID + 1) as u64)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         self.core
             .storage
             .data
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(())
     }
 
-    async fn mailbox_create_path(&self, account_id: u32, path: &str) -> trc::Result<Option<u32>> {
+    async fn mailbox_create_path(
+        &self,
+        account_id: u32,
+        path: &str,
+    ) -> crate::trc::Result<Option<u32>> {
         let cache = self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let mut next_parent_id = 0;
         let mut create_paths = Vec::with_capacity(2);
@@ -133,7 +137,7 @@ impl MailboxFnc for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::Mailbox, create_paths.len() as u64)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut batch = BatchBuilder::new();
             for name in create_paths {
                 let document_id = next_document_id;
@@ -146,11 +150,13 @@ impl MailboxFnc for Server {
                         ObjectIndexBuilder::<(), _>::new()
                             .with_changes(Mailbox::new(name).with_parent_id(next_parent_id)),
                     )
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 next_parent_id = document_id + 1;
             }
 
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(Some(next_parent_id - 1))

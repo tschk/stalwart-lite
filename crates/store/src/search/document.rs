@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::search::*;
+use crate::store::search::*;
 
 impl IndexDocument {
     pub fn new(index: SearchIndex) -> Self {

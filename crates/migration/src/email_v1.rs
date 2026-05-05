@@ -5,9 +5,8 @@
  */
 
 use super::{LegacyBincode, get_properties};
-use crate::{email_v2::LegacyKeyword, get_bitmap, get_document_ids, v014::SUBSPACE_BITMAP_TAG};
-use common::Server;
-use email::{
+use crate::common::Server;
+use crate::email::{
     mailbox::*,
     message::{
         index::extractors::VisitTextArchived,
@@ -20,12 +19,10 @@ use email::{
         },
     },
 };
-use mail_parser::{
-    Address, Attribute, ContentType, DateTime, Encoding, HeaderName, HeaderValue, Received,
-    parsers::fields::thread::thread_name,
+use crate::migration::{
+    email_v2::LegacyKeyword, get_bitmap, get_document_ids, v014::SUBSPACE_BITMAP_TAG,
 };
-use std::{borrow::Cow, collections::VecDeque};
-use store::{
+use crate::store::{
     Deserialize, SUBSPACE_INDEXES, SUBSPACE_PROPERTY, Serialize, SerializeInfallible, U32_LEN,
     U64_LEN, ValueKey,
     ahash::AHashMap,
@@ -34,14 +31,19 @@ use store::{
         key::KeySerializer,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     blob_hash::BlobHash,
     collection::Collection,
     field::{EmailField, Field},
     keyword::*,
 };
-use utils::{cheeky_hash::CheekyHash, codec::leb128::Leb128Iterator};
+use crate::utils::{cheeky_hash::CheekyHash, codec::leb128::Leb128Iterator};
+use mail_parser::{
+    Address, Attribute, ContentType, DateTime, Encoding, HeaderName, HeaderValue, Received,
+    parsers::fields::thread::thread_name,
+};
+use std::{borrow::Cow, collections::VecDeque};
 
 const FIELD_KEYWORDS: u8 = 4;
 const FIELD_THREAD_ID: u8 = 33;
@@ -50,11 +52,14 @@ pub(crate) const FIELD_MAILBOX_IDS: u8 = 7;
 
 const BM_MARKER: u8 = 1 << 7;
 
-pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_emails_v011(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let mut document_ids = get_document_ids(server, account_id, Collection::Email)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_emails = document_ids.len();
     if num_emails == 0 {
@@ -82,7 +87,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
         },
     )
     .await
-    .caused_by(trc::location!())?
+    .caused_by(crate::trc::location!())?
     .unwrap_or_default();
 
     let mut message_data: AHashMap<u32, MessageDataBuilder> =
@@ -98,7 +103,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
         FIELD_MAILBOX_IDS,
     )
     .await
-    .caused_by(trc::location!())?
+    .caused_by(crate::trc::location!())?
     {
         message_data.entry(message_id).or_default().mailboxes = uid_mailbox.0;
     }
@@ -107,7 +112,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
     for (message_id, keywords) in
         get_properties::<Keywords, _>(server, account_id, Collection::Email, &(), FIELD_KEYWORDS)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
     {
         message_data.entry(message_id).or_default().keywords =
             keywords.0.into_iter().map(Into::into).collect();
@@ -117,7 +122,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
     for (message_id, thread_id) in
         get_properties::<u32, _>(server, account_id, Collection::Email, &(), FIELD_THREAD_ID)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
     {
         message_data.entry(message_id).or_default().thread_id = thread_id;
     }
@@ -156,14 +161,14 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
                         Ok(Some(archive)) => {
                             let metadata: MessageMetadata = archive
                                 .deserialize_untrusted()
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             (metadata.root_part().offset_end, metadata)
                         }
                         _ => {
                             return Err(err
                                 .account_id(account_id)
                                 .document_id(message_id)
-                                .caused_by(trc::location!()));
+                                .caused_by(crate::trc::location!()));
                         }
                     }
                 }
@@ -234,19 +239,19 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
                     Field::ARCHIVE,
                     Archiver::new(data.seal())
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 )
                 .set(
                     EmailField::Metadata,
                     Archiver::new(metadata)
                         .serialize()
-                        .caused_by(trc::location!())?,
+                        .caused_by(crate::trc::location!())?,
                 );
             server
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
     }
 
@@ -274,7 +279,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     // Delete messageId index, now in References
@@ -301,7 +306,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Delete values
     for property in [
@@ -332,7 +337,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     // Increment document id counter
@@ -345,7 +350,7 @@ pub(crate) async fn migrate_emails_v011(server: &Server, account_id: u32) -> trc
                 document_ids.max().map(|id| id as u64).unwrap_or(num_emails) + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         Ok(num_emails)
     } else {
         Ok(0)
@@ -467,20 +472,20 @@ pub struct Mailboxes(Vec<UidMailbox>);
 pub struct Keywords(Vec<LegacyKeyword>);
 
 impl Deserialize for Mailboxes {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         let mut bytes = bytes.iter();
-        let len: usize = bytes
-            .next_leb128()
-            .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?;
+        let len: usize = bytes.next_leb128().ok_or_else(|| {
+            crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+        })?;
         let mut list = Vec::with_capacity(len);
         for _ in 0..len {
             list.push(UidMailbox {
-                mailbox_id: bytes
-                    .next_leb128()
-                    .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?,
-                uid: bytes
-                    .next_leb128()
-                    .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?,
+                mailbox_id: bytes.next_leb128().ok_or_else(|| {
+                    crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+                })?,
+                uid: bytes.next_leb128().ok_or_else(|| {
+                    crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+                })?,
             });
         }
         Ok(Mailboxes(list))
@@ -488,17 +493,16 @@ impl Deserialize for Mailboxes {
 }
 
 impl Deserialize for Keywords {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         let mut bytes = bytes.iter();
-        let len: usize = bytes
-            .next_leb128()
-            .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?;
+        let len: usize = bytes.next_leb128().ok_or_else(|| {
+            crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+        })?;
         let mut list = Vec::with_capacity(len);
         for _ in 0..len {
-            list.push(
-                deserialize_keyword(&mut bytes)
-                    .ok_or_else(|| trc::StoreEvent::DataCorruption.caused_by(trc::location!()))?,
-            );
+            list.push(deserialize_keyword(&mut bytes).ok_or_else(|| {
+                crate::trc::StoreEvent::DataCorruption.caused_by(crate::trc::location!())
+            })?);
         }
         Ok(Keywords(list))
     }

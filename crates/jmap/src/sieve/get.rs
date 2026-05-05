@@ -4,38 +4,38 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::StateManager;
-use common::Server;
-use email::sieve::{SieveScript, ingest::SieveScriptIngest};
-use jmap_proto::{
+use crate::common::Server;
+use crate::email::sieve::{SieveScript, ingest::SieveScriptIngest};
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::sieve::{Sieve, SieveProperty, SieveValue},
 };
-use jmap_tools::{Map, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     blob::{BlobClass, BlobId, BlobSection},
     collection::{Collection, SyncCollection},
     field::SieveField,
 };
+use jmap_tools::{Map, Value};
+use std::future::Future;
 
 pub trait SieveScriptGet: Sync + Send {
     fn sieve_script_get(
         &self,
         request: GetRequest<Sieve>,
-    ) -> impl Future<Output = trc::Result<GetResponse<Sieve>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<Sieve>>> + Send;
 }
 
 impl SieveScriptGet for Server {
     async fn sieve_script_get(
         &self,
         mut request: GetRequest<Sieve>,
-    ) -> trc::Result<GetResponse<Sieve>> {
+    ) -> crate::trc::Result<GetResponse<Sieve>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             SieveProperty::Id,
@@ -90,7 +90,7 @@ impl SieveScriptGet for Server {
             };
             let sieve = sieve_
                 .unarchive::<SieveScript>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = Map::with_capacity(properties.len());
             for property in &properties {
                 match property {

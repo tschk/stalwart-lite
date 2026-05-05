@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     backend::elastic::ElasticSearchStore,
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, SearchableField,
         TracingSearchField,
     },
 };
+use crate::utils::config::{Config, http::build_http_client, utils::AsKey};
 use reqwest::{Error, Response, Url};
 use serde_json::{Value, json};
-use utils::config::{Config, http::build_http_client, utils::AsKey};
 
 impl ElasticSearchStore {
     pub async fn open(config: &mut Config, prefix: impl AsKey) -> Option<Self> {
@@ -51,7 +51,7 @@ impl ElasticSearchStore {
         shards: usize,
         replicas: usize,
         with_source: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         self.create_index::<EmailSearchField>(shards, replicas, with_source)
             .await?;
         self.create_index::<CalendarSearchField>(shards, replicas, with_source)
@@ -68,7 +68,7 @@ impl ElasticSearchStore {
         shards: usize,
         replicas: usize,
         with_source: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let mut mappings = serde_json::Map::new();
         mappings.insert(
             "properties".to_string(),
@@ -107,7 +107,7 @@ impl ElasticSearchStore {
             .send()
             .await
             .map_err(|err| {
-                trc::StoreEvent::ElasticsearchError
+                crate::trc::StoreEvent::ElasticsearchError
                     .reason(err)
                     .details("Failed to create index")
             })?;
@@ -120,23 +120,23 @@ impl ElasticSearchStore {
                     // Index already exists, ignore
                     Ok(())
                 } else {
-                    Err(trc::StoreEvent::ElasticsearchError
+                    Err(crate::trc::StoreEvent::ElasticsearchError
                         .reason(text)
-                        .ctx(trc::Key::Code, status))
+                        .ctx(crate::trc::Key::Code, status))
                 }
             }
             status => {
                 let text = response.text().await.unwrap_or_default();
-                Err(trc::StoreEvent::ElasticsearchError
+                Err(crate::trc::StoreEvent::ElasticsearchError
                     .reason(text)
-                    .ctx(trc::Key::Code, status))
+                    .ctx(crate::trc::Key::Code, status))
             }
         }
     }
 
     #[cfg(feature = "test_mode")]
-    pub async fn drop_indexes(&self) -> trc::Result<()> {
-        use crate::write::SearchIndex;
+    pub async fn drop_indexes(&self) -> crate::trc::Result<()> {
+        use crate::store::write::SearchIndex;
 
         for index in &[
             SearchIndex::Email,
@@ -158,18 +158,20 @@ impl ElasticSearchStore {
     }
 }
 
-pub(crate) async fn assert_success(response: Result<Response, Error>) -> trc::Result<Response> {
+pub(crate) async fn assert_success(
+    response: Result<Response, Error>,
+) -> crate::trc::Result<Response> {
     match response {
         Ok(response) => {
             let status = response.status();
             if status.is_success() {
                 Ok(response)
             } else {
-                Err(trc::StoreEvent::ElasticsearchError
+                Err(crate::trc::StoreEvent::ElasticsearchError
                     .reason(response.text().await.unwrap_or_default())
-                    .ctx(trc::Key::Code, status.as_u16()))
+                    .ctx(crate::trc::Key::Code, status.as_u16()))
             }
         }
-        Err(err) => Err(trc::StoreEvent::ElasticsearchError.reason(err)),
+        Err(err) => Err(crate::trc::StoreEvent::ElasticsearchError.reason(err)),
     }
 }

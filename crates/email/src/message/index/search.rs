@@ -4,28 +4,28 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::message::{
+use crate::email::message::{
     index::{MAX_MESSAGE_PARTS, extractors::VisitTextArchived},
     metadata::{
         ArchivedMessageMetadata, ArchivedMetadataHeaderName, ArchivedMetadataHeaderValue,
         ArchivedMetadataPartType, DecodedPartContent, MESSAGE_RECEIVED_MASK, MetadataHeaderName,
     },
 };
-use mail_parser::{DateTime, decoders::html::html_to_text, parsers::fields::thread::thread_name};
-use nlp::{
+use crate::nlp::{
     language::{
         Language,
         detect::{LanguageDetector, MIN_LANGUAGE_SCORE},
     },
     tokenizers::word::WordTokenizer,
 };
-use store::{
+use crate::store::{
     ahash::AHashSet,
     backend::MAX_TOKEN_LENGTH,
     search::{EmailSearchField, IndexDocument, SearchField},
     write::SearchIndex,
 };
-use utils::chained_bytes::ChainedBytes;
+use crate::utils::chained_bytes::ChainedBytes;
+use mail_parser::{DateTime, decoders::html::html_to_text, parsers::fields::thread::thread_name};
 
 impl ArchivedMessageMetadata {
     pub fn index_document(

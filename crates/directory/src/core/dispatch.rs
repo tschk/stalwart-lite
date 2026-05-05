@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use trc::AddContext;
+use crate::trc::AddContext;
 
-use crate::{
+use crate::directory::{
     Directory, DirectoryInner, Principal, QueryParams,
     backend::{RcptType, internal::lookup::DirectoryStore},
 };
 
 impl Directory {
-    pub async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         match &self.store {
             DirectoryInner::Internal(store) => store.query(by).await,
             DirectoryInner::Ldap(store) => store.query(by).await,
@@ -22,10 +22,10 @@ impl Directory {
             DirectoryInner::Memory(store) => store.query(by).await,
             DirectoryInner::OpenId(store) => store.query(by).await,
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    pub async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         match &self.store {
             DirectoryInner::Internal(store) => store.email_to_id(address).await,
             DirectoryInner::Ldap(store) => store.email_to_id(address).await,
@@ -35,10 +35,10 @@ impl Directory {
             DirectoryInner::Memory(store) => store.email_to_id(address).await,
             DirectoryInner::OpenId(store) => store.email_to_id(address).await,
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         // Check cache
         if let Some(cache) = &self.cache
             && let Some(result) = cache.get_domain(domain)
@@ -55,7 +55,7 @@ impl Directory {
             DirectoryInner::Memory(store) => store.is_local_domain(domain).await,
             DirectoryInner::OpenId(store) => store.is_local_domain(domain).await,
         }
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Update cache
         if let Some(cache) = &self.cache {
@@ -65,7 +65,7 @@ impl Directory {
         Ok(result)
     }
 
-    pub async fn rcpt(&self, email: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, email: &str) -> crate::trc::Result<RcptType> {
         // Check cache
         if let Some(cache) = &self.cache
             && let Some(result) = cache.get_rcpt(email)
@@ -82,7 +82,7 @@ impl Directory {
             DirectoryInner::Memory(store) => store.rcpt(email).await,
             DirectoryInner::OpenId(store) => store.rcpt(email).await,
         }
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Update cache
         if let Some(cache) = &self.cache {
@@ -92,7 +92,7 @@ impl Directory {
         Ok(result)
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         match &self.store {
             DirectoryInner::Internal(store) => store.vrfy(address).await,
             DirectoryInner::Ldap(store) => store.vrfy(address).await,
@@ -102,10 +102,10 @@ impl Directory {
             DirectoryInner::Memory(store) => store.vrfy(address).await,
             DirectoryInner::OpenId(store) => store.vrfy(address).await,
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         match &self.store {
             DirectoryInner::Internal(store) => store.expn(address).await,
             DirectoryInner::Ldap(store) => store.expn(address).await,
@@ -115,7 +115,7 @@ impl Directory {
             DirectoryInner::Memory(store) => store.expn(address).await,
             DirectoryInner::OpenId(store) => store.expn(address).await,
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     pub fn has_bearer_token_support(&self) -> bool {

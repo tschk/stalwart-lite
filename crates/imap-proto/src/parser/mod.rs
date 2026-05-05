@@ -29,7 +29,7 @@ use std::{borrow::Cow, str::FromStr};
 
 use chrono::{DateTime, NaiveDate};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{Flag, Sequence},
     receiver::CommandParser,
@@ -413,7 +413,7 @@ impl<T: PartialEq> PushUnique<T> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::Sequence;
+    use crate::imap_proto::protocol::Sequence;
 
     #[test]
     fn parse_sequence_set() {

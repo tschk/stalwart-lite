@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::scheduling::{
+use crate::groupware::scheduling::{
     InstanceId, ItipError, ItipMessage, ItipSnapshots, ItipSummary,
     event_cancel::build_cancel_component,
     itip::{ItipExportAs, itip_add_tz, itip_build_envelope, itip_export_component},

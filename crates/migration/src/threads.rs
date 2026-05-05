@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use store::{
+use crate::common::Server;
+use crate::store::{
     U64_LEN,
     write::{AnyKey, key::KeySerializer},
 };
-use trc::AddContext;
-use types::collection::Collection;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
 
-use crate::{get_document_ids, v014::SUBSPACE_BITMAP_ID};
+use crate::migration::{get_document_ids, v014::SUBSPACE_BITMAP_ID};
 
-pub(crate) async fn migrate_threads(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_threads(server: &Server, account_id: u32) -> crate::trc::Result<u64> {
     // Obtain email ids
     let thread_ids = get_document_ids(server, account_id, Collection::Thread)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_threads = thread_ids.len();
     if num_threads == 0 {
@@ -46,7 +46,7 @@ pub(crate) async fn migrate_threads(server: &Server, account_id: u32) -> trc::Re
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Increment document id counter
     server
@@ -57,7 +57,7 @@ pub(crate) async fn migrate_threads(server: &Server, account_id: u32) -> trc::Re
             thread_ids.max().map(|id| id as u64).unwrap_or(num_threads) + 1,
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(num_threads)
 }

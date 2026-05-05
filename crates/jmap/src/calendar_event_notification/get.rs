@@ -4,20 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::JmapCacheState;
+use crate::jmap::changes::state::JmapCacheState;
 use calcard::{
     icalendar::{ArchivedICalendarProperty, ICalendar},
     jscalendar::import::ConversionOptions,
 };
-use common::{Server, auth::AccessToken};
-use groupware::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{
     cache::GroupwareCache,
     calendar::{
         ArchivedChangedBy, CalendarEventNotification, EVENT_NOTIFICATION_IS_CHANGE,
         EVENT_NOTIFICATION_IS_DRAFT,
     },
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     method::get::GetRequest,
     object::calendar_event_notification::{
         self, CalendarEventNotificationGetResponse, CalendarEventNotificationObject,
@@ -25,9 +25,9 @@ use jmap_proto::{
     },
     types::date::UTCDate,
 };
-use store::{ValueKey, write::{AlignedBytes, Archive, serialize::rkyv_deserialize}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, write::{AlignedBytes, Archive, serialize::rkyv_deserialize}};
+use crate::trc::AddContext;
+use crate::types::{
     blob::BlobId,
     collection::{Collection, SyncCollection},
     id::Id,
@@ -38,7 +38,7 @@ pub trait CalendarEventNotificationGet: Sync + Send {
         &self,
         request: GetRequest<calendar_event_notification::CalendarEventNotification>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<CalendarEventNotificationGetResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<CalendarEventNotificationGetResponse>> + Send;
 }
 
 impl CalendarEventNotificationGet for Server {
@@ -46,7 +46,7 @@ impl CalendarEventNotificationGet for Server {
         &self,
         mut request: GetRequest<calendar_event_notification::CalendarEventNotification>,
         access_token: &AccessToken,
-    ) -> trc::Result<CalendarEventNotificationGetResponse> {
+    ) -> crate::trc::Result<CalendarEventNotificationGetResponse> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             CalendarEventNotificationProperty::Id,
@@ -62,7 +62,7 @@ impl CalendarEventNotificationGet for Server {
                 SyncCollection::CalendarEventNotification,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let ids = if let Some(ids) = ids {
             ids
@@ -99,7 +99,7 @@ impl CalendarEventNotificationGet for Server {
             };
             let event = _event
                 .unarchive::<CalendarEventNotification>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = CalendarEventNotificationObject {
                 id,
                 ..Default::default()
@@ -161,7 +161,7 @@ impl CalendarEventNotificationGet for Server {
                         if event.flags & EVENT_NOTIFICATION_IS_CHANGE == 0 && result.event.is_none()
                         {
                             let js_event = rkyv_deserialize::<_, ICalendar>(&event.event)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .into_jscalendar_with_opt::<Id, BlobId>(
                                     ConversionOptions::default()
                                         .include_ical_components(false)
@@ -175,7 +175,7 @@ impl CalendarEventNotificationGet for Server {
                             && result.event_patch.is_none()
                         {
                             let js_event = rkyv_deserialize::<_, ICalendar>(&event.event)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .into_jscalendar_with_opt::<Id, BlobId>(
                                     ConversionOptions::default()
                                         .include_ical_components(false)

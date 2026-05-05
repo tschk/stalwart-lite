@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     config::{server::ServerProtocol, smtp::session::Mechanism},
     expr::{self, functions::ResolveVariable, *},
     listener::SessionStream,
 };
 
+use crate::trc::{NetworkEvent, SecurityEvent, SmtpEvent};
 use compact_str::ToCompactString;
 use smtp_proto::{
     request::receiver::{
@@ -19,9 +20,8 @@ use smtp_proto::{
     *,
 };
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use trc::{NetworkEvent, SecurityEvent, SmtpEvent};
 
-use crate::core::{Session, State};
+use crate::smtp::core::{Session, State};
 
 use super::auth::SaslToken;
 
@@ -45,7 +45,7 @@ impl<T: SessionStream> Session<T> {
                                 if self.instance.protocol == ServerProtocol::Smtp {
                                     self.handle_ehlo(host, true).await?;
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::LhloExpected),
                                         SpanId = self.data.session_id,
                                     );
@@ -96,14 +96,14 @@ impl<T: SessionStream> Session<T> {
                                     .unwrap_or_default()
                                     .into();
                                 if auth == 0 || self.params.auth_directory.is_none() {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::AuthNotAllowed),
                                         SpanId = self.data.session_id,
                                     );
 
                                     self.write(b"503 5.5.1 AUTH not allowed.\r\n").await?;
                                 } else if let Some(authenticated_as) = self.authenticated_as() {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::AlreadyAuthenticated),
                                         SpanId = self.data.session_id,
                                         AccountName = authenticated_as.to_string(),
@@ -124,7 +124,7 @@ impl<T: SessionStream> Session<T> {
                                         continue 'outer;
                                     }
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::AuthMechanismNotSupported),
                                         SpanId = self.data.session_id,
                                     );
@@ -136,7 +136,10 @@ impl<T: SessionStream> Session<T> {
                                 }
                             }
                             Request::Noop { .. } => {
-                                trc::event!(Smtp(SmtpEvent::Noop), SpanId = self.data.session_id,);
+                                crate::trc::event!(
+                                    Smtp(SmtpEvent::Noop),
+                                    SpanId = self.data.session_id,
+                                );
 
                                 self.write(b"250 2.0.0 OK\r\n").await?;
                             }
@@ -149,7 +152,7 @@ impl<T: SessionStream> Session<T> {
                             Request::StartTls => {
                                 if !self.stream.is_tls() {
                                     if self.instance.acceptor.is_tls() {
-                                        trc::event!(
+                                        crate::trc::event!(
                                             Smtp(SmtpEvent::StartTls),
                                             SpanId = self.data.session_id,
                                         );
@@ -162,7 +165,7 @@ impl<T: SessionStream> Session<T> {
                                         self.state = State::default();
                                         return Ok(false);
                                     } else {
-                                        trc::event!(
+                                        crate::trc::event!(
                                             Smtp(SmtpEvent::StartTlsUnavailable),
                                             SpanId = self.data.session_id,
                                         );
@@ -170,7 +173,7 @@ impl<T: SessionStream> Session<T> {
                                         self.write(b"502 5.7.0 TLS not available.\r\n").await?;
                                     }
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::StartTlsAlready),
                                         SpanId = self.data.session_id,
                                     );
@@ -179,19 +182,28 @@ impl<T: SessionStream> Session<T> {
                                 }
                             }
                             Request::Rset => {
-                                trc::event!(Smtp(SmtpEvent::Rset), SpanId = self.data.session_id,);
+                                crate::trc::event!(
+                                    Smtp(SmtpEvent::Rset),
+                                    SpanId = self.data.session_id,
+                                );
 
                                 self.reset();
                                 self.write(b"250 2.0.0 OK\r\n").await?;
                             }
                             Request::Quit => {
-                                trc::event!(Smtp(SmtpEvent::Quit), SpanId = self.data.session_id,);
+                                crate::trc::event!(
+                                    Smtp(SmtpEvent::Quit),
+                                    SpanId = self.data.session_id,
+                                );
 
                                 self.write(b"221 2.0.0 Bye.\r\n").await?;
                                 return Err(());
                             }
                             Request::Help { .. } => {
-                                trc::event!(Smtp(SmtpEvent::Help), SpanId = self.data.session_id,);
+                                crate::trc::event!(
+                                    Smtp(SmtpEvent::Help),
+                                    SpanId = self.data.session_id,
+                                );
 
                                 self.write(b"250 2.0.0 Help can be found at https://stalw.art\r\n")
                                     .await?;
@@ -200,7 +212,7 @@ impl<T: SessionStream> Session<T> {
                                 if self.instance.protocol == ServerProtocol::Smtp {
                                     self.handle_ehlo(host, false).await?;
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::LhloExpected),
                                         SpanId = self.data.session_id,
                                     );
@@ -213,7 +225,7 @@ impl<T: SessionStream> Session<T> {
                                 if self.instance.protocol == ServerProtocol::Lmtp {
                                     self.handle_ehlo(host, true).await?;
                                 } else {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Smtp(SmtpEvent::EhloExpected),
                                         SpanId = self.data.session_id,
                                     );
@@ -225,7 +237,7 @@ impl<T: SessionStream> Session<T> {
                             cmd @ (Request::Etrn { .. }
                             | Request::Atrn { .. }
                             | Request::Burl { .. }) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::CommandNotImplemented),
                                     SpanId = self.data.session_id,
                                     Details = format!("{cmd:?}"),
@@ -246,7 +258,7 @@ impl<T: SessionStream> Session<T> {
                                         .await
                                     {
                                         Ok(true) => {
-                                            trc::event!(
+                                            crate::trc::event!(
                                                 Security(SecurityEvent::ScanBan),
                                                 SpanId = self.data.session_id,
                                                 RemoteIp = self.data.remote_ip,
@@ -257,7 +269,7 @@ impl<T: SessionStream> Session<T> {
                                         }
                                         Ok(false) => {}
                                         Err(err) => {
-                                            trc::error!(
+                                            crate::trc::error!(
                                                 err.span_id(self.data.session_id)
                                                     .details("Failed to check for fail2ban")
                                             );
@@ -265,7 +277,7 @@ impl<T: SessionStream> Session<T> {
                                     }
                                 }
 
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::InvalidCommand),
                                     SpanId = self.data.session_id,
                                 );
@@ -273,7 +285,7 @@ impl<T: SessionStream> Session<T> {
                                 self.write(b"500 5.5.1 Invalid command.\r\n").await?;
                             }
                             Error::InvalidSenderAddress => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::InvalidSenderAddress),
                                     SpanId = self.data.session_id,
                                 );
@@ -282,7 +294,7 @@ impl<T: SessionStream> Session<T> {
                                     .await?;
                             }
                             Error::InvalidRecipientAddress => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::InvalidRecipientAddress),
                                     SpanId = self.data.session_id,
                                 );
@@ -293,7 +305,7 @@ impl<T: SessionStream> Session<T> {
                                 .await?;
                             }
                             Error::SyntaxError { syntax } => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::SyntaxError),
                                     SpanId = self.data.session_id,
                                     Details = syntax
@@ -311,7 +323,7 @@ impl<T: SessionStream> Session<T> {
                                 }
                             }
                             Error::InvalidParameter { param } => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::InvalidParameter),
                                     SpanId = self.data.session_id,
                                     Details = param
@@ -324,7 +336,7 @@ impl<T: SessionStream> Session<T> {
                                 .await?;
                             }
                             Error::UnsupportedParameter { param } => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Smtp(SmtpEvent::UnsupportedParameter),
                                     SpanId = self.data.session_id,
                                     Details = param.clone()
@@ -411,7 +423,7 @@ impl<T: SessionStream> Session<T> {
                                 continue 'outer;
                             }
                         } else {
-                            trc::event!(
+                            crate::trc::event!(
                                 Smtp(SmtpEvent::AuthExchangeTooLong),
                                 SpanId = self.data.session_id,
                                 Limit = MAX_LINE_LENGTH,
@@ -429,7 +441,7 @@ impl<T: SessionStream> Session<T> {
                 }
                 State::DataTooLarge(receiver) => {
                     if receiver.ingest(&mut iter) {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::MessageTooLarge),
                             SpanId = self.data.session_id,
                         );
@@ -444,7 +456,7 @@ impl<T: SessionStream> Session<T> {
                 }
                 State::RequestTooLarge(receiver) => {
                     if receiver.ingest(&mut iter) {
-                        trc::event!(
+                        crate::trc::event!(
                             Smtp(SmtpEvent::RequestTooLarge),
                             SpanId = self.data.session_id,
                         );
@@ -481,17 +493,17 @@ impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
         match self.stream.write_all(bytes).await {
             Ok(_) => match self.stream.flush().await {
                 Ok(_) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::RawOutput),
                         SpanId = self.data.session_id,
                         Size = bytes.len(),
-                        Contents = trc::Value::from_maybe_string(bytes),
+                        Contents = crate::trc::Value::from_maybe_string(bytes),
                     );
 
                     Ok(())
                 }
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Network(NetworkEvent::FlushError),
                         SpanId = self.data.session_id,
                         Reason = err.to_string(),
@@ -500,7 +512,7 @@ impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
                 }
             },
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Network(NetworkEvent::WriteError),
                     SpanId = self.data.session_id,
                     Reason = err.to_string(),
@@ -515,7 +527,7 @@ impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
     pub async fn read(&mut self, bytes: &mut [u8]) -> Result<usize, ()> {
         match self.stream.read(bytes).await {
             Ok(len) => {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::RawInput),
                     SpanId = self.data.session_id,
                     Size = len,
@@ -526,7 +538,7 @@ impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
                 Ok(len)
             }
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Network(NetworkEvent::ReadError),
                     SpanId = self.data.session_id,
                     Reason = err.to_string(),

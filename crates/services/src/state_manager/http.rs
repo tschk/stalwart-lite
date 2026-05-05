@@ -5,21 +5,21 @@
  */
 
 use super::{Event, ece::ece_encrypt};
-use crate::state_manager::PushRegistration;
-use base64::Engine;
-use calcard::jscalendar::JSCalendarDateTime;
-use common::ipc::PushNotification;
-use email::push::PushSubscription;
-use jmap_proto::{
+use crate::common::ipc::PushNotification;
+use crate::email::push::PushSubscription;
+use crate::jmap_proto::{
     response::status::{EmailPushObject, PushObject},
     types::state::State,
 };
+use crate::services::state_manager::PushRegistration;
+use crate::trc::PushSubscriptionEvent;
+use crate::types::{id::Id, type_state::DataType};
+use crate::utils::map::vec_map::VecMap;
+use base64::Engine;
+use calcard::jscalendar::JSCalendarDateTime;
 use reqwest::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use trc::PushSubscriptionEvent;
-use types::{id::Id, type_state::DataType};
-use utils::map::vec_map::VecMap;
 
 impl PushRegistration {
     pub fn send(&mut self, id: Id, push_tx: mpsc::Sender<Event>, push_timeout: Duration) {
@@ -124,7 +124,7 @@ pub(crate) async fn http_request(
             Err(err) => {
                 // Do not reattempt if encryption fails.
 
-                trc::event!(
+                crate::trc::event!(
                     PushSubscription(PushSubscriptionEvent::Error),
                     Details = "Failed to encrypt push subscription",
                     Url = details.url.to_string(),
@@ -138,14 +138,14 @@ pub(crate) async fn http_request(
     match client.body(body).send().await {
         Ok(response) => {
             if response.status().is_success() {
-                trc::event!(
+                crate::trc::event!(
                     PushSubscription(PushSubscriptionEvent::Success),
                     Url = details.url.to_string()
                 );
 
                 true
             } else {
-                trc::event!(
+                crate::trc::event!(
                     PushSubscription(PushSubscriptionEvent::Error),
                     Details = "HTTP POST failed",
                     Url = details.url.to_string(),
@@ -156,7 +156,7 @@ pub(crate) async fn http_request(
             }
         }
         Err(err) => {
-            trc::event!(
+            crate::trc::event!(
                 PushSubscription(PushSubscriptionEvent::Error),
                 Details = "HTTP POST failed",
                 Url = details.url.to_string(),

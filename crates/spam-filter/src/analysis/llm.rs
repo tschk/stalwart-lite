@@ -6,10 +6,10 @@
 
 use std::{future::Future, time::Instant};
 
-use common::Server;
-use trc::AiEvent;
+use crate::common::Server;
+use crate::trc::AiEvent;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeLlm: Sync + Send {
     fn spam_filter_analyze_llm(
@@ -43,7 +43,7 @@ impl SpamFilterAnalyzeLlm for Server {
                 .await
             {
                 Ok(response) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Ai(AiEvent::LlmResponse),
                         Id = config.model.id.clone(),
                         Details = response.clone(),
@@ -104,7 +104,7 @@ impl SpamFilterAnalyzeLlm for Server {
                     }
                 }
                 Err(err) => {
-                    trc::error!(err.span_id(ctx.input.span_id));
+                    crate::trc::error!(err.span_id(ctx.input.span_id));
                 }
             }
         }

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ETag,
@@ -12,33 +13,32 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use dav_proto::RequestHeaders;
-use groupware::{
+use crate::dav_proto::RequestHeaders;
+use crate::groupware::{
     DestroyArchive,
     cache::GroupwareCache,
     contact::{AddressBook, ContactCard},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::{BatchBuilder, ValueClass};
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, ValueClass};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     field::PrincipalField,
 };
+use hyper::StatusCode;
 
 pub(crate) trait CardDeleteRequestHandler: Sync + Send {
     fn handle_card_delete_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CardDeleteRequestHandler for Server {
@@ -46,7 +46,7 @@ impl CardDeleteRequestHandler for Server {
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -60,7 +60,7 @@ impl CardDeleteRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Check resource type
         let delete_resource = resources
@@ -79,12 +79,12 @@ impl CardDeleteRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
             let book = book_
                 .to_unarchived::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate ACL
             if !access_token.is_member(account_id)
@@ -130,7 +130,7 @@ impl CardDeleteRequestHandler for Server {
                     &mut batch,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Reset default address book id
             let default_book_id = self
@@ -142,7 +142,7 @@ impl CardDeleteRequestHandler for Server {
                     class: ValueClass::Property(PrincipalField::DefaultAddressBookId.into()),
                 })
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if default_book_id.is_some_and(|id| id == document_id) {
                 batch
                     .with_account_id(account_id)
@@ -171,7 +171,7 @@ impl CardDeleteRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
             // Validate headers
@@ -195,7 +195,7 @@ impl CardDeleteRequestHandler for Server {
             DestroyArchive(
                 card_
                     .to_unarchived::<ContactCard>()
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             )
             .delete(
                 access_token,
@@ -205,10 +205,12 @@ impl CardDeleteRequestHandler for Server {
                 resources.format_resource(delete_resource).into(),
                 &mut batch,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         }
 
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
         self.notify_task_queue();
 
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))

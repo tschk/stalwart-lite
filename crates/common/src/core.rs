@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
     Inner, Server,
     auth::{AccessToken, ResourceToken, TenantInfo},
     config::{
@@ -20,14 +20,8 @@ use crate::{
     ipc::{BroadcastEvent, PushEvent, PushNotification},
     manager::SPAM_CLASSIFIER_KEY,
 };
-use directory::{Directory, QueryParams, Type, backend::internal::manage::ManageDirectory};
-use mail_auth::IpLookupStrategy;
-use sieve::Sieve;
-use std::{
-    sync::{Arc, LazyLock},
-    time::Duration,
-};
-use store::{
+use crate::directory::{Directory, QueryParams, Type, backend::internal::manage::ManageDirectory};
+use crate::store::{
     BlobStore, Deserialize, InMemoryStore, IndexKey, IndexKeyPrefix, IterateParams, Key, LogKey,
     SUBSPACE_LOGS, SearchStore, SerializeInfallible, Store, U32_LEN, U64_LEN, ValueKey,
     dispatch::DocumentSet,
@@ -37,15 +31,21 @@ use store::{
         DirectoryClass, QueueClass, ValueClass, key::DeserializeBigEndian, now,
     },
 };
-use trc::{AddContext, SpamEvent};
-use types::{
+use crate::trc::{AddContext, SpamEvent};
+use crate::types::{
     blob::{BlobClass, BlobId},
     blob_hash::BlobHash,
     collection::{Collection, SyncCollection},
     field::Field,
     type_state::{DataType, StateChange},
 };
-use utils::{map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
+use crate::utils::{map::bitmap::Bitmap, snowflake::SnowflakeIdGenerator};
+use mail_auth::IpLookupStrategy;
+use sieve::Sieve;
+use std::{
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 impl Server {
     #[inline(always)]
@@ -80,8 +80,8 @@ impl Server {
     pub fn get_directory_or_default(&self, name: &str, session_id: u64) -> &Arc<Directory> {
         self.core.storage.directories.get(name).unwrap_or_else(|| {
             if !name.is_empty() {
-                trc::event!(
-                    Eval(trc::EvalEvent::DirectoryNotFound),
+                crate::trc::event!(
+                    Eval(crate::trc::EvalEvent::DirectoryNotFound),
                     Id = name.to_string(),
                     SpanId = session_id,
                 );
@@ -98,8 +98,8 @@ impl Server {
     pub fn get_in_memory_store_or_default(&self, name: &str, session_id: u64) -> &InMemoryStore {
         self.core.storage.lookups.get(name).unwrap_or_else(|| {
             if !name.is_empty() {
-                trc::event!(
-                    Eval(trc::EvalEvent::StoreNotFound),
+                crate::trc::event!(
+                    Eval(crate::trc::EvalEvent::StoreNotFound),
                     Id = name.to_string(),
                     SpanId = session_id,
                 );
@@ -112,8 +112,8 @@ impl Server {
     pub fn get_data_store(&self, name: &str, session_id: u64) -> &Store {
         self.core.storage.stores.get(name).unwrap_or_else(|| {
             if !name.is_empty() {
-                trc::event!(
-                    Eval(trc::EvalEvent::StoreNotFound),
+                crate::trc::event!(
+                    Eval(crate::trc::EvalEvent::StoreNotFound),
                     Id = name.to_string(),
                     SpanId = session_id,
                 );
@@ -125,8 +125,8 @@ impl Server {
 
     pub fn get_arc_sealer(&self, name: &str, session_id: u64) -> Option<Arc<ArcSealer>> {
         self.resolve_signature(name).map(|s| s.sealer).or_else(|| {
-            trc::event!(
-                Arc(trc::ArcEvent::SealerNotFound),
+            crate::trc::event!(
+                Arc(crate::trc::ArcEvent::SealerNotFound),
                 Id = name.to_string(),
                 SpanId = session_id,
             );
@@ -137,8 +137,8 @@ impl Server {
 
     pub fn get_dkim_signer(&self, name: &str, session_id: u64) -> Option<Arc<DkimSigner>> {
         self.resolve_signature(name).map(|s| s.signer).or_else(|| {
-            trc::event!(
-                Dkim(trc::DkimEvent::SignerNotFound),
+            crate::trc::event!(
+                Dkim(crate::trc::DkimEvent::SignerNotFound),
                 Id = name.to_string(),
                 SpanId = session_id,
             );
@@ -172,8 +172,8 @@ impl Server {
 
     pub fn get_trusted_sieve_script(&self, name: &str, session_id: u64) -> Option<&Arc<Sieve>> {
         self.core.sieve.trusted_scripts.get(name).or_else(|| {
-            trc::event!(
-                Sieve(trc::SieveEvent::ScriptNotFound),
+            crate::trc::event!(
+                Sieve(crate::trc::SieveEvent::ScriptNotFound),
                 Id = name.to_string(),
                 SpanId = session_id,
             );
@@ -184,8 +184,8 @@ impl Server {
 
     pub fn get_untrusted_sieve_script(&self, name: &str, session_id: u64) -> Option<&Arc<Sieve>> {
         self.core.sieve.untrusted_scripts.get(name).or_else(|| {
-            trc::event!(
-                Sieve(trc::SieveEvent::ScriptNotFound),
+            crate::trc::event!(
+                Sieve(crate::trc::SieveEvent::ScriptNotFound),
                 Id = name.to_string(),
                 SpanId = session_id,
             );
@@ -210,8 +210,8 @@ impl Server {
                 "local" => &LOCAL_GATEWAY,
                 "mx" => &MX_GATEWAY,
                 _ => {
-                    trc::event!(
-                        Smtp(trc::SmtpEvent::IdNotFound),
+                    crate::trc::event!(
+                        Smtp(crate::trc::SmtpEvent::IdNotFound),
                         Id = name.to_string(),
                         Details = "Gateway not found",
                         SpanId = session_id,
@@ -230,8 +230,8 @@ impl Server {
             .get(name)
             .unwrap_or_else(|| {
                 if name != &DEFAULT_QUEUE_NAME {
-                    trc::event!(
-                        Smtp(trc::SmtpEvent::IdNotFound),
+                    crate::trc::event!(
+                        Smtp(crate::trc::SmtpEvent::IdNotFound),
                         Id = name.to_string(),
                         Details = "Virtual queue not found",
                     );
@@ -266,8 +266,8 @@ impl Server {
             .get(name)
             .unwrap_or_else(|| {
                 if name != "default" {
-                    trc::event!(
-                        Smtp(trc::SmtpEvent::IdNotFound),
+                    crate::trc::event!(
+                        Smtp(crate::trc::SmtpEvent::IdNotFound),
                         Id = name.to_string(),
                         Details = "Queue strategy not found",
                         SpanId = session_id,
@@ -294,8 +294,8 @@ impl Server {
             .get(name)
             .unwrap_or_else(|| {
                 if name != "default" {
-                    trc::event!(
-                        Smtp(trc::SmtpEvent::IdNotFound),
+                    crate::trc::event!(
+                        Smtp(crate::trc::SmtpEvent::IdNotFound),
                         Id = name.to_string(),
                         Details = "TLS strategy not found",
                         SpanId = session_id,
@@ -326,8 +326,8 @@ impl Server {
             .get(name)
             .unwrap_or_else(|| {
                 if name != "default" {
-                    trc::event!(
-                        Smtp(trc::SmtpEvent::IdNotFound),
+                    crate::trc::event!(
+                        Smtp(crate::trc::SmtpEvent::IdNotFound),
                         Id = name.to_string(),
                         Details = "Connection strategy not found",
                         SpanId = session_id,
@@ -338,28 +338,31 @@ impl Server {
             })
     }
 
-    pub async fn get_used_quota(&self, account_id: u32) -> trc::Result<i64> {
+    pub async fn get_used_quota(&self, account_id: u32) -> crate::trc::Result<i64> {
         self.core
             .storage
             .data
             .get_counter(DirectoryClass::UsedQuota(account_id))
             .await
-            .add_context(|err| err.caused_by(trc::location!()).account_id(account_id))
+            .add_context(|err| {
+                err.caused_by(crate::trc::location!())
+                    .account_id(account_id)
+            })
     }
 
     pub async fn has_available_quota(
         &self,
         quotas: &ResourceToken,
         item_size: u64,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         if quotas.quota != 0 {
             let used_quota = self.get_used_quota(quotas.account_id).await? as u64;
 
             if used_quota + item_size > quotas.quota {
-                return Err(trc::LimitEvent::Quota
+                return Err(crate::trc::LimitEvent::Quota
                     .into_err()
-                    .ctx(trc::Key::Limit, quotas.quota)
-                    .ctx(trc::Key::Size, used_quota));
+                    .ctx(crate::trc::Key::Limit, quotas.quota)
+                    .ctx(crate::trc::Key::Size, used_quota));
             }
         }
 
@@ -374,10 +377,10 @@ impl Server {
             let used_quota = self.get_used_quota(tenant.id).await? as u64;
 
             if used_quota + item_size > tenant.quota {
-                return Err(trc::LimitEvent::TenantQuota
+                return Err(crate::trc::LimitEvent::TenantQuota
                     .into_err()
-                    .ctx(trc::Key::Limit, tenant.quota)
-                    .ctx(trc::Key::Size, used_quota));
+                    .ctx(crate::trc::Key::Limit, tenant.quota)
+                    .ctx(crate::trc::Key::Size, used_quota));
             }
         }
 
@@ -390,7 +393,7 @@ impl Server {
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> trc::Result<ResourceToken> {
+    ) -> crate::trc::Result<ResourceToken> {
         Ok(if access_token.primary_id == account_id {
             ResourceToken {
                 account_id,
@@ -409,7 +412,10 @@ impl Server {
                 .directory
                 .query(QueryParams::id(account_id).with_return_member_of(false))
                 .await
-                .add_context(|err| err.caused_by(trc::location!()).account_id(account_id))?
+                .add_context(|err| {
+                    err.caused_by(crate::trc::location!())
+                        .account_id(account_id)
+                })?
             {
                 quotas.quota = principal.quota().unwrap_or_default();
 
@@ -430,7 +436,7 @@ impl Server {
                             .query(QueryParams::id(tenant_id).with_return_member_of(false))
                             .await
                             .add_context(|err| {
-                                err.caused_by(trc::location!()).account_id(tenant_id)
+                                err.caused_by(crate::trc::location!()).account_id(tenant_id)
                             })?
                             .and_then(|tenant| tenant.quota())
                             .unwrap_or_default(),
@@ -451,10 +457,10 @@ impl Server {
         collection: Collection,
         documents: &I,
         mut cb: CB,
-    ) -> trc::Result<()>
+    ) -> crate::trc::Result<()>
     where
         I: DocumentSet + Send + Sync,
-        CB: FnMut(u32, Archive<AlignedBytes>) -> trc::Result<bool> + Send + Sync,
+        CB: FnMut(u32, Archive<AlignedBytes>) -> crate::trc::Result<bool> + Send + Sync,
     {
         let collection: u8 = collection.into();
 
@@ -488,7 +494,7 @@ impl Server {
             )
             .await
             .add_context(|err| {
-                err.caused_by(trc::location!())
+                err.caused_by(crate::trc::location!())
                     .account_id(account_id)
                     .collection(collection)
             })
@@ -500,9 +506,9 @@ impl Server {
         collection: Collection,
         field: u8,
         mut cb: CB,
-    ) -> trc::Result<()>
+    ) -> crate::trc::Result<()>
     where
-        CB: FnMut(u32, Archive<AlignedBytes>) -> trc::Result<()> + Send + Sync,
+        CB: FnMut(u32, Archive<AlignedBytes>) -> crate::trc::Result<()> + Send + Sync,
     {
         let collection: u8 = collection.into();
 
@@ -534,7 +540,7 @@ impl Server {
             )
             .await
             .add_context(|err| {
-                err.caused_by(trc::location!())
+                err.caused_by(crate::trc::location!())
                     .account_id(account_id)
                     .collection(collection)
             })
@@ -545,7 +551,7 @@ impl Server {
         account_id: u32,
         collection: Collection,
         field: impl Into<u8>,
-    ) -> trc::Result<RoaringBitmap> {
+    ) -> crate::trc::Result<RoaringBitmap> {
         let field = field.into();
         let mut results = RoaringBitmap::new();
         self.store()
@@ -570,7 +576,7 @@ impl Server {
                 },
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|_| results)
     }
 
@@ -580,7 +586,7 @@ impl Server {
         collection: Collection,
         field: impl Into<u8>,
         filter: impl AsRef<[u8]>,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         let field = field.into();
         let mut exists = false;
         let filter = filter.as_ref();
@@ -612,7 +618,7 @@ impl Server {
                 },
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|_| exists)
     }
 
@@ -622,7 +628,7 @@ impl Server {
         collection: Collection,
         field: impl Into<u8>,
         filter: impl AsRef<[u8]>,
-    ) -> trc::Result<RoaringBitmap> {
+    ) -> crate::trc::Result<RoaringBitmap> {
         let field = field.into();
         let filter = filter.as_ref();
         let key_len = IndexKeyPrefix::len() + filter.len() + U32_LEN;
@@ -656,7 +662,7 @@ impl Server {
                 },
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|_| results)
     }
 
@@ -665,7 +671,7 @@ impl Server {
         self.inner.ipc.task_tx.notify_one();
     }
 
-    pub async fn total_queued_messages(&self) -> trc::Result<u64> {
+    pub async fn total_queued_messages(&self) -> crate::trc::Result<u64> {
         let mut total = 0;
         self.store()
             .iterate(
@@ -681,7 +687,7 @@ impl Server {
                 },
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .map(|_| total)
     }
 
@@ -690,7 +696,7 @@ impl Server {
         self.inner.data.jmap_id_gen.generate()
     }
 
-    pub async fn commit_batch(&self, mut builder: BatchBuilder) -> trc::Result<AssignedIds> {
+    pub async fn commit_batch(&self, mut builder: BatchBuilder) -> crate::trc::Result<AssignedIds> {
         let mut assigned_ids = AssignedIds::default();
         let mut commit_points = builder.commit_points();
 
@@ -739,7 +745,7 @@ impl Server {
         account_id: u32,
         max_entries: Option<usize>,
         max_duration: Option<Duration>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         if let Some(max_entries) = max_entries {
             for sync_collection in [
                 SyncCollection::Email,
@@ -780,7 +786,7 @@ impl Server {
                         },
                     )
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 if num_changes > max_entries {
                     self.store()
@@ -797,7 +803,7 @@ impl Server {
                             },
                         )
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     // Delete vanished items
                     if let Some(vanished_collection) =
@@ -817,7 +823,7 @@ impl Server {
                                 },
                             )
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                     }
 
                     // Write truncation entry for cache
@@ -837,7 +843,7 @@ impl Server {
                     self.store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
             }
         }
@@ -858,7 +864,7 @@ impl Server {
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
         Ok(())
     }
@@ -877,10 +883,10 @@ impl Server {
         {
             Ok(_) => true,
             Err(_) => {
-                trc::event!(
-                    Server(trc::ServerEvent::ThreadError),
+                crate::trc::event!(
+                    Server(crate::trc::ServerEvent::ThreadError),
                     Details = "Error sending state change.",
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
 
                 false
@@ -892,16 +898,16 @@ impl Server {
         if let Some(broadcast_tx) = &self.inner.ipc.broadcast_tx.clone()
             && broadcast_tx.send(event).await.is_err()
         {
-            trc::event!(
-                Server(trc::ServerEvent::ThreadError),
+            crate::trc::event!(
+                Server(crate::trc::ServerEvent::ThreadError),
                 Details = "Error sending broadcast event.",
-                CausedBy = trc::location!()
+                CausedBy = crate::trc::location!()
             );
         }
     }
 
     #[allow(clippy::blocks_in_conditions)]
-    pub async fn put_jmap_blob(&self, account_id: u32, data: &[u8]) -> trc::Result<BlobId> {
+    pub async fn put_jmap_blob(&self, account_id: u32, data: &[u8]) -> crate::trc::Result<BlobId> {
         // First reserve the hash
         let hash = BlobHash::generate(data);
         let mut batch = BatchBuilder::new();
@@ -929,7 +935,7 @@ impl Server {
             .data
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if !self
             .core
@@ -937,7 +943,7 @@ impl Server {
             .data
             .blob_exists(&hash)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             // Upload blob to store
             self.core
@@ -945,7 +951,7 @@ impl Server {
                 .blob
                 .put_blob(hash.as_ref(), data)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Commit blob
             let mut batch = BatchBuilder::new();
@@ -955,7 +961,7 @@ impl Server {
                 .data
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(BlobId {
@@ -973,7 +979,7 @@ impl Server {
         account_id: u32,
         data: &[u8],
         hold_for: u64,
-    ) -> trc::Result<(BlobHash, BlobOp)> {
+    ) -> crate::trc::Result<(BlobHash, BlobOp)> {
         // First reserve the hash
         let hash = BlobHash::generate(data);
         let mut batch = BatchBuilder::new();
@@ -992,7 +998,7 @@ impl Server {
             .data
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if !self
             .core
@@ -1000,7 +1006,7 @@ impl Server {
             .data
             .blob_exists(&hash)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             // Upload blob to store
             self.core
@@ -1008,7 +1014,7 @@ impl Server {
                 .blob
                 .put_blob(hash.as_ref(), data)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Commit blob
             let mut batch = BatchBuilder::new();
@@ -1018,7 +1024,7 @@ impl Server {
                 .data
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok((
@@ -1030,21 +1036,21 @@ impl Server {
         ))
     }
 
-    pub async fn total_accounts(&self) -> trc::Result<u64> {
+    pub async fn total_accounts(&self) -> crate::trc::Result<u64> {
         self.store()
             .count_principals(None, Type::Individual.into(), None)
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
     }
 
-    pub async fn total_domains(&self) -> trc::Result<u64> {
+    pub async fn total_domains(&self) -> crate::trc::Result<u64> {
         self.store()
             .count_principals(None, Type::Domain.into(), None)
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
     }
 
-    pub async fn spam_model_reload(&self) -> trc::Result<()> {
+    pub async fn spam_model_reload(&self) -> crate::trc::Result<()> {
         if self.core.spam.classifier.is_some() {
             if let Some(model) = self
                 .blob_store()
@@ -1056,11 +1062,11 @@ impl Server {
                         .map(Some),
                     None => Ok(None),
                 })
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 self.inner.data.spam_classifier.store(Arc::new(model));
             } else {
-                trc::event!(Spam(SpamEvent::ModelNotFound));
+                crate::trc::event!(Spam(SpamEvent::ModelNotFound));
             }
         }
 
@@ -1071,7 +1077,7 @@ impl Server {
     pub async fn logo_resource(
         &self,
         _: &str,
-    ) -> trc::Result<Option<crate::manager::webadmin::Resource<Vec<u8>>>> {
+    ) -> crate::trc::Result<Option<crate::common::manager::webadmin::Resource<Vec<u8>>>> {
         Ok(None)
     }
 }

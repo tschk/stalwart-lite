@@ -5,7 +5,9 @@
  */
 
 use super::crypto::{EncryptMessage, EncryptMessageError};
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::Permission;
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess, mailbox::MailboxCacheAccess},
     mailbox::{INBOX_ID, JUNK_ID, SENT_ID, TRASH_ID, UidMailbox},
     message::{
@@ -14,20 +16,12 @@ use crate::{
         metadata::{MessageData, MessageMetadata},
     },
 };
-use common::{Server, auth::AccessToken};
-use directory::Permission;
-use groupware::{
+use crate::groupware::{
     calendar::itip::{ItipIngest, ItipIngestError},
     scheduling::{ItipError, ItipMessages},
 };
-use mail_parser::{
-    DateTime, Header, HeaderName, HeaderValue, Message, MessageParser, MimeHeaders, PartType,
-    parsers::fields::thread::thread_name,
-};
-use std::{borrow::Cow, cmp::Ordering, fmt::Write, time::Instant};
-use std::{future::Future, hash::Hasher};
-use store::write::{AlignedBytes, Archive};
-use store::{
+use crate::store::write::{AlignedBytes, Archive};
+use crate::store::{
     IndexKeyPrefix, IterateParams, U32_LEN, ValueKey,
     ahash::{AHashMap, AHashSet},
     write::{
@@ -35,8 +29,8 @@ use store::{
         TaskEpoch, TaskQueueClass, ValueClass, key::DeserializeBigEndian, now,
     },
 };
-use trc::{AddContext, MessageIngestEvent, SpamEvent};
-use types::{
+use crate::trc::{AddContext, MessageIngestEvent, SpamEvent};
+use crate::types::{
     blob::{BlobClass, BlobId},
     blob_hash::BlobHash,
     collection::{Collection, SyncCollection},
@@ -44,7 +38,13 @@ use types::{
     keyword::Keyword,
     special_use::SpecialUse,
 };
-use utils::{cheeky_hash::CheekyHash, sanitize_email};
+use crate::utils::{cheeky_hash::CheekyHash, sanitize_email};
+use mail_parser::{
+    DateTime, Header, HeaderName, HeaderValue, Message, MessageParser, MimeHeaders, PartType,
+    parsers::fields::thread::thread_name,
+};
+use std::{borrow::Cow, cmp::Ordering, fmt::Write, time::Instant};
+use std::{future::Future, hash::Hasher};
 
 #[derive(Default)]
 pub struct IngestedEmail {
@@ -88,19 +88,19 @@ pub trait EmailIngest: Sync + Send {
     fn email_ingest(
         &self,
         params: IngestEmail,
-    ) -> impl Future<Output = trc::Result<IngestedEmail>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<IngestedEmail>> + Send;
     fn find_thread_id(
         &self,
         account_id: u32,
         thread_name: &str,
         message_ids: &[CheekyHash],
-    ) -> impl Future<Output = trc::Result<ThreadResult>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ThreadResult>> + Send;
     fn assign_email_ids(
         &self,
         account_id: u32,
         mailbox_ids: impl IntoIterator<Item = u32> + Sync + Send,
         generate_email_id: bool,
-    ) -> impl Future<Output = trc::Result<impl Iterator<Item = u32> + 'static>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<impl Iterator<Item = u32> + 'static>> + Send;
     fn add_account_spam_sample(
         &self,
         batch: &mut BatchBuilder,
@@ -108,7 +108,7 @@ pub trait EmailIngest: Sync + Send {
         document_id: u32,
         is_spam: bool,
         span_id: u64,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
     fn add_spam_sample(
         &self,
         batch: &mut BatchBuilder,
@@ -128,7 +128,7 @@ pub struct ThreadResult {
 
 impl EmailIngest for Server {
     #[allow(clippy::blocks_in_conditions)]
-    async fn email_ingest(&self, mut params: IngestEmail<'_>) -> trc::Result<IngestedEmail> {
+    async fn email_ingest(&self, mut params: IngestEmail<'_>) -> crate::trc::Result<IngestedEmail> {
         // Check quota
         let start_time = Instant::now();
         let account_id = params.access_token.primary_id;
@@ -137,14 +137,14 @@ impl EmailIngest for Server {
         let resource_token = params.access_token.as_resource_token();
         self.has_available_quota(&resource_token, raw_message_len)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Parse message
         let mut raw_message = Cow::from(params.raw_message);
         let mut message = params.message.ok_or_else(|| {
-            trc::EventType::MessageIngest(trc::MessageIngestEvent::Error)
-                .ctx(trc::Key::Code, 550)
-                .ctx(trc::Key::Reason, "Failed to parse e-mail message.")
+            crate::trc::EventType::MessageIngest(crate::trc::MessageIngestEvent::Error)
+                .ctx(crate::trc::Key::Code, 550)
+                .ctx(crate::trc::Key::Reason, "Failed to parse e-mail message.")
         })?;
 
         // Obtain message references and thread name
@@ -197,7 +197,7 @@ impl EmailIngest for Server {
             let cache = self
                 .get_cached_messages(account_id)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Skip duplicate messages
             let target_mailbox_id = params.mailbox_ids.first().copied().unwrap_or(INBOX_ID);
@@ -205,7 +205,7 @@ impl EmailIngest for Server {
                 .in_mailboxes(&[target_mailbox_id, JUNK_ID])
                 .any(|m| thread_result.duplicate_ids.contains(&m.document_id))
             {
-                trc::event!(
+                crate::trc::event!(
                     MessageIngest(MessageIngestEvent::Duplicate),
                     SpanId = params.session_id,
                     AccountId = account_id,
@@ -268,7 +268,7 @@ impl EmailIngest for Server {
                                 sender.as_bytes(),
                             )
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                     {
                         is_spam = false;
                         if self
@@ -291,7 +291,7 @@ impl EmailIngest for Server {
                         let cache = self
                             .get_cached_messages(account_id)
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         let sent_folder_id = cache
                             .mailbox_by_role(&SpecialUse::Sent)
                             .map(|m| m.document_id)
@@ -387,8 +387,10 @@ impl EmailIngest for Server {
                                             if let Some(message) = message {
                                                 itip_messages.push(message);
                                             }
-                                            trc::event!(
-                                                Calendar(trc::CalendarEvent::ItipMessageReceived),
+                                            crate::trc::event!(
+                                                Calendar(
+                                                    crate::trc::CalendarEvent::ItipMessageReceived
+                                                ),
                                                 SpanId = params.session_id,
                                                 From = sender.to_string(),
                                                 AccountId = account_id,
@@ -399,9 +401,9 @@ impl EmailIngest for Server {
                                                 ItipError::NothingToSend
                                                 | ItipError::OtherSchedulingAgent => (),
                                                 err => {
-                                                    trc::event!(
+                                                    crate::trc::event!(
                                                         Calendar(
-                                                            trc::CalendarEvent::ItipMessageError
+                                                            crate::trc::CalendarEvent::ItipMessageError
                                                         ),
                                                         SpanId = params.session_id,
                                                         From = sender.to_string(),
@@ -412,13 +414,15 @@ impl EmailIngest for Server {
                                             }
                                         }
                                         Err(ItipIngestError::Internal(err)) => {
-                                            trc::error!(err.caused_by(trc::location!()));
+                                            crate::trc::error!(
+                                                err.caused_by(crate::trc::location!())
+                                            );
                                         }
                                     }
                                 }
                             } else {
-                                trc::event!(
-                                    Calendar(trc::CalendarEvent::ItipMessageError),
+                                crate::trc::event!(
+                                    Calendar(crate::trc::CalendarEvent::ItipMessageError),
                                     SpanId = params.session_id,
                                     From = message
                                         .from()
@@ -495,11 +499,11 @@ impl EmailIngest for Server {
                     PrincipalField::EncryptionKeys,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             let encrypt_params = encrypt_params_
                 .unarchive::<EncryptionParams>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             match message.encrypt(encrypt_params).await {
                 Ok(new_raw_message) => {
                     raw_message = Cow::from(new_raw_message);
@@ -507,12 +511,14 @@ impl EmailIngest for Server {
                     message = MessageParser::default()
                         .parse(raw_message.as_ref())
                         .ok_or_else(|| {
-                            trc::EventType::MessageIngest(trc::MessageIngestEvent::Error)
-                                .ctx(trc::Key::Code, 550)
-                                .ctx(
-                                    trc::Key::Reason,
-                                    "Failed to parse encrypted e-mail message.",
-                                )
+                            crate::trc::EventType::MessageIngest(
+                                crate::trc::MessageIngestEvent::Error,
+                            )
+                            .ctx(crate::trc::Key::Code, 550)
+                            .ctx(
+                                crate::trc::Key::Reason,
+                                "Failed to parse encrypted e-mail message.",
+                            )
                         })?;
 
                     // Disable spam training if requested
@@ -539,10 +545,10 @@ impl EmailIngest for Server {
                     true
                 }
                 Err(EncryptMessageError::Error(err)) => {
-                    trc::bail!(
-                        trc::StoreEvent::CryptoError
+                    crate::trc::bail!(
+                        crate::trc::StoreEvent::CryptoError
                             .into_err()
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                             .reason(err)
                     );
                 }
@@ -559,7 +565,7 @@ impl EmailIngest for Server {
             self.put_temporary_blob(account_id, raw_message.as_ref(), 60)
                 .await
                 .map(|(hash, op)| (hash, Some(op)))
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         };
 
         // Assign IMAP UIDs
@@ -568,7 +574,7 @@ impl EmailIngest for Server {
         let mut ids = self
             .assign_email_ids(account_id, params.mailbox_ids.iter().copied(), true)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let document_id = ids.next().unwrap();
         for (uid, mailbox_id) in ids.zip(params.mailbox_ids.iter().copied()) {
             mailbox_ids.push(UidMailbox::new(mailbox_id, uid));
@@ -579,7 +585,7 @@ impl EmailIngest for Server {
         let mut batch = BatchBuilder::new();
         let mailbox_ids_event = mailbox_ids
             .iter()
-            .map(|m| trc::Value::from(m.mailbox_id))
+            .map(|m| crate::trc::Value::from(m.mailbox_id))
             .collect::<Vec<_>>();
         batch.with_account_id(account_id);
 
@@ -613,7 +619,7 @@ impl EmailIngest for Server {
                 data,
                 params.received_at.unwrap_or_else(now),
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .set(
                 ValueClass::IndexProperty(IndexPropertyClass::Hash {
                     property: EmailField::Threading.into(),
@@ -659,7 +665,7 @@ impl EmailIngest for Server {
         if !itip_messages.is_empty() {
             ItipMessages::new(itip_messages)
                 .queue(&mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         // Insert and obtain ids
@@ -667,13 +673,13 @@ impl EmailIngest for Server {
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .last_change_id(account_id)?;
 
         // Request FTS index
         self.notify_task_queue();
 
-        trc::event!(
+        crate::trc::event!(
             MessageIngest(match params.source {
                 IngestSource::Smtp { .. } =>
                     if !is_spam {
@@ -718,7 +724,7 @@ impl EmailIngest for Server {
         account_id: u32,
         thread_name: &str,
         message_ids: &[CheekyHash],
-    ) -> trc::Result<ThreadResult> {
+    ) -> crate::trc::Result<ThreadResult> {
         let mut result = ThreadResult {
             thread_id: None,
             thread_hash: CheekyHash::new(if !thread_name.is_empty() {
@@ -788,7 +794,7 @@ impl EmailIngest for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         match thread_merge.num_thread_ids() {
             0 => Ok(result),
@@ -812,7 +818,7 @@ impl EmailIngest for Server {
         account_id: u32,
         mailbox_ids: impl IntoIterator<Item = u32> + Sync + Send,
         generate_email_id: bool,
-    ) -> trc::Result<impl Iterator<Item = u32> + 'static> {
+    ) -> crate::trc::Result<impl Iterator<Item = u32> + 'static> {
         // Increment UID next
         let mut batch = BatchBuilder::new();
         batch.with_account_id(account_id);
@@ -845,9 +851,12 @@ impl EmailIngest for Server {
                 AssignedId::ChangeId(_) => unreachable!(),
             }))
         } else {
-            Err(trc::StoreEvent::UnexpectedError
-                .caused_by(trc::location!())
-                .ctx(trc::Key::Reason, "No all document ids were generated"))
+            Err(crate::trc::StoreEvent::UnexpectedError
+                .caused_by(crate::trc::location!())
+                .ctx(
+                    crate::trc::Key::Reason,
+                    "No all document ids were generated",
+                ))
         }
     }
 
@@ -858,7 +867,7 @@ impl EmailIngest for Server {
         document_id: u32,
         is_spam: bool,
         span_id: u64,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         if self.core.spam.classifier.is_some()
             && let Some(archive) = self
                 .store()
@@ -869,11 +878,11 @@ impl EmailIngest for Server {
                     EmailField::Metadata,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         {
             let metadata = archive
                 .to_unarchived::<MessageMetadata>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             self.add_spam_sample(
                 batch,
                 (&metadata.inner.blob_hash).into(),
@@ -914,11 +923,11 @@ impl EmailIngest for Server {
                     vec![u8::from(is_spam), u8::from(hold_sample)],
                 );
 
-            trc::event!(
+            crate::trc::event!(
                 Spam(SpamEvent::TrainSampleAdded),
                 AccountId = batch.last_account_id(),
                 Details = if is_spam { "spam" } else { "ham" },
-                Expires = trc::Value::Timestamp(until),
+                Expires = crate::trc::Value::Timestamp(until),
                 SpanId = span_id,
             );
         }

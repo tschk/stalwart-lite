@@ -5,20 +5,20 @@
  */
 
 use super::{SqliteStore, into_error};
-use crate::{
+use crate::store::{
     IndexKey, Key, LogKey, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER, SUBSPACE_QUOTA,
     write::{AssignedIds, Batch, MergeResult, Operation, ValueClass, ValueOp},
 };
+use crate::trc::AddContext;
 use rusqlite::{OptionalExtension, TransactionBehavior, params};
-use trc::AddContext;
 
 impl SqliteStore {
-    pub(crate) async fn write(&self, batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub(crate) async fn write(&self, batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         let mut conn = self
             .conn_pool
             .get()
             .map_err(into_error)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         self.spawn_worker(move || {
             let mut account_id = u32::MAX;
             let mut collection = u8::MAX;
@@ -27,7 +27,7 @@ impl SqliteStore {
             let trx = conn
                 .transaction_with_behavior(TransactionBehavior::Immediate)
                 .map_err(into_error)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut result = AssignedIds::default();
             let has_changes = !batch.changes.is_empty();
 
@@ -41,10 +41,10 @@ impl SqliteStore {
                             "excluded.v RETURNING v"
                         ))
                         .map_err(into_error)
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .query_row(params![&key, &1i64], |row| row.get::<_, i64>(0))
                         .map_err(into_error)
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     result.push_change_id(account_id, change_id as u64);
                 }
             }
@@ -80,10 +80,10 @@ impl SqliteStore {
                                     table
                                 ))
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .execute([&key, value])
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             }
                             ValueOp::SetFnc(set_op) => {
                                 let value = (set_op.fnc)(&set_op.params, &result)?;
@@ -92,16 +92,16 @@ impl SqliteStore {
                                     table
                                 ))
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .execute([&key, &value])
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                             }
                             ValueOp::MergeFnc(merge_op) => {
                                 let merge_result = trx
                                     .prepare_cached(&format!("SELECT v FROM {} WHERE k = ?", table))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .query_row([&key], |row| {
                                         Ok((merge_op.fnc)(
                                             &merge_op.params,
@@ -111,7 +111,7 @@ impl SqliteStore {
                                     })
                                     .optional()
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .unwrap_or_else(|| {
                                         (merge_op.fnc)(&merge_op.params, &result, None)
                                     })?;
@@ -123,10 +123,10 @@ impl SqliteStore {
                                             table
                                         ))
                                         .map_err(into_error)
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                         .execute([&key, &value])
                                         .map_err(into_error)
-                                        .caused_by(trc::location!())?;
+                                        .caused_by(crate::trc::location!())?;
                                     }
                                     MergeResult::Delete => {
                                         trx.prepare_cached(&format!(
@@ -134,10 +134,10 @@ impl SqliteStore {
                                             table
                                         ))
                                         .map_err(into_error)
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                         .execute([&key])
                                         .map_err(into_error)
-                                        .caused_by(trc::location!())?;
+                                        .caused_by(crate::trc::location!())?;
                                     }
                                     MergeResult::Skip => (),
                                 }
@@ -152,19 +152,19 @@ impl SqliteStore {
                                         table
                                     ))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .execute(params![&key, *by])
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?;
+                                    .caused_by(crate::trc::location!())?;
                                 } else {
                                     trx.prepare_cached(&format!(
                                         "UPDATE {table} SET v = v + ? WHERE k = ?"
                                     ))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .execute(params![*by, &key])
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?;
+                                    .caused_by(crate::trc::location!())?;
                                 }
                             }
                             ValueOp::AddAndGet(by) => {
@@ -178,19 +178,19 @@ impl SqliteStore {
                                         table
                                     ))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .query_row(params![&key, &*by], |row| row.get::<_, i64>(0))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                                 );
                             }
                             ValueOp::Clear => {
                                 trx.prepare_cached(&format!("DELETE FROM {} WHERE k = ?", table))
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .execute([&key])
                                     .map_err(into_error)
-                                    .caused_by(trc::location!())?;
+                                    .caused_by(crate::trc::location!())?;
                             }
                         }
                     }
@@ -207,17 +207,17 @@ impl SqliteStore {
                         if *set {
                             trx.prepare_cached("INSERT OR IGNORE INTO i (k) VALUES (?)")
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .execute([&key])
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         } else {
                             trx.prepare_cached("DELETE FROM i WHERE k = ?")
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .execute([&key])
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
                         }
                     }
                     Operation::Log { collection, set } => {
@@ -230,10 +230,10 @@ impl SqliteStore {
 
                         trx.prepare_cached("INSERT OR REPLACE INTO l (k, v) VALUES (?, ?)")
                             .map_err(into_error)
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .execute([&key, set])
                             .map_err(into_error)
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                     }
                     Operation::AssertValue {
                         class,
@@ -245,21 +245,21 @@ impl SqliteStore {
                         let matches = trx
                             .prepare_cached(&format!("SELECT v FROM {} WHERE k = ?", table))
                             .map_err(into_error)
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .query_row([&key], |row| {
                                 Ok(assert_value.matches(row.get_ref(0)?.as_bytes()?))
                             })
                             .optional()
                             .map_err(into_error)
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .unwrap_or_else(|| assert_value.is_none());
                         if !matches {
                             trx.rollback()
                                 .map_err(into_error)
-                                .caused_by(trc::location!())?;
-                            return Err(trc::StoreEvent::AssertValueFailed
+                                .caused_by(crate::trc::location!())?;
+                            return Err(crate::trc::StoreEvent::AssertValueFailed
                                 .into_err()
-                                .caused_by(trc::location!()));
+                                .caused_by(crate::trc::location!()));
                         }
                     }
                 }
@@ -270,20 +270,20 @@ impl SqliteStore {
         .await
     }
 
-    pub(crate) async fn purge_store(&self) -> trc::Result<()> {
+    pub(crate) async fn purge_store(&self) -> crate::trc::Result<()> {
         let conn = self
             .conn_pool
             .get()
             .map_err(into_error)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         self.spawn_worker(move || {
             for subspace in [SUBSPACE_QUOTA, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER] {
                 conn.prepare_cached(&format!("DELETE FROM {} WHERE v = 0", char::from(subspace),))
                     .map_err(into_error)
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .execute([])
                     .map_err(into_error)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
 
             Ok(())
@@ -291,22 +291,26 @@ impl SqliteStore {
         .await
     }
 
-    pub(crate) async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub(crate) async fn delete_range(
+        &self,
+        from: impl Key,
+        to: impl Key,
+    ) -> crate::trc::Result<()> {
         let conn = self
             .conn_pool
             .get()
             .map_err(into_error)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         self.spawn_worker(move || {
             conn.prepare_cached(&format!(
                 "DELETE FROM {} WHERE k >= ? AND k < ?",
                 char::from(from.subspace()),
             ))
             .map_err(into_error)
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .execute([from.serialize(0), to.serialize(0)])
             .map_err(into_error)
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
             Ok(())
         })

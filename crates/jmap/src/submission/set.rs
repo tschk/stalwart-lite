@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{
+use crate::common::{
     Server,
     config::smtp::queue::QueueName,
     listener::{ServerInstance, stream::NullIo},
     storage::index::ObjectIndexBuilder,
 };
-use email::{
+use crate::email::{
     identity::Identity,
     message::metadata::{ArchivedMetadataHeaderName, ArchivedMetadataHeaderValue, MessageMetadata},
     submission::{Address, Delivered, DeliveryStatus, EmailSubmission, UndoStatus},
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::email_submission::{self, EmailSubmissionProperty, EmailSubmissionValue},
@@ -27,21 +27,21 @@ use jmap_proto::{
     },
     types::state::State,
 };
-use jmap_tools::{Key, Value};
-use smtp::{
+use crate::smtp::{
     core::{Session, SessionData},
     queue::spool::SmtpSpool,
 };
-use smtp_proto::{MailFrom, RcptTo, request::parser::Rfc5321Parser};
-use std::{borrow::Cow, future::Future};
-use std::{collections::HashMap, sync::Arc, time::Duration};
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder, now},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::EmailField, id::Id};
-use utils::{map::vec_map::VecMap, sanitize_email};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::EmailField, id::Id};
+use crate::utils::{map::vec_map::VecMap, sanitize_email};
+use jmap_tools::{Key, Value};
+use smtp_proto::{MailFrom, RcptTo, request::parser::Rfc5321Parser};
+use std::{borrow::Cow, future::Future};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 pub trait EmailSubmissionSet: Sync + Send {
     fn email_submission_set<'x>(
@@ -49,7 +49,7 @@ pub trait EmailSubmissionSet: Sync + Send {
         request: SetRequest<'x, email_submission::EmailSubmission>,
         instance: &Arc<ServerInstance>,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
-    ) -> impl Future<Output = trc::Result<SetResponse<email_submission::EmailSubmission>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<email_submission::EmailSubmission>>> + Send;
 
     fn send_message(
         &self,
@@ -58,7 +58,7 @@ pub trait EmailSubmissionSet: Sync + Send {
         instance: &Arc<ServerInstance>,
         object: Value<'_, EmailSubmissionProperty, EmailSubmissionValue>,
     ) -> impl Future<
-        Output = trc::Result<Result<EmailSubmission, SetError<EmailSubmissionProperty>>>,
+        Output = crate::trc::Result<Result<EmailSubmission, SetError<EmailSubmissionProperty>>>,
     > + Send;
 }
 
@@ -68,7 +68,7 @@ impl EmailSubmissionSet for Server {
         mut request: SetRequest<'x, email_submission::EmailSubmission>,
         instance: &Arc<ServerInstance>,
         next_call: &mut Option<Call<RequestMethod<'x>>>,
-    ) -> trc::Result<SetResponse<email_submission::EmailSubmission>> {
+    ) -> crate::trc::Result<SetResponse<email_submission::EmailSubmission>> {
         let account_id = request.account_id.document_id();
         let mut response = SetResponse::from_request(&request, self.core.jmap.set_max_objects)?;
         let will_destroy = request.unwrap_destroy().into_valid().collect::<Vec<_>>();
@@ -93,13 +93,13 @@ impl EmailSubmissionSet for Server {
                         .store()
                         .assign_document_ids(account_id, Collection::EmailSubmission, 1)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     batch
                         .with_account_id(account_id)
                         .with_collection(Collection::EmailSubmission)
                         .with_document(document_id)
                         .custom(ObjectIndexBuilder::<(), _>::new().with_changes(submission))
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .commit_point();
                     response.created(id, document_id);
                 }
@@ -130,7 +130,7 @@ impl EmailSubmissionSet for Server {
             {
                 submission
                     .into_deserialized::<EmailSubmission>()
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
             } else {
                 response.not_updated.append(id, SetError::not_found());
                 continue 'update;
@@ -184,7 +184,7 @@ impl EmailSubmissionSet for Server {
                                     .with_current(submission)
                                     .with_changes(new_submission),
                             )
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .commit_point();
                         response.updated.append(id, None);
                     } else {
@@ -235,10 +235,10 @@ impl EmailSubmissionSet for Server {
                         ObjectIndexBuilder::<_, ()>::new().with_current(
                             submission
                                 .to_unarchived::<EmailSubmission>()
-                                .caused_by(trc::location!())?,
+                                .caused_by(crate::trc::location!())?,
                         ),
                     )
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .commit_point();
                 response.destroyed.push(id);
             } else {
@@ -252,7 +252,7 @@ impl EmailSubmissionSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             response.new_state = State::Exact(change_id).into();
         }
 
@@ -323,7 +323,7 @@ impl EmailSubmissionSet for Server {
         response: &SetResponse<email_submission::EmailSubmission>,
         instance: &Arc<ServerInstance>,
         object: Value<'_, EmailSubmissionProperty, EmailSubmissionValue>,
-    ) -> trc::Result<Result<EmailSubmission, SetError<EmailSubmissionProperty>>> {
+    ) -> crate::trc::Result<Result<EmailSubmission, SetError<EmailSubmissionProperty>>> {
         let mut submission = EmailSubmission {
             email_id: u32::MAX,
             identity_id: u32::MAX,
@@ -478,7 +478,7 @@ impl EmailSubmissionSet for Server {
         {
             identity
                 .unarchive::<Identity>()
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .email
                 .to_string()
         } else {
@@ -526,7 +526,7 @@ impl EmailSubmissionSet for Server {
         };
         let metadata = metadata_
             .unarchive::<MessageMetadata>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Add recipients to envelope if missing
         let mut bcc_header = None;
@@ -646,7 +646,7 @@ impl EmailSubmissionSet for Server {
             SessionData::local(
                 self.get_access_token(account_id)
                     .await
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
                 None,
                 vec![],
                 vec![],
@@ -681,7 +681,7 @@ impl EmailSubmissionSet for Server {
             if has_success {
                 session.data.message = message;
                 let response = session.queue_message().await;
-                if let smtp::core::State::Accepted(queue_id) = session.state {
+                if let crate::smtp::core::State::Accepted(queue_id) = session.state {
                     Ok((true, responses, Some(queue_id)))
                 } else {
                     Err(
@@ -732,10 +732,12 @@ impl EmailSubmissionSet for Server {
                 Ok(Ok(submission))
             }
             Ok(Err(err)) => Ok(Err(err)),
-            Err(err) => Err(trc::EventType::Server(trc::ServerEvent::ThreadError)
-                .reason(err)
-                .caused_by(trc::location!())
-                .details("Join Error")),
+            Err(err) => Err(
+                crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
+                    .reason(err)
+                    .caused_by(crate::trc::location!())
+                    .details("Join Error"),
+            ),
         }
     }
 }

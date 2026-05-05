@@ -10,10 +10,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::config::telemetry::ConsoleTracer;
+use crate::common::config::telemetry::ConsoleTracer;
+use crate::trc::{ipc::subscriber::SubscriberBuilder, serializers::text::FmtWriter};
 use std::io::Write;
 use tokio::io::AsyncWrite;
-use trc::{ipc::subscriber::SubscriberBuilder, serializers::text::FmtWriter};
 
 pub(crate) fn spawn_console_tracer(builder: SubscriberBuilder, settings: ConsoleTracer) {
     let (_, mut rx) = builder.register();

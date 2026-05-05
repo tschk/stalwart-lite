@@ -19,23 +19,23 @@ pub use rkyv;
 pub use roaring;
 pub use xxhash_rust;
 
+use crate::utils::config::cron::SimpleCron;
 use ahash::AHashMap;
 use backend::{fs::FsStore, http::HttpStore, memory::StaticMemoryStore};
 use std::{borrow::Cow, sync::Arc};
-use utils::config::cron::SimpleCron;
 use write::ValueClass;
 
-use crate::backend::{elastic::ElasticSearchStore, meili::MeiliSearchStore};
+use crate::store::backend::{elastic::ElasticSearchStore, meili::MeiliSearchStore};
 
 pub trait Deserialize: Sized + Sync + Send {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self>;
-    fn deserialize_owned(bytes: Vec<u8>) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self>;
+    fn deserialize_owned(bytes: Vec<u8>) -> crate::trc::Result<Self> {
         Self::deserialize(&bytes)
     }
 }
 
 pub trait Serialize {
-    fn serialize(&self) -> trc::Result<Vec<u8>>;
+    fn serialize(&self) -> crate::trc::Result<Vec<u8>>;
 }
 
 pub trait SerializeInfallible {
@@ -771,18 +771,18 @@ impl std::fmt::Debug for Store {
     }
 }
 
-impl From<Value<'_>> for trc::Value {
+impl From<Value<'_>> for crate::trc::Value {
     fn from(value: Value) -> Self {
         match value {
-            Value::Integer(v) => trc::Value::Int(v),
-            Value::Bool(v) => trc::Value::Bool(v),
-            Value::Float(v) => trc::Value::Float(v),
-            Value::Text(v) => trc::Value::String(match v {
+            Value::Integer(v) => crate::trc::Value::Int(v),
+            Value::Bool(v) => crate::trc::Value::Bool(v),
+            Value::Float(v) => crate::trc::Value::Float(v),
+            Value::Text(v) => crate::trc::Value::String(match v {
                 Cow::Borrowed(v) => v.into(),
                 Cow::Owned(v) => v.into(),
             }),
-            Value::Blob(v) => trc::Value::Bytes(v.into_owned()),
-            Value::Null => trc::Value::None,
+            Value::Blob(v) => crate::trc::Value::Bytes(v.into_owned()),
+            Value::Null => crate::trc::Value::None,
         }
     }
 }

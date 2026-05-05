@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::config::Config;
+use crate::utils::config::Config;
 use mail_auth::{MX, ResolverCache, Txt};
 use quick_cache::{
     Equivalent, Weighter,

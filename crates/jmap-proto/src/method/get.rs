@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::JmapObject,
     request::{
         IntoValid, MaybeInvalid,
@@ -13,9 +13,9 @@ use crate::{
     },
     types::state::State,
 };
+use crate::types::id::Id;
 use jmap_tools::Value;
 use serde::{Deserialize, Deserializer};
-use types::id::Id;
 
 #[derive(Debug, Clone)]
 pub struct GetRequest<T: JmapObject> {
@@ -116,13 +116,16 @@ impl<T: JmapObject> GetRequest<T> {
         }
     }
 
-    pub fn unwrap_ids(&mut self, max_objects_in_get: usize) -> trc::Result<Option<Vec<T::Id>>> {
+    pub fn unwrap_ids(
+        &mut self,
+        max_objects_in_get: usize,
+    ) -> crate::trc::Result<Option<Vec<T::Id>>> {
         if let Some(ids) = self.ids.take() {
             let ids = ids.unwrap();
             if ids.len() <= max_objects_in_get {
                 Ok(Some(ids.into_valid().collect::<Vec<_>>()))
             } else {
-                Err(trc::JmapEvent::RequestTooLarge.into_err())
+                Err(crate::trc::JmapEvent::RequestTooLarge.into_err())
             }
         } else {
             Ok(None)

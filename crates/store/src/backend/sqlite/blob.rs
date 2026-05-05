@@ -15,7 +15,7 @@ impl SqliteStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let conn = self.conn_pool.get().map_err(into_error)?;
         self.spawn_worker(move || {
             let mut result = conn
@@ -41,7 +41,7 @@ impl SqliteStore {
         .await
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().map_err(into_error)?;
         self.spawn_worker(move || {
             conn.prepare_cached("INSERT OR REPLACE INTO t (k, v) VALUES (?, ?)")
@@ -53,7 +53,7 @@ impl SqliteStore {
         .await
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let conn = self.conn_pool.get().map_err(into_error)?;
         self.spawn_worker(move || {
             conn.prepare_cached("DELETE FROM t WHERE k = ?")

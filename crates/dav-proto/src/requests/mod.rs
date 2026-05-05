@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, RawElement, Token, tokenizer::Tokenizer},
     schema::Namespace,
 };
-use types::dead_property::{DeadElementTag, DeadProperty, DeadPropertyTag};
+use crate::types::dead_property::{DeadElementTag, DeadProperty, DeadPropertyTag};
 
 pub mod acl;
 pub mod lockinfo;
@@ -18,7 +18,7 @@ pub mod propfind;
 pub mod report;
 
 impl DavParser for DeadProperty {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut depth = 1;
         let mut items = DeadProperty::default();
 
@@ -111,14 +111,22 @@ impl From<&RawElement<'_>> for DeadElementTag {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use std::path::PathBuf;
+
+    use crate::dav_proto::{
         parser::{DavParser, tokenizer::Tokenizer},
         schema::request::{Acl, LockInfo, MkCol, PropFind, PropertyUpdate, Report},
     };
 
     #[test]
     fn parse_requests() {
-        for entry in std::fs::read_dir("resources/requests").unwrap() {
+        let resources = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("crates")
+            .join("dav-proto")
+            .join("resources")
+            .join("requests");
+
+        for entry in std::fs::read_dir(resources).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
 

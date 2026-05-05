@@ -5,12 +5,12 @@
  */
 
 use super::ArchivedResource;
-use crate::{
+use crate::common::{DavResources, Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::dav::{
     DavError, DavErrorCondition, DavResourceName, common::uri::DavUriResource,
     principal::propfind::PrincipalPropFind,
 };
-use common::{DavResources, Server, auth::AccessToken, sharing::EffectiveAcl};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders,
     schema::{
         property::{DavProperty, Privilege, WebDavProperty},
@@ -18,45 +18,47 @@ use dav_proto::{
         response::{Ace, BaseCondition, GrantDeny, Href, MultiStatus, Principal},
     },
 };
-use directory::{QueryParams, Type, backend::internal::manage::ManageDirectory};
-use groupware::RFC_3986;
-use groupware::{cache::GroupwareCache, calendar::Calendar, contact::AddressBook, file::FileNode};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use rkyv::vec::ArchivedVec;
-use store::{
+use crate::directory::{QueryParams, Type, backend::internal::manage::ManageDirectory};
+use crate::groupware::RFC_3986;
+use crate::groupware::{
+    cache::GroupwareCache, calendar::Calendar, contact::AddressBook, file::FileNode,
+};
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{ahash::AHashSet, roaring::RoaringBitmap, write::BatchBuilder};
-use trc::AddContext;
-use types::{
+use crate::store::{ahash::AHashSet, roaring::RoaringBitmap, write::BatchBuilder};
+use crate::trc::AddContext;
+use crate::types::{
     acl::{Acl, AclGrant, ArchivedAclGrant},
     collection::Collection,
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use hyper::StatusCode;
+use rkyv::vec::ArchivedVec;
 
 pub(crate) trait DavAclHandler: Sync + Send {
     fn handle_acl_request(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-        request: dav_proto::schema::request::Acl,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+        request: crate::dav_proto::schema::request::Acl,
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn handle_acl_prop_set(
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: AclPrincipalPropSet,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn validate_and_map_aces(
         &self,
         access_token: &AccessToken,
-        acl: dav_proto::schema::request::Acl,
+        acl: crate::dav_proto::schema::request::Acl,
         collection: Collection,
-    ) -> impl Future<Output = crate::Result<Vec<AclGrant>>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<Vec<AclGrant>>> + Send;
 
     fn resolve_ace(
         &self,
@@ -64,7 +66,7 @@ pub(crate) trait DavAclHandler: Sync + Send {
         account_id: u32,
         grants: &ArchivedVec<ArchivedAclGrant>,
         expand: Option<&PropFind>,
-    ) -> impl Future<Output = crate::Result<Vec<Ace>>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<Vec<Ace>>> + Send;
 }
 
 pub(crate) trait ResourceAcl {
@@ -74,7 +76,7 @@ pub(crate) trait ResourceAcl {
         is_member: bool,
         parent_id: Option<u32>,
         check_acls: impl Into<Bitmap<Acl>> + Send,
-    ) -> crate::Result<u32>;
+    ) -> crate::dav::Result<u32>;
 }
 
 impl DavAclHandler for Server {
@@ -82,8 +84,8 @@ impl DavAclHandler for Server {
         &self,
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
-        request: dav_proto::schema::request::Acl,
-    ) -> crate::Result<HttpResponse> {
+        request: crate::dav_proto::schema::request::Acl,
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -101,7 +103,7 @@ impl DavAclHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, collection.into())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resource_
             .resource
             .and_then(|r| resources.by_path(r))
@@ -119,11 +121,11 @@ impl DavAclHandler for Server {
                 resource.document_id(),
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
-        let container =
-            ArchivedResource::from_archive(&archive, collection).caused_by(trc::location!())?;
+        let container = ArchivedResource::from_archive(&archive, collection)
+            .caused_by(crate::trc::location!())?;
 
         // Validate ACL
         let acls = container.acls().unwrap();
@@ -147,7 +149,7 @@ impl DavAclHandler for Server {
                 ArchivedResource::Calendar(calendar) => {
                     let mut new_calendar = calendar
                         .deserialize::<Calendar>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     new_calendar.acls = grants;
                     new_calendar
                         .update(
@@ -157,12 +159,12 @@ impl DavAclHandler for Server {
                             resource.document_id(),
                             &mut batch,
                         )
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 ArchivedResource::AddressBook(book) => {
                     let mut new_book = book
                         .deserialize::<AddressBook>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     new_book.acls = grants;
                     new_book
                         .update(
@@ -172,11 +174,12 @@ impl DavAclHandler for Server {
                             resource.document_id(),
                             &mut batch,
                         )
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 ArchivedResource::FileNode(node) => {
-                    let mut new_node =
-                        node.deserialize::<FileNode>().caused_by(trc::location!())?;
+                    let mut new_node = node
+                        .deserialize::<FileNode>()
+                        .caused_by(crate::trc::location!())?;
                     new_node.acls = grants;
                     new_node
                         .update(
@@ -186,12 +189,14 @@ impl DavAclHandler for Server {
                             resource.document_id(),
                             &mut batch,
                         )
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 _ => unreachable!(),
             }
 
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(HttpResponse::new(StatusCode::OK))
@@ -202,7 +207,7 @@ impl DavAclHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         mut request: AclPrincipalPropSet,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         let uri = self
             .validate_uri(access_token, headers.uri)
             .await
@@ -210,7 +215,7 @@ impl DavAclHandler for Server {
         let uri = self
             .map_uri_resource(access_token, uri)
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
         if !matches!(
@@ -228,26 +233,26 @@ impl DavAclHandler for Server {
                 uri.resource,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
         let acls = match uri.collection {
             Collection::FileNode => {
                 &archive
                     .unarchive::<FileNode>()
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .acls
             }
             Collection::AddressBook => {
                 &archive
                     .unarchive::<AddressBook>()
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .acls
             }
             Collection::Calendar => {
                 &archive
                     .unarchive::<Calendar>()
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .acls
             }
             _ => unreachable!(),
@@ -287,9 +292,9 @@ impl DavAclHandler for Server {
     async fn validate_and_map_aces(
         &self,
         access_token: &AccessToken,
-        acl: dav_proto::schema::request::Acl,
+        acl: crate::dav_proto::schema::request::Acl,
         collection: Collection,
-    ) -> crate::Result<Vec<AclGrant>> {
+    ) -> crate::dav::Result<Vec<AclGrant>> {
         let mut grants = Vec::with_capacity(acl.aces.len());
         for ace in acl.aces {
             if ace.invert {
@@ -426,7 +431,7 @@ impl DavAclHandler for Server {
                 .directory()
                 .query(QueryParams::id(principal_id).with_return_member_of(false))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or_else(|| {
                     DavError::Condition(DavErrorCondition::new(
                         StatusCode::FORBIDDEN,
@@ -455,7 +460,7 @@ impl DavAclHandler for Server {
         account_id: u32,
         grants: &ArchivedVec<ArchivedAclGrant>,
         expand: Option<&PropFind>,
-    ) -> crate::Result<Vec<Ace>> {
+    ) -> crate::dav::Result<Vec<Ace>> {
         let mut aces = Vec::with_capacity(grants.len());
         if access_token.is_member(account_id)
             || grants.effective_acl(access_token).contains(Acl::Share)
@@ -477,7 +482,7 @@ impl DavAclHandler for Server {
                         .store()
                         .get_principal_name(grant_account_id)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .unwrap_or_else(|| format!("_{grant_account_id}"));
 
                     Principal::Href(Href(format!(
@@ -507,7 +512,7 @@ impl ResourceAcl for DavResources {
         is_member: bool,
         parent_id: Option<u32>,
         check_acls: impl Into<Bitmap<Acl>> + Send,
-    ) -> crate::Result<u32> {
+    ) -> crate::dav::Result<u32> {
         match parent_id {
             Some(parent_id) => {
                 if is_member || self.has_access_to_container(access_token, parent_id, check_acls) {

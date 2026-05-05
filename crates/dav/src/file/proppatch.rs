@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken, sharing::EffectiveAcl};
+use crate::dav::{
     DavError, DavMethod, PropStatBuilder,
     common::{
         ETag, ExtractETag,
@@ -13,8 +14,7 @@ use crate::{
     },
     file::DavFileResource,
 };
-use common::{Server, auth::AccessToken, sharing::EffectiveAcl};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{
         property::{DavProperty, DavValue, ResourceType, WebDavProperty},
@@ -22,19 +22,19 @@ use dav_proto::{
         response::{BaseCondition, MultiStatus, Response},
     },
 };
-use groupware::{cache::GroupwareCache, file::FileNode};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::BatchBuilder;
-use store::{
+use crate::groupware::{cache::GroupwareCache, file::FileNode};
+use crate::http_proto::HttpResponse;
+use crate::store::write::BatchBuilder;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait FilePropPatchRequestHandler: Sync + Send {
     fn handle_file_proppatch_request(
@@ -42,7 +42,7 @@ pub(crate) trait FilePropPatchRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PropertyUpdate,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn apply_file_properties(
         &self,
@@ -59,7 +59,7 @@ impl FilePropPatchRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         mut request: PropertyUpdate,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -70,7 +70,7 @@ impl FilePropPatchRequestHandler for Server {
         let files = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = files.map_resource(&resource_)?;
 
         if !request.has_changes() {
@@ -86,11 +86,11 @@ impl FilePropPatchRequestHandler for Server {
                 resource.resource,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
         let node = node_
             .to_unarchived::<FileNode>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Validate ACL
         if !access_token.is_member(account_id)
@@ -121,7 +121,9 @@ impl FilePropPatchRequestHandler for Server {
         .await?;
 
         // Deserialize
-        let mut new_node = node.deserialize::<FileNode>().caused_by(trc::location!())?;
+        let mut new_node = node
+            .deserialize::<FileNode>()
+            .caused_by(crate::trc::location!())?;
 
         // Remove properties
         let mut items = PropStatBuilder::default();
@@ -151,9 +153,11 @@ impl FilePropPatchRequestHandler for Server {
                     resource.resource,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .etag();
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
             etag
         } else {
             node_.etag().into()

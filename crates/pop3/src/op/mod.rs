@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::listener::SessionStream;
+use crate::common::listener::SessionStream;
 
-use crate::{
+use crate::pop3::{
     Session,
     protocol::{Mechanism, response::Response},
 };
@@ -17,19 +17,19 @@ pub mod fetch;
 pub mod list;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_capa(&mut self) -> trc::Result<()> {
+    pub async fn handle_capa(&mut self) -> crate::trc::Result<()> {
         let mechanisms = if self.stream.is_tls() || self.server.core.imap.allow_plain_auth {
             vec![Mechanism::Plain, Mechanism::OAuthBearer, Mechanism::XOauth2]
         } else {
             vec![Mechanism::OAuthBearer, Mechanism::XOauth2]
         };
 
-        trc::event!(
-            Pop3(trc::Pop3Event::Capabilities),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Capabilities),
             SpanId = self.session_id,
             Tls = self.stream.is_tls(),
             Strict = !self.server.core.imap.allow_plain_auth,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         self.write_bytes(
@@ -42,21 +42,21 @@ impl<T: SessionStream> Session<T> {
         .await
     }
 
-    pub async fn handle_stls(&mut self) -> trc::Result<()> {
-        trc::event!(
-            Pop3(trc::Pop3Event::StartTls),
+    pub async fn handle_stls(&mut self) -> crate::trc::Result<()> {
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::StartTls),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         self.write_ok("Begin TLS negotiation now").await
     }
 
-    pub async fn handle_utf8(&mut self) -> trc::Result<()> {
-        trc::event!(
-            Pop3(trc::Pop3Event::Utf8),
+    pub async fn handle_utf8(&mut self) -> crate::trc::Result<()> {
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Utf8),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         self.write_ok("UTF8 enabled").await

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::collection::SyncCollection;
+use crate::types::collection::SyncCollection;
+use crate::utils::map::bitmap::{Bitmap, BitmapItem};
 use jmap_tools::{Element, Property, Value};
 use serde::Serialize;
 use std::{fmt::Display, str::FromStr};
-use utils::map::bitmap::{Bitmap, BitmapItem};
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Copy, Serialize, PartialOrd, Ord)]
 #[repr(u8)]

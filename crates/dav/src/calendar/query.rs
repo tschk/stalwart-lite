@@ -5,7 +5,8 @@
  */
 
 use super::freebusy::freebusy_in_range;
-use crate::{
+use crate::common::{DavResource, Server, auth::AccessToken};
+use crate::dav::{
     DavError,
     common::{
         CalendarFilter, DavQuery,
@@ -13,6 +14,25 @@ use crate::{
         uri::DavUriResource,
     },
 };
+use crate::dav_proto::{
+    RequestHeaders,
+    schema::{
+        property::{CalDavProperty, CalendarData, DavProperty},
+        request::{CalendarQuery, Filter, FilterOp, PropFind, Timezone},
+        response::MultiStatus,
+    },
+};
+use crate::groupware::{
+    cache::GroupwareCache,
+    calendar::{ArchivedCalendarEvent, expand::CalendarEventExpansion},
+};
+use crate::http_proto::HttpResponse;
+use crate::store::{
+    ahash::{AHashMap, AHashSet},
+    write::serialize::rkyv_deserialize,
+};
+use crate::trc::AddContext;
+use crate::types::{TimeRange, acl::Acl, collection::SyncCollection};
 use calcard::{
     common::{PartialDateTime, timezone::Tz},
     icalendar::{
@@ -22,28 +42,8 @@ use calcard::{
         ICalendarValue,
     },
 };
-use common::{DavResource, Server, auth::AccessToken};
-use dav_proto::{
-    RequestHeaders,
-    schema::{
-        property::{CalDavProperty, CalendarData, DavProperty},
-        request::{CalendarQuery, Filter, FilterOp, PropFind, Timezone},
-        response::MultiStatus,
-    },
-};
-use groupware::{
-    cache::GroupwareCache,
-    calendar::{ArchivedCalendarEvent, expand::CalendarEventExpansion},
-};
-use http_proto::HttpResponse;
 use hyper::StatusCode;
 use std::{fmt::Write, slice::Iter, str::FromStr};
-use store::{
-    ahash::{AHashMap, AHashSet},
-    write::serialize::rkyv_deserialize,
-};
-use trc::AddContext;
-use types::{TimeRange, acl::Acl, collection::SyncCollection};
 
 pub(crate) trait CalendarQueryRequestHandler: Sync + Send {
     fn handle_calendar_query_request(
@@ -51,7 +51,7 @@ pub(crate) trait CalendarQueryRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: CalendarQuery,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarQueryRequestHandler for Server {
@@ -60,7 +60,7 @@ impl CalendarQueryRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: CalendarQuery,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -70,7 +70,7 @@ impl CalendarQueryRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let Some(resource) = resources.by_path(
             resource_
                 .resource
@@ -227,8 +227,8 @@ impl CalendarQueryHandler {
                         .data
                         .expand(default_tz, max_time_range)
                         .unwrap_or_else(|| {
-                            trc::event!(
-                                Calendar(trc::CalendarEvent::RuleExpansionError),
+                            crate::trc::event!(
+                                Calendar(crate::trc::CalendarEvent::RuleExpansionError),
                                 Reason = "chrono error",
                                 Details = event.data.event.to_string(),
                             );

@@ -4,25 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::auth::oauth::OAuthStatus;
-use common::{
+use crate::common::{
     KV_OAUTH, Server,
     auth::{
         AccessToken,
         oauth::{CLIENT_ID_MAX_LEN, DEVICE_CODE_LEN, USER_CODE_ALPHABET, USER_CODE_LEN},
     },
 };
-use http_proto::*;
-use serde::Deserialize;
-use serde_json::json;
-use std::future::Future;
-use std::sync::Arc;
-use store::{
+use crate::http::auth::oauth::OAuthStatus;
+use crate::http_proto::*;
+use crate::store::{
     Serialize,
     dispatch::lookup::KeyValue,
     write::{Archive, Archiver},
 };
-use store::{
+use crate::store::{
     rand::{
         Rng,
         distr::{Alphanumeric, StandardUniform},
@@ -30,7 +26,11 @@ use store::{
     },
     write::AlignedBytes,
 };
-use trc::AddContext;
+use crate::trc::AddContext;
+use serde::Deserialize;
+use serde_json::json;
+use std::future::Future;
+use std::sync::Arc;
 
 use super::{DeviceAuthResponse, FormData, MAX_POST_LEN, OAuthCode, OAuthCodeRequest};
 
@@ -52,19 +52,19 @@ pub trait OAuthApiHandler: Sync + Send {
         &self,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_device_auth(
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_oauth_metadata(
         &self,
         req: HttpRequest,
         session: HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl OAuthApiHandler for Server {
@@ -72,11 +72,12 @@ impl OAuthApiHandler for Server {
         &self,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let request =
             serde_json::from_slice::<OAuthCodeRequest>(body.as_deref().unwrap_or_default())
                 .map_err(|err| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                        .from_json_error(err)
                 })?;
 
         let response = match request {
@@ -87,14 +88,14 @@ impl OAuthApiHandler for Server {
             } => {
                 // Validate clientId
                 if client_id.len() > CLIENT_ID_MAX_LEN {
-                    return Err(trc::ManageEvent::Error
+                    return Err(crate::trc::ManageEvent::Error
                         .into_err()
                         .details("Client ID is invalid."));
                 } else if redirect_uri
                     .as_ref()
                     .is_some_and(|uri| uri.starts_with("http://"))
                 {
-                    return Err(trc::ManageEvent::Error
+                    return Err(crate::trc::ManageEvent::Error
                         .into_err()
                         .details("Redirect URI must be HTTPS."));
                 }
@@ -116,7 +117,7 @@ impl OAuthApiHandler for Server {
                 })
                 .untrusted()
                 .serialize()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 // Insert client code
                 self.core
@@ -163,7 +164,7 @@ impl OAuthApiHandler for Server {
                 {
                     let oauth = auth_code_
                         .unarchive::<OAuthCode>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     if oauth.status == OAuthStatus::Pending {
                         let new_oauth_code = OAuthCode {
                             status: OAuthStatus::Authorized,
@@ -192,7 +193,7 @@ impl OAuthApiHandler for Server {
                                     Archiver::new(new_oauth_code)
                                         .untrusted()
                                         .serialize()
-                                        .caused_by(trc::location!())?,
+                                        .caused_by(crate::trc::location!())?,
                                 )
                                 .expires(self.core.oauth.oauth_expiry_auth_code),
                             )
@@ -213,14 +214,14 @@ impl OAuthApiHandler for Server {
         &self,
         req: &mut HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Parse form
         let mut form_data = FormData::from_request(req, MAX_POST_LEN, session.session_id).await?;
         let client_id = form_data
             .remove("client_id")
             .filter(|client_id| client_id.len() <= CLIENT_ID_MAX_LEN)
             .ok_or_else(|| {
-                trc::ResourceEvent::BadParameters
+                crate::trc::ResourceEvent::BadParameters
                     .into_err()
                     .details("Client ID is missing.")
             })?;
@@ -257,7 +258,7 @@ impl OAuthApiHandler for Server {
         })
         .untrusted()
         .serialize()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Insert device code
         self.core
@@ -299,7 +300,7 @@ impl OAuthApiHandler for Server {
         &self,
         req: HttpRequest,
         session: HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let base_url = HttpContext::new(&session, &req)
             .resolve_response_url(self)
             .await

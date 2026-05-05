@@ -9,9 +9,10 @@ use super::{
     Error, ErrorDetails, HostResponse, Message, MessageSource, QueueEnvelope, RCPT_DSN_SENT,
     Recipient, Status,
 };
-use crate::queue::{MessageWrapper, UnexpectedResponse};
-use crate::reporting::SmtpReporting;
-use common::Server;
+use crate::common::Server;
+use crate::smtp::queue::{MessageWrapper, UnexpectedResponse};
+use crate::smtp::reporting::SmtpReporting;
+use crate::store::write::now;
 use mail_builder::MessageBuilder;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::content_type::ContentType;
@@ -22,7 +23,6 @@ use smtp_proto::{
 };
 use std::fmt::Write;
 use std::future::Future;
-use store::write::now;
 
 pub trait SendDsn: Sync + Send {
     fn send_dsn(&self, message: &mut MessageWrapper) -> impl Future<Output = ()> + Send;
@@ -74,8 +74,8 @@ impl SendDsn for Server {
 
             match &rcpt.status {
                 Status::Completed(response) => {
-                    trc::event!(
-                        Delivery(trc::DeliveryEvent::DsnSuccess),
+                    crate::trc::event!(
+                        Delivery(crate::trc::DeliveryEvent::DsnSuccess),
                         SpanId = message.span_id,
                         To = rcpt.address.clone(),
                         Hostname = response.hostname.clone(),
@@ -84,22 +84,22 @@ impl SendDsn for Server {
                     );
                 }
                 Status::TemporaryFailure(response) if rcpt.notify.due <= now => {
-                    trc::event!(
-                        Delivery(trc::DeliveryEvent::DsnTempFail),
+                    crate::trc::event!(
+                        Delivery(crate::trc::DeliveryEvent::DsnTempFail),
                         SpanId = message.span_id,
                         To = rcpt.address.clone(),
                         Hostname = response.entity.clone(),
                         Details = response.details.to_string(),
-                        NextRetry = trc::Value::Timestamp(rcpt.retry.due),
+                        NextRetry = crate::trc::Value::Timestamp(rcpt.retry.due),
                         Expires = rcpt
                             .expiration_time(message.message.created)
-                            .map(trc::Value::Timestamp),
+                            .map(crate::trc::Value::Timestamp),
                         Total = rcpt.retry.inner,
                     );
                 }
                 Status::PermanentFailure(response) => {
-                    trc::event!(
-                        Delivery(trc::DeliveryEvent::DsnPermFail),
+                    crate::trc::event!(
+                        Delivery(crate::trc::DeliveryEvent::DsnPermFail),
                         SpanId = message.span_id,
                         To = rcpt.address.clone(),
                         Hostname = response.entity.clone(),
@@ -108,15 +108,15 @@ impl SendDsn for Server {
                     );
                 }
                 Status::Scheduled if rcpt.notify.due <= now => {
-                    trc::event!(
-                        Delivery(trc::DeliveryEvent::DsnTempFail),
+                    crate::trc::event!(
+                        Delivery(crate::trc::DeliveryEvent::DsnTempFail),
                         SpanId = message.span_id,
                         To = rcpt.address.clone(),
                         Details = "Concurrency limited",
-                        NextRetry = trc::Value::Timestamp(rcpt.retry.due),
+                        NextRetry = crate::trc::Value::Timestamp(rcpt.retry.due),
                         Expires = rcpt
                             .expiration_time(message.message.created)
-                            .map(trc::Value::Timestamp),
+                            .map(crate::trc::Value::Timestamp),
                         Total = rcpt.retry.inner,
                     );
                 }
@@ -344,20 +344,20 @@ impl MessageWrapper {
                 String::from_utf8(buf).unwrap_or_default()
             }
             Ok(None) => {
-                trc::event!(
-                    Queue(trc::QueueEvent::BlobNotFound),
+                crate::trc::event!(
+                    Queue(crate::trc::QueueEvent::BlobNotFound),
                     SpanId = self.span_id,
                     BlobId = self.message.blob_hash.to_hex(),
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
 
                 String::new()
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(self.span_id)
                         .details("Failed to fetch blobId")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 );
 
                 String::new()
@@ -416,8 +416,8 @@ impl MessageWrapper {
         }
 
         if !is_double_bounce.is_empty() {
-            trc::event!(
-                Delivery(trc::DeliveryEvent::DoubleBounce),
+            crate::trc::event!(
+                Delivery(crate::trc::DeliveryEvent::DoubleBounce),
                 SpanId = self.span_id,
                 To = is_double_bounce
             );

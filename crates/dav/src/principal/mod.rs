@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::auth::AccessToken;
-use dav_proto::schema::response::Href;
-use groupware::RFC_3986;
+use crate::common::auth::AccessToken;
+use crate::dav_proto::schema::response::Href;
+use crate::groupware::RFC_3986;
 
-use crate::DavResourceName;
+use crate::dav::DavResourceName;
 
 pub mod matching;
 pub mod propfind;

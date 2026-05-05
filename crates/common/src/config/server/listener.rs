@@ -11,17 +11,17 @@ use rustls::{
     crypto::ring::{ALL_CIPHER_SUITES, default_provider},
 };
 
-use tokio::net::TcpSocket;
-use tokio_rustls::TlsAcceptor;
-use utils::{
+use crate::utils::{
     config::{
         Config,
         utils::{AsKey, ParseValue},
     },
     snowflake::SnowflakeIdGenerator,
 };
+use tokio::net::TcpSocket;
+use tokio_rustls::TlsAcceptor;
 
-use crate::{
+use crate::common::{
     Inner,
     listener::{TcpAcceptor, tls::CertificateResolver},
 };

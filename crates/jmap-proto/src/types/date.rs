@@ -239,7 +239,7 @@ impl From<u64> for UTCDate {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::date::UTCDate;
+    use crate::jmap_proto::types::date::UTCDate;
     use std::str::FromStr;
 
     #[test]

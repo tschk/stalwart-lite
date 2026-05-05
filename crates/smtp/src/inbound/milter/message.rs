@@ -5,21 +5,21 @@
  */
 
 use super::{Action, Error, Macros, Modification};
-use crate::{
-    core::{Session, SessionAddress, SessionData},
-    inbound::{FilterResponse, milter::MilterClient},
-};
-use common::{
+use crate::common::{
     DAEMON_NAME,
     config::smtp::session::{Milter, Stage},
     listener::SessionStream,
 };
+use crate::smtp::{
+    core::{Session, SessionAddress, SessionData},
+    inbound::{FilterResponse, milter::MilterClient},
+};
+use crate::trc::MilterEvent;
+use crate::utils::DomainPart;
 use mail_auth::AuthenticatedMessage;
 use smtp_proto::{IntoString, request::parser::Rfc5321Parser};
 use std::{borrow::Cow, time::Instant};
 use tokio::io::{AsyncRead, AsyncWrite};
-use trc::MilterEvent;
-use utils::DomainPart;
 
 enum Rejection {
     Action(Action),
@@ -52,7 +52,7 @@ impl<T: SessionStream> Session<T> {
             let time = Instant::now();
             match self.connect_and_run(milter, message).await {
                 Ok(new_modifications) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Milter(MilterEvent::ActionAccept),
                         SpanId = self.data.session_id,
                         Id = milter.id.to_string(),
@@ -75,7 +75,7 @@ impl<T: SessionStream> Session<T> {
                     }
                 }
                 Err(Rejection::Action(action)) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Milter(match &action {
                             Action::Discard => MilterEvent::ActionDiscard,
                             Action::Reject => MilterEvent::ActionReject,
@@ -116,25 +116,28 @@ impl<T: SessionStream> Session<T> {
                 }
                 Err(Rejection::Error(err)) => {
                     let (code, details) = match err {
-                        Error::Io(details) => {
-                            (MilterEvent::IoError, trc::Value::from(details.to_string()))
-                        }
+                        Error::Io(details) => (
+                            MilterEvent::IoError,
+                            crate::trc::Value::from(details.to_string()),
+                        ),
                         Error::FrameTooLarge(size) => {
-                            (MilterEvent::FrameTooLarge, trc::Value::from(size))
+                            (MilterEvent::FrameTooLarge, crate::trc::Value::from(size))
                         }
                         Error::FrameInvalid(bytes) => {
-                            (MilterEvent::FrameInvalid, trc::Value::from(bytes))
+                            (MilterEvent::FrameInvalid, crate::trc::Value::from(bytes))
                         }
                         Error::Unexpected(response) => (
                             MilterEvent::UnexpectedResponse,
-                            trc::Value::from(response.to_string()),
+                            crate::trc::Value::from(response.to_string()),
                         ),
-                        Error::Timeout => (MilterEvent::Timeout, trc::Value::None),
-                        Error::TLSInvalidName => (MilterEvent::TlsInvalidName, trc::Value::None),
-                        Error::Disconnected => (MilterEvent::Disconnected, trc::Value::None),
+                        Error::Timeout => (MilterEvent::Timeout, crate::trc::Value::None),
+                        Error::TLSInvalidName => {
+                            (MilterEvent::TlsInvalidName, crate::trc::Value::None)
+                        }
+                        Error::Disconnected => (MilterEvent::Disconnected, crate::trc::Value::None),
                     };
 
-                    trc::event!(
+                    crate::trc::event!(
                         Milter(code),
                         SpanId = self.data.session_id,
                         Id = milter.id.to_string(),
@@ -319,7 +322,7 @@ impl SessionData {
                                 mail_from.dsn_info = addr.env_id.map(|e| e.into_owned());
                             }
                             Err(err) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Milter(MilterEvent::ParseError),
                                     SpanId = self.session_id,
                                     Details = "Failed to parse milter mailFrom parameters",
@@ -355,7 +358,7 @@ impl SessionData {
                                     rcpt.dsn_info = addr.orcpt.map(|e| e.into_owned());
                                 }
                                 Err(err) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Milter(MilterEvent::ParseError),
                                         SpanId = self.session_id,
                                         Details = "Failed to parse milter rcptTo parameters",

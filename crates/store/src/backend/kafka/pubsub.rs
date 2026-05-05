@@ -7,20 +7,20 @@
 use std::time::Duration;
 
 use super::{CustomContext, KafkaPubSub, LoggingConsumer};
-use crate::dispatch::pubsub::{Msg, PubSubStream};
+use crate::store::dispatch::pubsub::{Msg, PubSubStream};
+use crate::trc::{ClusterEvent, Error, EventType};
 use rdkafka::{
     Message,
     consumer::{CommitMode, Consumer, StreamConsumer},
     producer::FutureRecord,
 };
-use trc::{ClusterEvent, Error, EventType};
 
 pub struct KafkaPubSubStream {
     subs: LoggingConsumer,
 }
 
 impl KafkaPubSub {
-    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> trc::Result<()> {
+    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> crate::trc::Result<()> {
         self.producer
             .send(
                 FutureRecord::<(), [u8]>::to(topic).payload(message.as_slice()),
@@ -33,7 +33,7 @@ impl KafkaPubSub {
             })
     }
 
-    pub async fn subscribe(&self, topic: &'static str) -> trc::Result<PubSubStream> {
+    pub async fn subscribe(&self, topic: &'static str) -> crate::trc::Result<PubSubStream> {
         let subs: StreamConsumer<CustomContext> = self
             .consumer_builder
             .create_with_context(CustomContext)

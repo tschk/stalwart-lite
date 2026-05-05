@@ -5,28 +5,28 @@
  */
 
 use super::object::Object;
-use crate::{
+use crate::common::Server;
+use crate::email::mailbox::Mailbox;
+use crate::migration::{
     get_document_ids,
     object::{FromLegacy, Property, Value},
     v014::{SUBSPACE_BITMAP_TAG, SUBSPACE_BITMAP_TEXT},
 };
-use common::Server;
-use email::mailbox::Mailbox;
-use store::{
+use crate::store::{
     SUBSPACE_INDEXES, Serialize, U64_LEN, ValueKey, rand,
     write::{
         AlignedBytes, AnyKey, Archive, Archiver, BatchBuilder, ValueClass, key::KeySerializer,
     },
 };
-use trc::AddContext;
-use types::{collection::Collection, field::Field, special_use::SpecialUse};
-use utils::config::utils::ParseValue;
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::Field, special_use::SpecialUse};
+use crate::utils::config::utils::ParseValue;
 
-pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> crate::trc::Result<u64> {
     // Obtain email ids
     let mailbox_ids = get_document_ids(server, account_id, Collection::Mailbox)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_mailboxes = mailbox_ids.len();
     if num_mailboxes == 0 {
@@ -55,7 +55,7 @@ pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::
                         Field::ARCHIVE,
                         Archiver::new(Mailbox::from_legacy(legacy))
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 did_migrate = true;
 
@@ -63,7 +63,7 @@ pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => (),
             Err(err) => {
@@ -81,7 +81,7 @@ pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::
                     return Err(err
                         .account_id(account_id)
                         .document_id(mailbox_id)
-                        .caused_by(trc::location!()));
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -109,7 +109,7 @@ pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     // Increment document id counter
@@ -126,7 +126,7 @@ pub(crate) async fn migrate_mailboxes(server: &Server, account_id: u32) -> trc::
                     + 1,
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         Ok(num_mailboxes)
     } else {
         Ok(0)

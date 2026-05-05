@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::{
     language::{
         Language,
         detect::{LanguageDetector, MIN_LANGUAGE_SCORE},
@@ -75,7 +75,7 @@ impl WordStemTokenizer {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::tokenizers::{
+    use crate::nlp::tokenizers::{
         stream::WordStemTokenizer,
         types::{TokenType, TypesTokenizer},
     };

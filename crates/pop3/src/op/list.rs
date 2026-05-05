@@ -6,13 +6,13 @@
 
 use std::time::Instant;
 
-use common::listener::SessionStream;
-use directory::Permission;
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
 
-use crate::{Session, protocol::response::Response};
+use crate::pop3::{Session, protocol::response::Response};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_list(&mut self, msg: Option<u32>) -> trc::Result<()> {
+    pub async fn handle_list(&mut self, msg: Option<u32>) -> crate::trc::Result<()> {
         // Validate access
         self.state
             .access_token()
@@ -22,8 +22,8 @@ impl<T: SessionStream> Session<T> {
         let mailbox = self.state.mailbox();
         if let Some(msg) = msg {
             if let Some(message) = mailbox.messages.get(msg.saturating_sub(1) as usize) {
-                trc::event!(
-                    Pop3(trc::Pop3Event::ListMessage),
+                crate::trc::event!(
+                    Pop3(crate::trc::Pop3Event::ListMessage),
                     SpanId = self.session_id,
                     DocumentId = message.id,
                     Size = message.size,
@@ -32,14 +32,14 @@ impl<T: SessionStream> Session<T> {
 
                 self.write_ok(format!("{} {}", msg, message.size)).await
             } else {
-                Err(trc::Pop3Event::Error
+                Err(crate::trc::Pop3Event::Error
                     .into_err()
                     .details("No such message.")
-                    .caused_by(trc::location!()))
+                    .caused_by(crate::trc::location!()))
             }
         } else {
-            trc::event!(
-                Pop3(trc::Pop3Event::List),
+            crate::trc::event!(
+                Pop3(crate::trc::Pop3Event::List),
                 SpanId = self.session_id,
                 Total = mailbox.messages.len(),
                 Elapsed = op_start.elapsed()
@@ -53,7 +53,7 @@ impl<T: SessionStream> Session<T> {
         }
     }
 
-    pub async fn handle_uidl(&mut self, msg: Option<u32>) -> trc::Result<()> {
+    pub async fn handle_uidl(&mut self, msg: Option<u32>) -> crate::trc::Result<()> {
         // Validate access
         self.state
             .access_token()
@@ -63,8 +63,8 @@ impl<T: SessionStream> Session<T> {
         let mailbox = self.state.mailbox();
         if let Some(msg) = msg {
             if let Some(message) = mailbox.messages.get(msg.saturating_sub(1) as usize) {
-                trc::event!(
-                    Pop3(trc::Pop3Event::UidlMessage),
+                crate::trc::event!(
+                    Pop3(crate::trc::Pop3Event::UidlMessage),
                     SpanId = self.session_id,
                     DocumentId = message.id,
                     Uid = message.uid,
@@ -75,14 +75,14 @@ impl<T: SessionStream> Session<T> {
                 self.write_ok(format!("{} {}{}", msg, mailbox.uid_validity, message.uid))
                     .await
             } else {
-                Err(trc::Pop3Event::Error
+                Err(crate::trc::Pop3Event::Error
                     .into_err()
                     .details("No such message.")
-                    .caused_by(trc::location!()))
+                    .caused_by(crate::trc::location!()))
             }
         } else {
-            trc::event!(
-                Pop3(trc::Pop3Event::Uidl),
+            crate::trc::event!(
+                Pop3(crate::trc::Pop3Event::Uidl),
                 SpanId = self.session_id,
                 Total = mailbox.messages.len(),
                 Elapsed = op_start.elapsed()
@@ -102,7 +102,7 @@ impl<T: SessionStream> Session<T> {
         }
     }
 
-    pub async fn handle_stat(&mut self) -> trc::Result<()> {
+    pub async fn handle_stat(&mut self) -> crate::trc::Result<()> {
         // Validate access
         self.state
             .access_token()
@@ -111,8 +111,8 @@ impl<T: SessionStream> Session<T> {
         let op_start = Instant::now();
         let mailbox = self.state.mailbox();
 
-        trc::event!(
-            Pop3(trc::Pop3Event::Stat),
+        crate::trc::event!(
+            Pop3(crate::trc::Pop3Event::Stat),
             SpanId = self.session_id,
             Total = mailbox.total,
             Size = mailbox.size,

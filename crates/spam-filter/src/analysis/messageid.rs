@@ -6,10 +6,10 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
 use mail_parser::HeaderName;
 
-use crate::{Hostname, SpamFilterContext};
+use crate::spam_filter::{Hostname, SpamFilterContext};
 
 pub trait SpamFilterAnalyzeMid: Sync + Send {
     fn spam_filter_analyze_message_id(

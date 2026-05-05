@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::map::vec_map::VecMap;
 use compact_str::format_compact;
 use std::collections::HashMap;
-use utils::map::vec_map::VecMap;
 
 pub mod eval;
 pub mod jsptr;
@@ -23,16 +23,16 @@ pub(crate) enum Graph<'x> {
 fn topological_sort<T>(
     create: &mut VecMap<String, T>,
     graph: HashMap<String, Vec<String>>,
-) -> trc::Result<VecMap<String, T>> {
+) -> crate::trc::Result<VecMap<String, T>> {
     // Make sure all references exist
     for (from_id, to_ids) in graph.iter() {
         for to_id in to_ids {
             if !create.contains_key(to_id) {
-                return Err(trc::JmapEvent::InvalidResultReference.into_err().details(
-                    format_compact!(
+                return Err(crate::trc::JmapEvent::InvalidResultReference
+                    .into_err()
+                    .details(format_compact!(
                         "Invalid reference to non-existing object {to_id:?} from {from_id:?}"
-                    ),
-                ));
+                    )));
             }
         }
     }
@@ -47,7 +47,7 @@ fn topological_sort<T>(
             if let Some(to_ids) = graph.get(from_id) {
                 it_stack.push((it, from_id));
                 if it_stack.len() > 1000 {
-                    return Err(trc::JmapEvent::InvalidArguments
+                    return Err(crate::trc::JmapEvent::InvalidArguments
                         .into_err()
                         .details("Cyclical references are not allowed."));
                 }
@@ -85,7 +85,7 @@ fn topological_sort<T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::jmap_proto::{
         method::{changes::ChangesResponse, get::GetResponse, query::QueryResponse},
         object::{
             email::{EmailProperty, EmailValue},
@@ -98,9 +98,9 @@ mod tests {
         },
         response::{ChangesResponseMethod, GetResponseMethod, Response, ResponseMethod},
     };
+    use crate::types::id::Id;
     use jmap_tools::{Key, Map, Value};
     use std::collections::HashMap;
-    use types::id::Id;
 
     #[test]
     fn eval_value_references() {
@@ -505,7 +505,9 @@ mod tests {
                 Err(err) => {
                     assert_eq!(test_num, 3);
                     assert!(
-                        err.matches(trc::EventType::Jmap(trc::JmapEvent::InvalidArguments)),
+                        err.matches(crate::trc::EventType::Jmap(
+                            crate::trc::JmapEvent::InvalidArguments
+                        )),
                         "{:?}",
                         err
                     );

@@ -7,12 +7,12 @@
 pub mod lookup;
 pub mod manage;
 
-use crate::Type;
+use crate::directory::Type;
 use ahash::AHashMap;
 
+use crate::store::{Deserialize, SerializeInfallible, U32_LEN, write::key::KeySerializer};
+use crate::utils::codec::leb128::Leb128Iterator;
 use std::fmt::Display;
-use store::{Deserialize, SerializeInfallible, U32_LEN, write::key::KeySerializer};
-use utils::codec::leb128::Leb128Iterator;
 
 pub struct PrincipalInfo {
     pub id: u32,
@@ -57,18 +57,18 @@ impl SerializeInfallible for PrincipalInfo {
 }
 
 impl Deserialize for PrincipalInfo {
-    fn deserialize(bytes_: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes_: &[u8]) -> crate::trc::Result<Self> {
         let mut bytes = bytes_.iter();
         Ok(PrincipalInfo {
             id: bytes.next_leb128().ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Value, bytes_)
+                crate::trc::StoreEvent::DataCorruption
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Value, bytes_)
             })?,
             typ: Type::from_u8(*bytes.next().ok_or_else(|| {
-                trc::StoreEvent::DataCorruption
-                    .caused_by(trc::location!())
-                    .ctx(trc::Key::Value, bytes_)
+                crate::trc::StoreEvent::DataCorruption
+                    .caused_by(crate::trc::location!())
+                    .ctx(crate::trc::Key::Value, bytes_)
             })?),
             tenant: bytes.next_leb128(),
         })

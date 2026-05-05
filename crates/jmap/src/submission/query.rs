@@ -4,33 +4,33 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{api::query::QueryResponseBuilder, changes::state::StateManager};
-use common::Server;
-use email::submission::UndoStatus;
-use jmap_proto::{
+use crate::common::Server;
+use crate::email::submission::UndoStatus;
+use crate::jmap::{api::query::QueryResponseBuilder, changes::state::StateManager};
+use crate::jmap_proto::{
     method::query::{Filter, QueryRequest, QueryResponse},
     object::email_submission::{self, EmailSubmissionComparator, EmailSubmissionFilter},
     request::IntoValid,
 };
-use std::future::Future;
-use store::{
+use crate::store::{
     IterateParams, U32_LEN, U64_LEN, ValueKey,
     ahash::AHashSet,
     roaring::RoaringBitmap,
     search::{SearchFilter, SearchQuery},
     write::{IndexPropertyClass, SearchIndex, ValueClass, key::DeserializeBigEndian, now},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::EmailSubmissionField,
 };
+use std::future::Future;
 
 pub trait EmailSubmissionQuery: Sync + Send {
     fn email_submission_query(
         &self,
         request: QueryRequest<email_submission::EmailSubmission>,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 struct Submission {
@@ -46,7 +46,7 @@ impl EmailSubmissionQuery for Server {
     async fn email_submission_query(
         &self,
         mut request: QueryRequest<email_submission::EmailSubmission>,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         let account_id = request.account_id.document_id();
 
         let mut submissions = Vec::with_capacity(16);
@@ -93,7 +93,7 @@ impl EmailSubmissionQuery for Server {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let mut filters = Vec::with_capacity(request.filter.len());
         for cond in std::mem::take(&mut request.filter) {
@@ -175,7 +175,9 @@ impl EmailSubmissionQuery for Server {
                     }
 
                     EmailSubmissionFilter::_T(other) => {
-                        return Err(trc::JmapEvent::UnsupportedFilter.into_err().details(other));
+                        return Err(crate::trc::JmapEvent::UnsupportedFilter
+                            .into_err()
+                            .details(other));
                     }
                 },
                 Filter::And => {
@@ -230,7 +232,9 @@ impl EmailSubmissionQuery for Server {
                         }
                     }
                     EmailSubmissionComparator::_T(other) => {
-                        return Err(trc::JmapEvent::UnsupportedSort.into_err().details(other));
+                        return Err(crate::trc::JmapEvent::UnsupportedSort
+                            .into_err()
+                            .details(other));
                     }
                 }
             }

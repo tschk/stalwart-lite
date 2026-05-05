@@ -6,7 +6,7 @@
 
 use mysql_async::{Params, Row, prelude::Queryable};
 
-use crate::{IntoRows, QueryResult, QueryType, Value};
+use crate::store::{IntoRows, QueryResult, QueryType, Value};
 
 use super::{MysqlStore, into_error};
 
@@ -15,7 +15,7 @@ impl MysqlStore {
         &self,
         query: &str,
         params: &[Value<'_>],
-    ) -> trc::Result<T> {
+    ) -> crate::trc::Result<T> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let s = conn.prep(query).await.map_err(into_error)?;
         let params = Params::Positional(params.iter().map(Into::into).collect());

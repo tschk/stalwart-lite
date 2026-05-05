@@ -5,26 +5,26 @@
  */
 
 use super::ImapContext;
-use crate::{
+use crate::common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
+use crate::directory::Permission;
+use crate::imap::{
     core::{Session, SessionData},
     spawn_op,
 };
-use common::{listener::SessionStream, storage::index::ObjectIndexBuilder};
-use directory::Permission;
-use imap_proto::{Command, ResponseCode, StatusResponse, receiver::Request};
-use std::time::Instant;
-use store::{
+use crate::imap_proto::{Command, ResponseCode, StatusResponse, receiver::Request};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use types::collection::Collection;
+use crate::types::collection::Collection;
+use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_subscribe(
         &mut self,
         request: Request<Command>,
         is_subscribe: bool,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapSubscribe)?;
 
@@ -54,22 +54,22 @@ impl<T: SessionStream> SessionData<T> {
         mailbox_name: String,
         subscribe: bool,
         op_start: Instant,
-    ) -> trc::Result<StatusResponse> {
+    ) -> crate::trc::Result<StatusResponse> {
         // Refresh mailboxes
         self.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&tag, trc::location!())?;
+            .imap_ctx(&tag, crate::trc::location!())?;
 
         // Validate mailbox
         let (account_id, mailbox_id) = match self.get_mailbox_by_name(&mailbox_name) {
             Some(mailbox) => (mailbox.account_id, mailbox.mailbox_id),
             None => {
-                return Err(trc::ImapEvent::Error
+                return Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Mailbox does not exist.")
                     .code(ResponseCode::NonExistent)
                     .id(tag)
-                    .caused_by(trc::location!()));
+                    .caused_by(crate::trc::location!()));
             }
         };
 
@@ -79,7 +79,7 @@ impl<T: SessionStream> SessionData<T> {
                 if let Some(mailbox) = account.mailbox_state.get(&mailbox_id)
                     && mailbox.is_subscribed == subscribe
                 {
-                    return Err(trc::ImapEvent::Error
+                    return Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details(if subscribe {
                             "Mailbox is already subscribed."
@@ -102,24 +102,26 @@ impl<T: SessionStream> SessionData<T> {
                 mailbox_id,
             ))
             .await
-            .imap_ctx(&tag, trc::location!())?
+            .imap_ctx(&tag, crate::trc::location!())?
             .ok_or_else(|| {
-                trc::ImapEvent::Error
+                crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Mailbox does not exist.")
                     .code(ResponseCode::NonExistent)
                     .id(tag.clone())
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
             })?;
         let mailbox = mailbox_
-            .to_unarchived::<email::mailbox::Mailbox>()
-            .imap_ctx(&tag, trc::location!())?;
+            .to_unarchived::<crate::email::mailbox::Mailbox>()
+            .imap_ctx(&tag, crate::trc::location!())?;
 
         if (subscribe && !mailbox.inner.is_subscribed(self.account_id))
             || (!subscribe && mailbox.inner.is_subscribed(self.account_id))
         {
             // Build batch
-            let mut new_mailbox = mailbox.deserialize().imap_ctx(&tag, trc::location!())?;
+            let mut new_mailbox = mailbox
+                .deserialize()
+                .imap_ctx(&tag, crate::trc::location!())?;
             if subscribe {
                 new_mailbox.subscribers.push(self.account_id);
             } else {
@@ -135,11 +137,11 @@ impl<T: SessionStream> SessionData<T> {
                         .with_current(mailbox)
                         .with_changes(new_mailbox),
                 )
-                .imap_ctx(&tag, trc::location!())?;
+                .imap_ctx(&tag, crate::trc::location!())?;
             self.server
                 .commit_batch(batch)
                 .await
-                .imap_ctx(&tag, trc::location!())?;
+                .imap_ctx(&tag, crate::trc::location!())?;
 
             // Update mailbox cache
             for account in self.mailboxes.lock().iter_mut() {
@@ -152,11 +154,11 @@ impl<T: SessionStream> SessionData<T> {
             }
         }
 
-        trc::event!(
+        crate::trc::event!(
             Imap(if subscribe {
-                trc::ImapEvent::Subscribe
+                crate::trc::ImapEvent::Subscribe
             } else {
-                trc::ImapEvent::Unsubscribe
+                crate::trc::ImapEvent::Unsubscribe
             }),
             SpanId = self.session_id,
             AccountId = account_id,

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use directory::{Directory, backend::RcptType};
+use crate::directory::{Directory, backend::RcptType};
+use crate::utils::config::{Config, utils::AsKey};
 use std::borrow::Cow;
-use utils::config::{Config, utils::AsKey};
 
-use crate::{
+use crate::common::{
     Server,
     config::smtp::session::AddressMapping,
     expr::{
@@ -22,7 +22,7 @@ impl Server {
         directory: &Directory,
         email: &str,
         session_id: u64,
-    ) -> trc::Result<Option<u32>> {
+    ) -> crate::trc::Result<Option<u32>> {
         let mut address = self
             .core
             .smtp
@@ -60,7 +60,7 @@ impl Server {
         directory: &Directory,
         email: &str,
         session_id: u64,
-    ) -> trc::Result<RcptType> {
+    ) -> crate::trc::Result<RcptType> {
         // Expand subaddress
         let mut address = self
             .core
@@ -98,7 +98,7 @@ impl Server {
         directory: &Directory,
         address: &str,
         session_id: u64,
-    ) -> trc::Result<Vec<String>> {
+    ) -> crate::trc::Result<Vec<String>> {
         directory
             .vrfy(
                 self.core
@@ -118,7 +118,7 @@ impl Server {
         directory: &Directory,
         address: &str,
         session_id: u64,
-    ) -> trc::Result<Vec<String>> {
+    ) -> crate::trc::Result<Vec<String>> {
         directory
             .expn(
                 self.core
@@ -168,7 +168,7 @@ impl AddressMapping {
 struct Address<'x>(&'x str);
 
 impl ResolveVariable for Address<'_> {
-    fn resolve_variable(&'_ self, _: u32) -> crate::expr::Variable<'_> {
+    fn resolve_variable(&'_ self, _: u32) -> crate::common::expr::Variable<'_> {
         Variable::from(self.0)
     }
 

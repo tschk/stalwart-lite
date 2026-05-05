@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use imap_proto::{Command, receiver::Request};
+use crate::imap_proto::{Command, receiver::Request};
 
-use crate::core::Session;
-use common::listener::SessionStream;
+use crate::common::listener::SessionStream;
+use crate::imap::core::Session;
 use mail_send::Credentials;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_login(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_login(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         let arguments = request.parse_login()?;
 
         self.authenticate(

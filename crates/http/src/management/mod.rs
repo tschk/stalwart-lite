@@ -27,13 +27,14 @@ pub mod enterprise;
 use enterprise::telemetry::TelemetryApi;
 // SPDX-SnippetEnd
 
-use crate::auth::oauth::auth::OAuthApiHandler;
-use common::{Server, auth::AccessToken};
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{Permission, backend::internal::manage};
+use crate::http::auth::oauth::auth::OAuthApiHandler;
+use crate::http_proto::{request::fetch_body, *};
+use crate::store::write::now;
 use crypto::CryptoHandler;
-use directory::{Permission, backend::internal::manage};
 use dkim::DkimManagement;
 use dns::DnsManagement;
-use http_proto::{request::fetch_body, *};
 use hyper::{Method, StatusCode, header};
 use log::LogManagement;
 use mail_parser::DateTime;
@@ -46,36 +47,35 @@ use settings::ManageSettings;
 use spam::ManageSpamHandler;
 use std::future::Future;
 use std::{str::FromStr, sync::Arc};
-use store::write::now;
 use stores::ManageStore;
 use troubleshoot::TroubleshootApi;
 
-/// Convert a `trc::Error` to an `HttpResponse` using standard HTTP problem JSON.
-fn trc_error_to_http_response(err: &trc::Error) -> HttpResponse {
+/// Convert a `crate::trc::Error` to an `HttpResponse` using standard HTTP problem JSON.
+fn trc_error_to_http_response(err: &crate::trc::Error) -> HttpResponse {
     let details_or_reason = err
-        .value(trc::Key::Details)
-        .or_else(|| err.value(trc::Key::Reason))
+        .value(crate::trc::Key::Details)
+        .or_else(|| err.value(crate::trc::Key::Reason))
         .and_then(|v| v.as_str());
 
     let (status, title, detail) = match err.as_ref() {
-        trc::EventType::Limit(cause) => match cause {
-            trc::LimitEvent::TooManyRequests => (
+        crate::trc::EventType::Limit(cause) => match cause {
+            crate::trc::LimitEvent::TooManyRequests => (
                 429u16,
                 "Too Many Requests",
                 "Your request has been rate limited. Please try again in a few seconds.",
             ),
             _ => (400, "Bad Request", "Request limit exceeded."),
         },
-        trc::EventType::Auth(cause) => match cause {
-            trc::AuthEvent::TooManyAttempts => (
+        crate::trc::EventType::Auth(cause) => match cause {
+            crate::trc::AuthEvent::TooManyAttempts => (
                 429,
                 "Too Many Authentication Attempts",
                 "Your request has been rate limited. Please try again in a few minutes.",
             ),
             _ => (401, "Unauthorized", "You have to authenticate first."),
         },
-        trc::EventType::Security(cause) => match cause {
-            trc::SecurityEvent::Unauthorized => (
+        crate::trc::EventType::Security(cause) => match cause {
+            crate::trc::SecurityEvent::Unauthorized => (
                 403,
                 "Forbidden",
                 "You do not have enough permissions to access this resource.",
@@ -86,13 +86,13 @@ fn trc_error_to_http_response(err: &trc::Error) -> HttpResponse {
                 "Your request has been rate limited. Please try again in a few minutes.",
             ),
         },
-        trc::EventType::Resource(cause) => match cause {
-            trc::ResourceEvent::NotFound => (
+        crate::trc::EventType::Resource(cause) => match cause {
+            crate::trc::ResourceEvent::NotFound => (
                 404,
                 "Not Found",
                 "The requested resource does not exist on this server.",
             ),
-            trc::ResourceEvent::BadParameters => (
+            crate::trc::ResourceEvent::BadParameters => (
                 400,
                 "Invalid parameters",
                 details_or_reason.unwrap_or("One or multiple parameters could not be parsed."),
@@ -152,7 +152,7 @@ pub trait ManagementApi: Sync + Send {
         req: &mut HttpRequest,
         access_token: Arc<AccessToken>,
         session: &HttpSessionData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl ManagementApi for Server {
@@ -162,7 +162,7 @@ impl ManagementApi for Server {
         req: &mut HttpRequest,
         access_token: Arc<AccessToken>,
         session: &HttpSessionData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let body = fetch_body(req, 1024 * 1024, session.session_id).await;
         let path = req.uri().path().split('/').skip(2).collect::<Vec<_>>();
 
@@ -232,7 +232,7 @@ impl ManagementApi for Server {
 
                     self.handle_account_auth_post(req, access_token, body).await
                 }
-                _ => Err(trc::ResourceEvent::NotFound.into_err()),
+                _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
             },
             "troubleshoot" => {
                 // Validate the access token
@@ -263,7 +263,7 @@ impl ManagementApi for Server {
                 }
             }
             // SPDX-SnippetEnd
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 }
@@ -314,40 +314,46 @@ pub trait ToManageHttpResponse {
     fn into_http_response(self) -> HttpResponse;
 }
 
-impl ToManageHttpResponse for &trc::Error {
+impl ToManageHttpResponse for &crate::trc::Error {
     fn into_http_response(self) -> HttpResponse {
         match self.as_ref() {
-            trc::EventType::Manage(cause) => {
+            crate::trc::EventType::Manage(cause) => {
                 match cause {
-                    trc::ManageEvent::MissingParameter => ManagementApiError::FieldMissing {
-                        field: self.value_as_str(trc::Key::Key).unwrap_or_default(),
+                    crate::trc::ManageEvent::MissingParameter => ManagementApiError::FieldMissing {
+                        field: self.value_as_str(crate::trc::Key::Key).unwrap_or_default(),
                     },
-                    trc::ManageEvent::AlreadyExists => ManagementApiError::FieldAlreadyExists {
-                        field: self.value_as_str(trc::Key::Key).unwrap_or_default(),
-                        value: self.value_as_str(trc::Key::Value).unwrap_or_default(),
+                    crate::trc::ManageEvent::AlreadyExists => {
+                        ManagementApiError::FieldAlreadyExists {
+                            field: self.value_as_str(crate::trc::Key::Key).unwrap_or_default(),
+                            value: self
+                                .value_as_str(crate::trc::Key::Value)
+                                .unwrap_or_default(),
+                        }
+                    }
+                    crate::trc::ManageEvent::NotFound => ManagementApiError::NotFound {
+                        item: self.value_as_str(crate::trc::Key::Key).unwrap_or_default(),
                     },
-                    trc::ManageEvent::NotFound => ManagementApiError::NotFound {
-                        item: self.value_as_str(trc::Key::Key).unwrap_or_default(),
-                    },
-                    trc::ManageEvent::NotSupported => ManagementApiError::Unsupported {
+                    crate::trc::ManageEvent::NotSupported => ManagementApiError::Unsupported {
                         details: self
-                            .value(trc::Key::Details)
-                            .or_else(|| self.value(trc::Key::Reason))
+                            .value(crate::trc::Key::Details)
+                            .or_else(|| self.value(crate::trc::Key::Reason))
                             .and_then(|v| v.as_str())
                             .unwrap_or("Requested action is unsupported"),
                     },
-                    trc::ManageEvent::AssertFailed => ManagementApiError::AssertFailed,
-                    trc::ManageEvent::Error => ManagementApiError::Other {
-                        reason: self.value_as_str(trc::Key::Reason),
+                    crate::trc::ManageEvent::AssertFailed => ManagementApiError::AssertFailed,
+                    crate::trc::ManageEvent::Error => ManagementApiError::Other {
+                        reason: self.value_as_str(crate::trc::Key::Reason),
                         details: self
-                            .value_as_str(trc::Key::Details)
+                            .value_as_str(crate::trc::Key::Details)
                             .unwrap_or("Unknown error"),
                     },
                 }
             }
             .into_http_response(),
-            trc::EventType::Auth(
-                trc::AuthEvent::Failed | trc::AuthEvent::Error | trc::AuthEvent::TokenExpired,
+            crate::trc::EventType::Auth(
+                crate::trc::AuthEvent::Failed
+                | crate::trc::AuthEvent::Error
+                | crate::trc::AuthEvent::TokenExpired,
             ) => HttpResponse::unauthorized(true),
             _ => trc_error_to_http_response(self),
         }

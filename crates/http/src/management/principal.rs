@@ -4,9 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::management::stores::destroy_account_data;
-use common::{Server, auth::AccessToken};
-use directory::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{
     DirectoryInner, Permission, PrincipalData, QueryBy, QueryParams, Type,
     backend::internal::{
         PrincipalAction, PrincipalField, PrincipalSet, PrincipalUpdate, PrincipalValue,
@@ -16,13 +15,14 @@ use directory::{
         },
     },
 };
-use http_proto::{request::decode_path_element, *};
+use crate::http::management::stores::destroy_account_data;
+use crate::http_proto::{request::decode_path_element, *};
+use crate::trc::AddContext;
+use crate::utils::url_params::UrlParams;
 use hyper::{Method, header};
 use serde_json::json;
 use std::future::Future;
 use std::sync::Arc;
-use trc::AddContext;
-use utils::url_params::UrlParams;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type")]
@@ -50,21 +50,21 @@ pub trait PrincipalManager: Sync + Send {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_account_auth_get(
         &self,
         access_token: Arc<AccessToken>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn handle_account_auth_post(
         &self,
         req: &HttpRequest,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
-    fn assert_supported_directory(&self, override_: bool) -> trc::Result<()>;
+    fn assert_supported_directory(&self, override_: bool) -> crate::trc::Result<()>;
 }
 
 impl PrincipalManager for Server {
@@ -74,15 +74,17 @@ impl PrincipalManager for Server {
         path: Vec<&str>,
         body: Option<Vec<u8>>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (path.get(1).copied(), req.method()) {
             (None | Some("deploy"), &Method::POST) => {
                 // Parse principal
                 let principal =
                     serde_json::from_slice::<PrincipalSet>(body.as_deref().unwrap_or_default())
                         .map_err(|err| {
-                            trc::EventType::Resource(trc::ResourceEvent::BadParameters)
-                                .from_json_error(err)
+                            crate::trc::EventType::Resource(
+                                crate::trc::ResourceEvent::BadParameters,
+                            )
+                            .from_json_error(err)
                         })?;
 
                 // Validate the access token
@@ -143,7 +145,7 @@ impl PrincipalManager for Server {
                         .store()
                         .get_principal_info(name)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .filter(|v| v.typ == Type::Role && v.has_tenant_access(tenant_id))
                         .or_else(|| PrincipalField::Roles.map_internal_roles(name))
                     {
@@ -192,7 +194,7 @@ impl PrincipalManager for Server {
                         .set([("report.domain", report_domain)], true)
                         .await
                 {
-                    trc::error!(err.details("Failed to set report domain"));
+                    crate::trc::error!(err.details("Failed to set report domain"));
                 }
 
                 // Increment revision
@@ -337,14 +339,16 @@ impl PrincipalManager for Server {
                 let params = UrlParams::new(req.uri().query());
                 let filter = params.get("filter");
                 let typ = params.parse::<Type>("type").ok_or_else(|| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
                         .into_err()
                         .details("Invalid type")
                 })?;
                 if params.get("confirm") != Some("true") {
-                    return Err(trc::EventType::Resource(trc::ResourceEvent::BadParameters)
-                        .into_err()
-                        .details("Missing confirmation parameter"));
+                    return Err(crate::trc::EventType::Resource(
+                        crate::trc::ResourceEvent::BadParameters,
+                    )
+                    .into_err()
+                    .details("Missing confirmation parameter"));
                 }
 
                 // Validate the access token
@@ -408,7 +412,7 @@ impl PrincipalManager for Server {
                                     server.invalidate_principal_caches(changed_principals).await;
                                 }
                                 Err(err) => {
-                                    trc::error!(err.details("Failed to delete principal"));
+                                    crate::trc::error!(err.details("Failed to delete principal"));
                                     continue;
                                 }
                             }
@@ -420,7 +424,7 @@ impl PrincipalManager for Server {
                             )
                             .await
                             {
-                                trc::error!(err.details("Failed to delete principal"));
+                                crate::trc::error!(err.details("Failed to delete principal"));
                             }
                         }
                     });
@@ -478,7 +482,7 @@ impl PrincipalManager for Server {
                             .store()
                             .query(QueryParams::id(account_id).with_return_member_of(true))
                             .await?
-                            .ok_or_else(|| trc::ManageEvent::NotFound.into_err())?;
+                            .ok_or_else(|| crate::trc::ManageEvent::NotFound.into_err())?;
 
                         // Map fields
                         let principal = self
@@ -487,7 +491,7 @@ impl PrincipalManager for Server {
                             .data
                             .map_principal(principal, &[])
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         Ok(JsonResponse::new(json!({
                                 "data": principal,
@@ -523,7 +527,7 @@ impl PrincipalManager for Server {
                         )
                         .await
                         {
-                            trc::error!(err.details("Failed to delete principal"));
+                            crate::trc::error!(err.details("Failed to delete principal"));
                         }
 
                         // Increment revision
@@ -555,8 +559,10 @@ impl PrincipalManager for Server {
                             body.as_deref().unwrap_or_default(),
                         )
                         .map_err(|err| {
-                            trc::EventType::Resource(trc::ResourceEvent::BadParameters)
-                                .from_json_error(err)
+                            crate::trc::EventType::Resource(
+                                crate::trc::ResourceEvent::BadParameters,
+                            )
+                            .from_json_error(err)
                         })?;
 
                         // Validate changes
@@ -583,12 +589,12 @@ impl PrincipalManager for Server {
                                 PrincipalField::Tenant => {
                                     // Tenants are not allowed to change their tenantId
                                     if access_token.tenant.is_some() {
-                                        trc::bail!(
-                                            trc::SecurityEvent::Unauthorized
+                                        crate::trc::bail!(
+                                            crate::trc::SecurityEvent::Unauthorized
                                                 .into_err()
                                                 .details(permission_needed.name())
                                                 .ctx(
-                                                    trc::Key::Reason,
+                                                    crate::trc::Key::Reason,
                                                     "Tenants cannot change their tenantId"
                                                 )
                                         );
@@ -617,7 +623,7 @@ impl PrincipalManager for Server {
                                                 .store()
                                                 .get_principal_info(name)
                                                 .await
-                                                .caused_by(trc::location!())?
+                                                .caused_by(crate::trc::location!())?
                                                 .filter(|v| {
                                                     v.typ == Type::Role
                                                         && v.has_tenant_access(tenant_id)
@@ -673,18 +679,18 @@ impl PrincipalManager for Server {
                         }))
                         .into_http_response())
                     }
-                    _ => Err(trc::ResourceEvent::NotFound.into_err()),
+                    _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
                 }
             }
 
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 
     async fn handle_account_auth_get(
         &self,
         access_token: Arc<AccessToken>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         let mut response = AccountAuthResponse {
             otp_auth: false,
             app_passwords: Vec::new(),
@@ -695,7 +701,7 @@ impl PrincipalManager for Server {
                 .directory()
                 .query(QueryParams::id(access_token.primary_id()).with_return_member_of(false))
                 .await?
-                .ok_or_else(|| trc::ManageEvent::NotFound.into_err())?;
+                .ok_or_else(|| crate::trc::ManageEvent::NotFound.into_err())?;
 
             for data in &principal.data {
                 match data {
@@ -725,18 +731,21 @@ impl PrincipalManager for Server {
         req: &HttpRequest,
         access_token: Arc<AccessToken>,
         body: Option<Vec<u8>>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Parse request
         let requests =
             serde_json::from_slice::<Vec<AccountAuthRequest>>(body.as_deref().unwrap_or_default())
                 .map_err(|err| {
-                    trc::EventType::Resource(trc::ResourceEvent::BadParameters).from_json_error(err)
+                    crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                        .from_json_error(err)
                 })?;
 
         if requests.is_empty() {
-            return Err(trc::EventType::Resource(trc::ResourceEvent::BadParameters)
-                .into_err()
-                .details("Empty request"));
+            return Err(
+                crate::trc::EventType::Resource(crate::trc::ResourceEvent::BadParameters)
+                    .into_err()
+                    .details("Empty request"),
+            );
         }
 
         // Make sure the user authenticated using Basic auth
@@ -861,7 +870,7 @@ impl PrincipalManager for Server {
         .into_http_response())
     }
 
-    fn assert_supported_directory(&self, override_: bool) -> trc::Result<()> {
+    fn assert_supported_directory(&self, override_: bool) -> crate::trc::Result<()> {
         let class = match &self.core.storage.directory.store {
             DirectoryInner::Internal(_) => return Ok(()),
             DirectoryInner::Ldap(_) => "LDAP",

@@ -4,48 +4,50 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::StateManager;
-use common::Server;
-use email::submission::{
+use crate::common::Server;
+use crate::email::submission::{
     ArchivedAddress, ArchivedEnvelope, ArchivedUndoStatus, Delivered, DeliveryStatus,
     EmailSubmission,
 };
-use jmap_proto::{
+use crate::jmap::changes::state::StateManager;
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::email_submission::{self, Displayed, EmailSubmissionProperty, EmailSubmissionValue},
     types::date::UTCDate,
 };
-use jmap_tools::{Key, Map, Value};
-use smtp::queue::{ArchivedError, ArchivedErrorDetails, ArchivedStatus, Message, spool::SmtpSpool};
-use smtp_proto::ArchivedResponse;
-use std::future::Future;
-use store::{
+use crate::smtp::queue::{
+    ArchivedError, ArchivedErrorDetails, ArchivedStatus, Message, spool::SmtpSpool,
+};
+use crate::store::{
     IterateParams, U32_LEN, ValueKey,
     rkyv::option::ArchivedOption,
     write::{
         AlignedBytes, Archive, IndexPropertyClass, ValueClass, key::DeserializeBigEndian, now,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::EmailSubmissionField,
     id::Id,
 };
-use utils::map::vec_map::VecMap;
+use crate::utils::map::vec_map::VecMap;
+use jmap_tools::{Key, Map, Value};
+use smtp_proto::ArchivedResponse;
+use std::future::Future;
 
 pub trait EmailSubmissionGet: Sync + Send {
     fn email_submission_get(
         &self,
         request: GetRequest<email_submission::EmailSubmission>,
-    ) -> impl Future<Output = trc::Result<GetResponse<email_submission::EmailSubmission>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<email_submission::EmailSubmission>>> + Send;
 }
 
 impl EmailSubmissionGet for Server {
     async fn email_submission_get(
         &self,
         mut request: GetRequest<email_submission::EmailSubmission>,
-    ) -> trc::Result<GetResponse<email_submission::EmailSubmission>> {
+    ) -> crate::trc::Result<GetResponse<email_submission::EmailSubmission>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let properties = request.unwrap_properties(&[
             EmailSubmissionProperty::Id,
@@ -96,7 +98,7 @@ impl EmailSubmissionGet for Server {
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             ids
         };
@@ -129,7 +131,7 @@ impl EmailSubmissionGet for Server {
             };
             let submission = submission_
                 .unarchive::<EmailSubmission>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Obtain queueId
             let mut delivery_status = submission
@@ -142,11 +144,11 @@ impl EmailSubmissionGet for Server {
                 && let Some(queued_message_) = self
                     .read_message_archive(queue_id)
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
             {
                 let queued_message = queued_message_
                     .unarchive::<Message>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 for rcpt in queued_message.recipients.iter() {
                     *delivery_status.get_mut_or_insert(rcpt.address().to_string()) =
                         DeliveryStatus {

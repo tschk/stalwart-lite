@@ -4,7 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    Server, auth::AccessToken, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
+};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ETag, ExtractETag,
@@ -14,27 +17,24 @@ use crate::{
     },
     file::DavFileResource,
 };
-use common::{
-    Server, auth::AccessToken, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
-};
-use dav_proto::{RequestHeaders, Return, schema::property::Rfc1123DateTime};
-use groupware::{
+use crate::dav_proto::{RequestHeaders, Return, schema::property::Rfc1123DateTime};
+use crate::groupware::{
     cache::GroupwareCache,
     file::{FileNode, FileProperties},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::{BatchBuilder, now};
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, now};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     blob_hash::BlobHash,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait FileUpdateRequestHandler: Sync + Send {
     fn handle_file_update_request(
@@ -43,7 +43,7 @@ pub(crate) trait FileUpdateRequestHandler: Sync + Send {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         is_patch: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl FileUpdateRequestHandler for Server {
@@ -53,7 +53,7 @@ impl FileUpdateRequestHandler for Server {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         _is_patch: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -63,7 +63,7 @@ impl FileUpdateRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource_name = resource
             .resource
             .ok_or(DavError::Code(StatusCode::CONFLICT))?;
@@ -85,11 +85,11 @@ impl FileUpdateRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
             let node = node_
                 .to_unarchived::<FileNode>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate ACL
             if !access_token.is_member(account_id)
@@ -129,7 +129,7 @@ impl FileUpdateRequestHandler for Server {
                         .blob_store()
                         .get_blob(file.blob_hash.0.as_slice(), 0..usize::MAX)
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .ok_or(DavError::Code(StatusCode::PRECONDITION_FAILED))?;
 
                     return Ok(HttpResponse::new(StatusCode::PRECONDITION_FAILED)
@@ -173,10 +173,12 @@ impl FileUpdateRequestHandler for Server {
             let (blob_hash, blob_hold) = self
                 .put_temporary_blob(account_id, &bytes, 60)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Build node
-            let mut new_node = node.deserialize::<FileNode>().caused_by(trc::location!())?;
+            let mut new_node = node
+                .deserialize::<FileNode>()
+                .caused_by(crate::trc::location!())?;
             let new_file = new_node.file.as_mut().unwrap();
             new_file.blob_hash = blob_hash;
             new_file.media_type = headers
@@ -199,9 +201,11 @@ impl FileUpdateRequestHandler for Server {
                         .with_changes(new_node)
                         .with_access_token(access_token),
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let etag = batch.etag();
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
 
             Ok(HttpResponse::new(StatusCode::NO_CONTENT).with_etag_opt(etag))
         } else {
@@ -253,7 +257,7 @@ impl FileUpdateRequestHandler for Server {
             let (blob_hash, blob_hold) = self
                 .put_temporary_blob(account_id, &bytes, 60)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Build node
             let now = now();
@@ -283,7 +287,7 @@ impl FileUpdateRequestHandler for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::FileNode, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             batch
                 .with_account_id(account_id)
                 .with_collection(Collection::FileNode)
@@ -294,9 +298,11 @@ impl FileUpdateRequestHandler for Server {
                         .with_changes(node)
                         .with_access_token(access_token),
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let etag = batch.etag();
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
 
             Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))
         }

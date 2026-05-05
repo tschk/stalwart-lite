@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::PubSubStore;
+use crate::store::PubSubStore;
 
 pub enum PubSubStream {
     #[cfg(feature = "redis")]
-    Redis(crate::backend::redis::pubsub::RedisPubSubStream),
+    Redis(crate::store::backend::redis::pubsub::RedisPubSubStream),
     #[cfg(feature = "redis")]
-    RedisCluster(crate::backend::redis::pubsub::RedisClusterPubSubStream),
+    RedisCluster(crate::store::backend::redis::pubsub::RedisClusterPubSubStream),
     #[cfg(feature = "nats")]
-    Nats(crate::backend::nats::pubsub::NatsPubSubStream),
+    Nats(crate::store::backend::nats::pubsub::NatsPubSubStream),
     #[cfg(feature = "zenoh")]
-    Zenoh(crate::backend::zenoh::pubsub::ZenohPubSubStream),
+    Zenoh(crate::store::backend::zenoh::pubsub::ZenohPubSubStream),
     #[cfg(feature = "kafka")]
-    Kafka(crate::backend::kafka::pubsub::KafkaPubSubStream),
+    Kafka(crate::store::backend::kafka::pubsub::KafkaPubSubStream),
     #[cfg(not(any(feature = "redis", feature = "nats")))]
     Unimplemented,
 }
@@ -36,7 +36,7 @@ pub enum Msg {
 
 #[allow(unused_variables)]
 impl PubSubStore {
-    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> trc::Result<()> {
+    pub async fn publish(&self, topic: &'static str, message: Vec<u8>) -> crate::trc::Result<()> {
         match self {
             #[cfg(feature = "redis")]
             PubSubStore::Redis(store) => store.publish(topic, message).await,
@@ -46,11 +46,11 @@ impl PubSubStore {
             PubSubStore::Zenoh(store) => store.publish(topic, message).await,
             #[cfg(feature = "kafka")]
             PubSubStore::Kafka(store) => store.publish(topic, message).await,
-            PubSubStore::None => Err(trc::StoreEvent::NotSupported.into_err()),
+            PubSubStore::None => Err(crate::trc::StoreEvent::NotSupported.into_err()),
         }
     }
 
-    pub async fn subscribe(&self, topic: &'static str) -> trc::Result<PubSubStream> {
+    pub async fn subscribe(&self, topic: &'static str) -> crate::trc::Result<PubSubStream> {
         match self {
             #[cfg(feature = "redis")]
             PubSubStore::Redis(store) => store.subscribe(topic).await,
@@ -60,7 +60,7 @@ impl PubSubStore {
             PubSubStore::Zenoh(store) => store.subscribe(topic).await,
             #[cfg(feature = "kafka")]
             PubSubStore::Kafka(store) => store.subscribe(topic).await,
-            PubSubStore::None => Err(trc::StoreEvent::NotSupported.into_err()),
+            PubSubStore::None => Err(crate::trc::StoreEvent::NotSupported.into_err()),
         }
     }
 

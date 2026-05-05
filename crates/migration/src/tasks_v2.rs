@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use store::{
+use crate::common::Server;
+use crate::store::{
     IterateParams, SUBSPACE_TASK_QUEUE, U32_LEN, U64_LEN, ValueKey,
     write::{
         AnyClass, BatchBuilder, TaskEpoch, ValueClass,
         key::{DeserializeBigEndian, KeySerializer},
     },
 };
-use trc::AddContext;
+use crate::trc::AddContext;
 
-pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_tasks_v014(server: &Server) -> crate::trc::Result<()> {
     let from_key = ValueKey::<ValueClass> {
         account_id: 0,
         collection: 0,
@@ -48,7 +48,11 @@ pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
                         delete_tasks.push(key.to_vec());
                     }
                     None => {
-                        return Err(trc::Error::corrupted_key(key, None, trc::location!()));
+                        return Err(crate::trc::Error::corrupted_key(
+                            key,
+                            None,
+                            crate::trc::location!(),
+                        ));
                     }
                     _ => {
                         let due = key.deserialize_be_u64(0)?;
@@ -67,7 +71,7 @@ pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let num_migrated = delete_tasks.len() + insert_tasks.len();
     if num_migrated != 0 {
@@ -87,7 +91,7 @@ pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 batch = BatchBuilder::new();
                 batch_len = 0;
             }
@@ -104,7 +108,7 @@ pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 batch = BatchBuilder::new();
                 batch_len = 0;
             }
@@ -113,11 +117,11 @@ pub(crate) async fn migrate_tasks_v014(server: &Server) -> trc::Result<()> {
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migrated {num_migrated} tasks")
     );
 

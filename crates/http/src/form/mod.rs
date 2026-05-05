@@ -4,15 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::auth::oauth::FormData;
-use chrono::Utc;
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_CONTACT, Server,
     config::network::{ContactForm, FieldOrDefault},
     ip_to_bytes, psl,
 };
-use email::message::delivery::{IngestMessage, IngestRecipient, LocalDeliveryStatus, MailDelivery};
-use http_proto::*;
+use crate::email::message::delivery::{
+    IngestMessage, IngestRecipient, LocalDeliveryStatus, MailDelivery,
+};
+use crate::http::auth::oauth::FormData;
+use crate::http_proto::*;
+use crate::store::write::BatchBuilder;
+use crate::trc::AddContext;
+use chrono::Utc;
 use hyper::StatusCode;
 use mail_auth::common::cache::NoCache;
 use mail_builder::{
@@ -25,8 +29,6 @@ use mail_builder::{
 };
 use serde_json::json;
 use std::{borrow::Cow, fmt::Write, future::Future};
-use store::write::BatchBuilder;
-use trc::AddContext;
 
 pub trait FormHandler: Sync + Send {
     fn handle_contact_form(
@@ -34,7 +36,7 @@ pub trait FormHandler: Sync + Send {
         session: &HttpSessionData,
         form: &ContactForm,
         form_data: FormData,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl FormHandler for Server {
@@ -43,7 +45,7 @@ impl FormHandler for Server {
         session: &HttpSessionData,
         form: &ContactForm,
         form_data: FormData,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Validate rate
         if let Some(rate) = &form.rate
             && !session.remote_ip.is_loopback()
@@ -58,10 +60,10 @@ impl FormHandler for Server {
                     false,
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .is_some()
         {
-            return Err(trc::LimitEvent::TooManyRequests.into_err());
+            return Err(crate::trc::LimitEvent::TooManyRequests.into_err());
         }
 
         // Validate honeypot
@@ -70,7 +72,7 @@ impl FormHandler for Server {
             .as_ref()
             .is_some_and(|field| form_data.has_field(field))
         {
-            return Err(trc::ResourceEvent::BadParameters
+            return Err(crate::trc::ResourceEvent::BadParameters
                 .into_err()
                 .details("Honey pot field present"));
         }
@@ -173,7 +175,7 @@ impl FormHandler for Server {
             let (message_blob, blob_hold) = self
                 .put_temporary_blob(u32::MAX, &message, 60)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             for result in self
                 .deliver_message(IngestMessage {
@@ -211,7 +213,7 @@ impl FormHandler for Server {
             self.store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Suppress errors if there is at least one success
             if has_success {

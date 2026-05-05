@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{core::Session, scripts::ScriptResult};
-use common::{
+use crate::common::{
     config::smtp::session::{Mechanism, Stage},
     listener::SessionStream,
 };
+use crate::smtp::{core::Session, scripts::ScriptResult};
+use crate::trc::SmtpEvent;
 use mail_auth::{
     SpfResult,
     spf::verify::{HasValidLabels, SpfParameters},
@@ -18,7 +19,6 @@ use std::{
     borrow::Cow,
     time::{Duration, Instant, SystemTime},
 };
-use trc::SmtpEvent;
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_ehlo(&mut self, domain: Cow<'_, str>, is_extended: bool) -> Result<(), ()> {
@@ -27,7 +27,7 @@ impl<T: SessionStream> Session<T> {
         if domain != self.data.helo_domain {
             // Reject non-FQDN EHLO domains - simply checks that the hostname has at least one dot
             if self.params.ehlo_reject_non_fqdn && !domain.as_ref().has_valid_labels() {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::InvalidEhlo),
                     SpanId = self.data.session_id,
                     Domain = domain.as_ref().to_string(),
@@ -36,7 +36,7 @@ impl<T: SessionStream> Session<T> {
                 return self.write(b"550 5.5.0 Invalid EHLO domain.\r\n").await;
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::Ehlo),
                 SpanId = self.data.session_id,
                 Domain = domain.as_ref().to_string(),
@@ -62,7 +62,7 @@ impl<T: SessionStream> Session<T> {
                     ))
                     .await;
 
-                trc::event!(
+                crate::trc::event!(
                     Smtp(if matches!(spf_output.result(), SpfResult::Pass) {
                         SmtpEvent::SpfEhloPass
                     } else {
@@ -70,7 +70,7 @@ impl<T: SessionStream> Session<T> {
                     }),
                     SpanId = self.data.session_id,
                     Domain = self.data.helo_domain.clone(),
-                    Result = trc::Error::from(&spf_output),
+                    Result = crate::trc::Error::from(&spf_output),
                     Elapsed = time.elapsed(),
                 );
 

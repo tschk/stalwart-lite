@@ -5,7 +5,8 @@
  */
 
 use super::assert_is_unique_uid;
-use crate::{
+use crate::common::{DavName, Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavErrorCondition, DavMethod,
     calendar::ItipPrecondition,
     common::{
@@ -16,35 +17,34 @@ use crate::{
     file::DavFileResource,
     fix_percent_encoding,
 };
+use crate::dav_proto::{
+    RequestHeaders, Return,
+    schema::{property::Rfc1123DateTime, response::CalCondition},
+};
+use crate::directory::Permission;
+use crate::groupware::{
+    cache::GroupwareCache,
+    calendar::{CalendarEvent, CalendarEventData},
+    scheduling::{ItipMessages, event_create::itip_create, event_update::itip_update},
+};
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, now};
+use crate::store::{
+    ValueKey,
+    write::{AlignedBytes, Archive},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    acl::Acl,
+    collection::{Collection, SyncCollection},
+};
 use calcard::{
     Entry, Parser,
     common::timezone::Tz,
     icalendar::{ICalendar, ICalendarComponentType},
 };
-use common::{DavName, Server, auth::AccessToken};
-use dav_proto::{
-    RequestHeaders, Return,
-    schema::{property::Rfc1123DateTime, response::CalCondition},
-};
-use directory::Permission;
-use groupware::{
-    cache::GroupwareCache,
-    calendar::{CalendarEvent, CalendarEventData},
-    scheduling::{ItipMessages, event_create::itip_create, event_update::itip_update},
-};
-use http_proto::HttpResponse;
 use hyper::StatusCode;
 use std::collections::HashSet;
-use store::write::{BatchBuilder, now};
-use store::{
-    ValueKey,
-    write::{AlignedBytes, Archive},
-};
-use trc::AddContext;
-use types::{
-    acl::Acl,
-    collection::{Collection, SyncCollection},
-};
 
 pub(crate) trait CalendarUpdateRequestHandler: Sync + Send {
     fn handle_calendar_update_request(
@@ -53,7 +53,7 @@ pub(crate) trait CalendarUpdateRequestHandler: Sync + Send {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         is_patch: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl CalendarUpdateRequestHandler for Server {
@@ -63,7 +63,7 @@ impl CalendarUpdateRequestHandler for Server {
         headers: &RequestHeaders<'_>,
         bytes: Vec<u8>,
         _is_patch: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self
             .validate_uri(access_token, headers.uri)
@@ -73,7 +73,7 @@ impl CalendarUpdateRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource_name = fix_percent_encoding(
             resource
                 .resource
@@ -132,11 +132,11 @@ impl CalendarUpdateRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
             let event = event_
                 .to_unarchived::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Validate headers
             match self
@@ -201,7 +201,7 @@ impl CalendarUpdateRequestHandler for Server {
             let mut next_email_alarm = None;
             let mut new_event = event
                 .deserialize::<CalendarEvent>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let old_ical = new_event.data.event;
             new_event.size = bytes.len() as u32;
             new_event.data = CalendarEventData::new(
@@ -291,7 +291,7 @@ impl CalendarUpdateRequestHandler for Server {
             let schedule_tag = new_event.schedule_tag;
             let etag = new_event
                 .update(access_token, event, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .etag();
             if prev_email_alarm != next_email_alarm {
                 if let Some(prev_alarm) = prev_email_alarm {
@@ -304,9 +304,11 @@ impl CalendarUpdateRequestHandler for Server {
             if let Some(itip_messages) = itip_messages {
                 itip_messages
                     .queue(&mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             Ok(HttpResponse::new(StatusCode::NO_CONTENT)
@@ -421,7 +423,7 @@ impl CalendarUpdateRequestHandler for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::CalendarEvent, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let schedule_tag = event.schedule_tag;
             let etag = event
                 .insert(
@@ -431,14 +433,16 @@ impl CalendarUpdateRequestHandler for Server {
                     next_email_alarm,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .etag();
             if let Some(itip_messages) = itip_messages {
                 itip_messages
                     .queue(&mut batch)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
             self.notify_task_queue();
 
             Ok(HttpResponse::new(StatusCode::CREATED)
@@ -450,7 +454,7 @@ impl CalendarUpdateRequestHandler for Server {
     }
 }
 
-fn validate_ical(ical: &ICalendar) -> crate::Result<&str> {
+fn validate_ical(ical: &ICalendar) -> crate::dav::Result<&str> {
     // Validate UIDs
     let mut uids = HashSet::with_capacity(1);
 

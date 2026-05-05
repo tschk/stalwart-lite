@@ -4,27 +4,22 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::task_manager::imip::SendImipTask;
-use crate::task_manager::index::SearchIndexTask;
-use crate::task_manager::lock::{TaskLock, TaskLockManager};
-use crate::task_manager::merge_threads::MergeThreadsTask;
-use alarm::SendAlarmTask;
-use common::IPC_CHANNEL_BUFFER;
-use common::config::server::ServerProtocol;
-use common::listener::limiter::ConcurrencyLimiter;
-use common::listener::{ServerInstance, TcpAcceptor};
-use common::{Inner, KV_LOCK_TASK, Server, core::BuildServer};
-use email::message::ingest::MergeThreadIds;
-use groupware::calendar::alarm::{CalendarAlarm, CalendarAlarmType};
-use std::collections::hash_map::Entry;
-use std::future::Future;
-use std::time::Duration;
-use std::{sync::Arc, time::Instant};
-use store::ahash::AHashSet;
-use store::rand;
-use store::rand::seq::SliceRandom;
-use store::write::{SearchIndex, TaskEpoch};
-use store::{
+use crate::common::IPC_CHANNEL_BUFFER;
+use crate::common::config::server::ServerProtocol;
+use crate::common::listener::limiter::ConcurrencyLimiter;
+use crate::common::listener::{ServerInstance, TcpAcceptor};
+use crate::common::{Inner, KV_LOCK_TASK, Server, core::BuildServer};
+use crate::email::message::ingest::MergeThreadIds;
+use crate::groupware::calendar::alarm::{CalendarAlarm, CalendarAlarmType};
+use crate::services::task_manager::imip::SendImipTask;
+use crate::services::task_manager::index::SearchIndexTask;
+use crate::services::task_manager::lock::{TaskLock, TaskLockManager};
+use crate::services::task_manager::merge_threads::MergeThreadsTask;
+use crate::store::ahash::AHashSet;
+use crate::store::rand;
+use crate::store::rand::seq::SliceRandom;
+use crate::store::write::{SearchIndex, TaskEpoch};
+use crate::store::{
     IterateParams, U16_LEN, U32_LEN, U64_LEN, ValueKey,
     ahash::AHashMap,
     write::{
@@ -33,9 +28,14 @@ use store::{
         now,
     },
 };
+use crate::trc::TaskQueueEvent;
+use crate::utils::snowflake::SnowflakeIdGenerator;
+use alarm::SendAlarmTask;
+use std::collections::hash_map::Entry;
+use std::future::Future;
+use std::time::Duration;
+use std::{sync::Arc, time::Instant};
 use tokio::sync::{mpsc, watch};
-use trc::TaskQueueEvent;
-use utils::snowflake::SnowflakeIdGenerator;
 
 pub mod alarm;
 pub mod imip;
@@ -149,7 +149,7 @@ pub fn spawn_task_manager(inner: Arc<Inner>) {
                     if success.iter().all(|t| t.is_done()) {
                         delete_tasks(&server, &locked_batch).await;
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             TaskQueue(TaskQueueEvent::TaskFailed),
                             Total = locked_batch.len(),
                             Details = "Indexing task failed",
@@ -203,7 +203,7 @@ pub fn spawn_task_manager(inner: Arc<Inner>) {
                     if success {
                         delete_tasks(&server, &[task]).await;
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             TaskQueue(TaskQueueEvent::TaskFailed),
                             AccountId = task.account_id,
                             DocumentId = task.document_id,
@@ -247,7 +247,7 @@ pub fn spawn_task_manager(inner: Arc<Inner>) {
                     if success {
                         delete_tasks(&server, &[task]).await;
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             TaskQueue(TaskQueueEvent::TaskFailed),
                             AccountId = task.account_id,
                             DocumentId = task.document_id,
@@ -282,7 +282,7 @@ pub fn spawn_task_manager(inner: Arc<Inner>) {
                     if success {
                         delete_tasks(&server, &[task]).await;
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             TaskQueue(TaskQueueEvent::TaskFailed),
                             AccountId = task.account_id,
                             DocumentId = task.document_id,
@@ -387,14 +387,14 @@ impl TaskQueueManager for Server {
             )
             .await
             .map_err(|err| {
-                trc::error!(
-                    err.caused_by(trc::location!())
+                crate::trc::error!(
+                    err.caused_by(crate::trc::location!())
                         .details("Failed to iterate over task queue.")
                 );
             });
 
         if !tasks.is_empty() || !ipc.locked.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 TaskQueue(TaskQueueEvent::TaskAcquired),
                 Total = tasks.len(),
                 Details = ipc.locked.len(),
@@ -424,10 +424,10 @@ impl TaskQueueManager for Server {
                         .await
                         .is_err()
                     {
-                        trc::event!(
-                            Server(trc::ServerEvent::ThreadError),
+                        crate::trc::event!(
+                            Server(crate::trc::ServerEvent::ThreadError),
                             Details = "Error sending task.",
-                            CausedBy = trc::location!()
+                            CausedBy = crate::trc::location!()
                         );
                     }
                 }
@@ -445,10 +445,10 @@ impl TaskQueueManager for Server {
                         .await
                         .is_err()
                     {
-                        trc::event!(
-                            Server(trc::ServerEvent::ThreadError),
+                        crate::trc::event!(
+                            Server(crate::trc::ServerEvent::ThreadError),
                             Details = "Error sending task.",
-                            CausedBy = trc::location!()
+                            CausedBy = crate::trc::location!()
                         );
                     }
                 }
@@ -464,10 +464,10 @@ impl TaskQueueManager for Server {
                         .await
                         .is_err()
                     {
-                        trc::event!(
-                            Server(trc::ServerEvent::ThreadError),
+                        crate::trc::event!(
+                            Server(crate::trc::ServerEvent::ThreadError),
                             Details = "Error sending task.",
-                            CausedBy = trc::location!()
+                            CausedBy = crate::trc::location!()
                         );
                     }
                 }
@@ -485,15 +485,15 @@ impl TaskQueueManager for Server {
                         .await
                         .is_err()
                     {
-                        trc::event!(
-                            Server(trc::ServerEvent::ThreadError),
+                        crate::trc::event!(
+                            Server(crate::trc::ServerEvent::ThreadError),
                             Details = "Error sending task.",
-                            CausedBy = trc::location!()
+                            CausedBy = crate::trc::location!()
                         );
                     }
                 }
                 _ => {
-                    trc::event!(
+                    crate::trc::event!(
                         TaskQueue(TaskQueueEvent::TaskIgnored),
                         Details = event.action.name(),
                         AccountId = event.account_id,
@@ -510,7 +510,7 @@ impl TaskQueueManager for Server {
         ipc.locked
             .retain(|_, locked| locked.expires > now && locked.revision == ipc.revision);
         Duration::from_secs(next_event.map_or(QUEUE_REFRESH_INTERVAL, |timestamp| {
-            timestamp.saturating_sub(store::write::now())
+            timestamp.saturating_sub(crate::store::write::now())
         }))
     }
 }
@@ -529,7 +529,7 @@ async fn delete_tasks<T: TaskLock>(server: &Server, tasks: &[T]) {
     }
 
     if let Err(err) = server.store().write(batch.build_all()).await {
-        trc::error!(err.details("Failed to remove task(s) from queue."));
+        crate::trc::error!(err.details("Failed to remove task(s) from queue."));
     }
 
     for task in tasks {

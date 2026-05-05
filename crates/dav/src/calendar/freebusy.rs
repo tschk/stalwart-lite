@@ -5,7 +5,27 @@
  */
 
 use super::query::CalendarQueryHandler;
-use crate::{DavError, calendar::query::is_resource_in_time_range, common::uri::DavUriResource};
+use crate::common::{DavResourcePath, DavResources, PROD_ID, Server, auth::AccessToken};
+use crate::dav::{
+    DavError, calendar::query::is_resource_in_time_range, common::uri::DavUriResource,
+};
+use crate::dav_proto::{RequestHeaders, schema::request::FreeBusyQuery};
+use crate::groupware::{cache::GroupwareCache, calendar::CalendarEvent};
+use crate::http_proto::HttpResponse;
+use crate::store::{
+    ValueKey,
+    write::{AlignedBytes, Archive},
+};
+use crate::store::{
+    ahash::AHashMap,
+    write::{now, serialize::rkyv_deserialize},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    TimeRange,
+    acl::Acl,
+    collection::{Collection, SyncCollection},
+};
 use calcard::{
     common::{PartialDateTime, timezone::Tz},
     icalendar::{
@@ -16,26 +36,8 @@ use calcard::{
         ICalendarProperty, ICalendarTransparency, ICalendarValue,
     },
 };
-use common::{DavResourcePath, DavResources, PROD_ID, Server, auth::AccessToken};
-use dav_proto::{RequestHeaders, schema::request::FreeBusyQuery};
-use groupware::{cache::GroupwareCache, calendar::CalendarEvent};
-use http_proto::HttpResponse;
 use hyper::StatusCode;
 use std::str::FromStr;
-use store::{
-    ValueKey,
-    write::{AlignedBytes, Archive},
-};
-use store::{
-    ahash::AHashMap,
-    write::{now, serialize::rkyv_deserialize},
-};
-use trc::AddContext;
-use types::{
-    TimeRange,
-    acl::Acl,
-    collection::{Collection, SyncCollection},
-};
 
 pub(crate) trait CalendarFreebusyRequestHandler: Sync + Send {
     fn handle_calendar_freebusy_request(
@@ -43,7 +45,7 @@ pub(crate) trait CalendarFreebusyRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: FreeBusyQuery,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn build_freebusy_object(
         &self,
@@ -52,7 +54,7 @@ pub(crate) trait CalendarFreebusyRequestHandler: Sync + Send {
         resources: &DavResources,
         account_id: u32,
         resource: DavResourcePath<'_>,
-    ) -> impl Future<Output = crate::Result<ICalendar>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<ICalendar>> + Send;
 }
 
 impl CalendarFreebusyRequestHandler for Server {
@@ -61,7 +63,7 @@ impl CalendarFreebusyRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: FreeBusyQuery,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -71,7 +73,7 @@ impl CalendarFreebusyRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resources
             .by_path(
                 resource_
@@ -99,7 +101,7 @@ impl CalendarFreebusyRequestHandler for Server {
         resources: &DavResources,
         account_id: u32,
         resource: DavResourcePath<'_>,
-    ) -> crate::Result<ICalendar> {
+    ) -> crate::dav::Result<ICalendar> {
         // Obtain shared ids
         let shared_ids = if !access_token.is_member(account_id) {
             resources
@@ -166,13 +168,13 @@ impl CalendarFreebusyRequestHandler for Server {
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 else {
                     continue;
                 };
                 let event = archive
                     .unarchive::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 /*
                    Only VEVENT components without a TRANSP property or with the TRANSP

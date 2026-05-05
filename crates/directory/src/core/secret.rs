@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::Principal;
-use crate::PrincipalData;
+use crate::directory::Principal;
+use crate::directory::PrincipalData;
 use argon2::Argon2;
 use compact_str::ToCompactString;
 use mail_builder::encoders::base64::base64_encode;
@@ -27,7 +27,7 @@ impl Principal {
         code: &str,
         only_app_pass: bool,
         is_ordered: bool,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         let mut seen_password = false;
         let mut password = None;
         let mut otp_auth = None;
@@ -77,7 +77,7 @@ impl Principal {
                     let result = verify_secret_hash(password, code).await?
                         && TOTP::from_url(otp_auth)
                             .map_err(|err| {
-                                trc::AuthEvent::Error
+                                crate::trc::AuthEvent::Error
                                     .reason(err)
                                     .details(otp_auth.to_compact_string())
                             })?
@@ -88,7 +88,7 @@ impl Principal {
                     // Only let the client know if the TOTP code is missing
                     // if the password is correct
 
-                    Err(trc::AuthEvent::MissingTotp.into_err())
+                    Err(crate::trc::AuthEvent::MissingTotp.into_err())
                 } else {
                     Ok(false)
                 }
@@ -99,7 +99,7 @@ impl Principal {
     }
 }
 
-async fn verify_hash_prefix(hashed_secret: &str, secret: &str) -> trc::Result<bool> {
+async fn verify_hash_prefix(hashed_secret: &str, secret: &str) -> crate::trc::Result<bool> {
     if hashed_secret.starts_with("$argon2")
         || hashed_secret.starts_with("$pbkdf2")
         || hashed_secret.starts_with("$scrypt")
@@ -116,7 +116,7 @@ async fn verify_hash_prefix(hashed_secret: &str, secret: &str) -> trc::Result<bo
                     .ok();
             }
             Err(err) => {
-                tx.send(Err(trc::AuthEvent::Error
+                tx.send(Err(crate::trc::AuthEvent::Error
                     .reason(err)
                     .details(hashed_secret)))
                     .ok();
@@ -125,9 +125,11 @@ async fn verify_hash_prefix(hashed_secret: &str, secret: &str) -> trc::Result<bo
 
         match rx.await {
             Ok(result) => result,
-            Err(err) => Err(trc::EventType::Server(trc::ServerEvent::ThreadError)
-                .caused_by(trc::location!())
-                .reason(err)),
+            Err(err) => Err(
+                crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError)
+                    .caused_by(crate::trc::location!())
+                    .reason(err),
+            ),
         }
     } else if hashed_secret.starts_with("$2") {
         // Blowfish crypt
@@ -145,13 +147,13 @@ async fn verify_hash_prefix(hashed_secret: &str, secret: &str) -> trc::Result<bo
         // MD5 based hash
         Ok(md5_crypt::verify(secret, hashed_secret))
     } else {
-        Err(trc::AuthEvent::Error
+        Err(crate::trc::AuthEvent::Error
             .into_err()
             .details(hashed_secret.to_string()))
     }
 }
 
-pub async fn verify_secret_hash(hashed_secret: &str, secret: &str) -> trc::Result<bool> {
+pub async fn verify_secret_hash(hashed_secret: &str, secret: &str) -> crate::trc::Result<bool> {
     if hashed_secret.starts_with('$') {
         verify_hash_prefix(hashed_secret, secret).await
     } else if hashed_secret.starts_with('_') {
@@ -246,12 +248,12 @@ pub async fn verify_secret_hash(hashed_secret: &str, secret: &str) -> trc::Resul
                     }
                 }
                 "PLAIN" | "plain" | "CLEAR" | "clear" => Ok(hashed_secret == secret),
-                _ => Err(trc::AuthEvent::Error
-                    .ctx(trc::Key::Reason, "Unsupported algorithm")
+                _ => Err(crate::trc::AuthEvent::Error
+                    .ctx(crate::trc::Key::Reason, "Unsupported algorithm")
                     .details(hashed_secret.to_string())),
             }
         } else {
-            Err(trc::AuthEvent::Error
+            Err(crate::trc::AuthEvent::Error
                 .into_err()
                 .details(hashed_secret.to_string()))
         }

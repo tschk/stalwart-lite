@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
+use crate::store::rand::Rng;
 use aes_gcm::{Aes128Gcm, Nonce, aead::Aead};
 use hkdf::Hkdf;
 use p256::{
@@ -11,7 +12,6 @@ use p256::{
     elliptic_curve::{rand_core::OsRng, sec1::ToEncodedPoint},
 };
 use sha2::Sha256;
-use store::rand::Rng;
 
 /*
 
@@ -41,7 +41,7 @@ pub fn ece_encrypt(
     client_auth_secret: &[u8],
     mut data: &[u8],
 ) -> Result<Vec<u8>, String> {
-    let salt = store::rand::rng().random::<[u8; 16]>();
+    let salt = crate::store::rand::rng().random::<[u8; 16]>();
     let server_secret = EphemeralSecret::random(&mut OsRng);
     let server_public_key = server_secret.public_key();
     let server_public_key_bytes = server_public_key.to_encoded_point(false);

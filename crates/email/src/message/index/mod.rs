@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::storage::index::{IndexItem, IndexValue, IndexableObject};
+use crate::email::{
     mailbox::{JUNK_ID, TRASH_ID},
     message::metadata::{ArchivedMessageData, MessageData},
 };
-use common::storage::index::{IndexItem, IndexValue, IndexableObject};
-use store::write::now;
-use types::{blob_hash::BlobHash, collection::SyncCollection, field::EmailField};
+use crate::store::write::now;
+use crate::types::{blob_hash::BlobHash, collection::SyncCollection, field::EmailField};
 
 pub mod extractors;
 pub mod metadata;
@@ -107,5 +107,5 @@ pub(super) trait IndexMessage {
         blob_hash: BlobHash,
         data: MessageData,
         received_at: u64,
-    ) -> trc::Result<&mut Self>;
+    ) -> crate::trc::Result<&mut Self>;
 }

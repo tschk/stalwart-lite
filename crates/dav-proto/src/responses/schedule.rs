@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     responses::{XmlCdataEscape, XmlEscape},
     schema::{
         Namespaces,

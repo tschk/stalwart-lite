@@ -5,12 +5,13 @@
  */
 
 use super::client::SmtpClient;
-use crate::outbound::DeliveryResult;
-use crate::outbound::client::{BoxResponse, from_error_status, from_mail_send_error};
-use crate::queue::{Error, MessageWrapper, Recipient, Status};
-use crate::queue::{ErrorDetails, HostResponse, UnexpectedResponse};
-use common::Server;
-use common::config::smtp::queue::ConnectionStrategy;
+use crate::common::Server;
+use crate::common::config::smtp::queue::ConnectionStrategy;
+use crate::smtp::outbound::DeliveryResult;
+use crate::smtp::outbound::client::{BoxResponse, from_error_status, from_mail_send_error};
+use crate::smtp::queue::{Error, MessageWrapper, Recipient, Status};
+use crate::smtp::queue::{ErrorDetails, HostResponse, UnexpectedResponse};
+use crate::trc::DeliveryEvent;
 use mail_send::Credentials;
 use smtp_proto::{
     EXT_CHUNKING, EXT_DSN, EXT_REQUIRE_TLS, EXT_SIZE, EXT_SMTP_UTF8, EhloResponse, MAIL_REQUIRETLS,
@@ -19,7 +20,6 @@ use smtp_proto::{
 };
 use std::{fmt::Write, time::Instant};
 use tokio::io::{AsyncRead, AsyncWrite};
-use trc::DeliveryEvent;
 
 pub struct SessionParams<'x> {
     pub server: &'x Server,
@@ -47,7 +47,7 @@ impl MessageWrapper {
         } else {
             match smtp_client.say_helo(&params).await {
                 Ok(capabilities) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::Ehlo),
                         SpanId = params.session_id,
                         Hostname = params.hostname.to_string(),
@@ -58,7 +58,7 @@ impl MessageWrapper {
                     capabilities
                 }
                 Err(status) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::EhloRejected),
                         SpanId = params.session_id,
                         Hostname = params.hostname.to_string(),
@@ -76,7 +76,7 @@ impl MessageWrapper {
         if let Some(credentials) = params.credentials {
             let time = Instant::now();
             if let Err(err) = smtp_client.authenticate(credentials, &capabilities).await {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::AuthFailed),
                     SpanId = params.session_id,
                     Hostname = params.hostname.to_string(),
@@ -92,7 +92,7 @@ impl MessageWrapper {
                 return;
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Delivery(DeliveryEvent::Auth),
                 SpanId = params.session_id,
                 Hostname = params.hostname.to_string(),
@@ -104,7 +104,7 @@ impl MessageWrapper {
             /*capabilities = match say_helo(&mut smtp_client, &params).await {
                 Ok(capabilities) => capabilities,
                 Err(status) => {
-                    trc::event!(
+                    crate::trc::event!(
 
                         context = "ehlo",
                         event = "rejected",
@@ -129,7 +129,7 @@ impl MessageWrapper {
             }
         }) {
             Ok(response) => {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::MailFrom),
                     SpanId = params.session_id,
                     Hostname = params.hostname.to_string(),
@@ -140,7 +140,7 @@ impl MessageWrapper {
                 );
             }
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::MailFromRejected),
                     SpanId = params.session_id,
                     Hostname = params.hostname.to_string(),
@@ -174,7 +174,7 @@ impl MessageWrapper {
             match smtp_client.cmd(cmd.as_bytes()).await {
                 Ok(response) => match response.severity() {
                     Severity::PositiveCompletion => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::RcptTo),
                             SpanId = params.session_id,
                             Hostname = params.hostname.to_string(),
@@ -194,7 +194,7 @@ impl MessageWrapper {
                         ));
                     }
                     severity => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::RcptToRejected),
                             SpanId = params.session_id,
                             Hostname = params.hostname.to_string(),
@@ -222,7 +222,7 @@ impl MessageWrapper {
                     }
                 },
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::RcptToFailed),
                         SpanId = params.session_id,
                         Hostname = params.hostname.to_string(),
@@ -250,7 +250,7 @@ impl MessageWrapper {
                 .then(|| format!("BDAT {} LAST\r\n", self.message.size));
 
             if let Err(status) = smtp_client.send_message(self, &bdat_cmd, &params).await {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::MessageRejected),
                     SpanId = params.session_id,
                     Hostname = params.hostname.to_string(),
@@ -273,7 +273,7 @@ impl MessageWrapper {
                         // Mark recipients as delivered
                         if response.code() == 250 {
                             for (rcpt, rcpt_idx, status) in accepted_rcpts {
-                                trc::event!(
+                                crate::trc::event!(
                                     Delivery(DeliveryEvent::Delivered),
                                     SpanId = params.session_id,
                                     Hostname = params.hostname.to_string(),
@@ -286,7 +286,7 @@ impl MessageWrapper {
                                 statuses.push(DeliveryResult::account(status, *rcpt_idx));
                             }
                         } else {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::MessageRejected),
                                 SpanId = params.session_id,
                                 Hostname = params.hostname.to_string(),
@@ -308,7 +308,7 @@ impl MessageWrapper {
                         }
                     }
                     Err(status) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::MessageRejected),
                             SpanId = params.session_id,
                             Hostname = params.hostname.to_string(),
@@ -334,7 +334,7 @@ impl MessageWrapper {
                             let status: Status<HostResponse<Box<str>>, ErrorDetails> =
                                 match response.severity() {
                                     Severity::PositiveCompletion => {
-                                        trc::event!(
+                                        crate::trc::event!(
                                             Delivery(DeliveryEvent::Delivered),
                                             SpanId = params.session_id,
                                             Hostname = params.hostname.to_string(),
@@ -350,7 +350,7 @@ impl MessageWrapper {
                                         })
                                     }
                                     severity => {
-                                        trc::event!(
+                                        crate::trc::event!(
                                             Delivery(DeliveryEvent::RcptToRejected),
                                             SpanId = params.session_id,
                                             Hostname = params.hostname.to_string(),
@@ -384,7 +384,7 @@ impl MessageWrapper {
                         }
                     }
                     Err(status) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::MessageRejected),
                             SpanId = params.session_id,
                             Hostname = params.hostname.to_string(),

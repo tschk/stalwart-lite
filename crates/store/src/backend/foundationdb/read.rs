@@ -5,7 +5,7 @@
  */
 
 use super::{FdbStore, MAX_VALUE_SIZE, ReadVersion, into_error};
-use crate::{
+use crate::store::{
     Deserialize, IterateParams, Key, ValueKey, WITH_SUBSPACE,
     backend::deserialize_i64_le,
     write::{ValueClass, key::KeySerializer},
@@ -30,7 +30,7 @@ struct ChunkedValueCollector {
 }
 
 impl FdbStore {
-    pub(crate) async fn get_value<U>(&self, key: impl Key) -> trc::Result<Option<U>>
+    pub(crate) async fn get_value<U>(&self, key: impl Key) -> crate::trc::Result<Option<U>>
     where
         U: Deserialize,
     {
@@ -47,8 +47,8 @@ impl FdbStore {
     pub(crate) async fn iterate<T: Key>(
         &self,
         params: IterateParams<T>,
-        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> trc::Result<bool> + Sync + Send,
-    ) -> trc::Result<()> {
+        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> crate::trc::Result<bool> + Sync + Send,
+    ) -> crate::trc::Result<()> {
         let begin = params.begin.serialize(WITH_SUBSPACE);
         let end = params.end.serialize(WITH_SUBSPACE);
 
@@ -166,7 +166,7 @@ impl FdbStore {
     pub(crate) async fn get_counter(
         &self,
         key: impl Into<ValueKey<ValueClass>> + Sync + Send,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         let key = key.into().serialize(WITH_SUBSPACE);
         if let Some(bytes) = self
             .read_trx()
@@ -181,7 +181,7 @@ impl FdbStore {
         }
     }
 
-    pub(crate) async fn read_trx(&self) -> trc::Result<Transaction> {
+    pub(crate) async fn read_trx(&self) -> crate::trc::Result<Transaction> {
         let (is_expired, mut read_version) = {
             let version = self.version.lock();
             (version.is_expired(), version.version)
@@ -203,7 +203,7 @@ pub(crate) async fn read_chunked_value(
     key: &[u8],
     trx: &Transaction,
     snapshot: bool,
-) -> trc::Result<ChunkedValue> {
+) -> crate::trc::Result<ChunkedValue> {
     if let Some(bytes) = trx.get(key, snapshot).await.map_err(into_error)? {
         if bytes.len() < MAX_VALUE_SIZE {
             Ok(ChunkedValue::Single(bytes))

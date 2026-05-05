@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use directory::{
+use crate::common::{Server, auth::AccessToken};
+use crate::directory::{
     Permission,
     backend::internal::manage::{self},
 };
 
+use crate::utils::config::Config;
 use hyper::Method;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha1::Digest;
-use utils::config::Config;
 use x509_parser::parse_x509_certificate;
 
-use crate::management::dkim::{Algorithm, obtain_dkim_public_key};
-use http_proto::{request::decode_path_element, *};
+use crate::http::management::dkim::{Algorithm, obtain_dkim_public_key};
+use crate::http_proto::{request::decode_path_element, *};
 use std::future::Future;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,12 +35,12 @@ pub trait DnsManagement: Sync + Send {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 
     fn build_dns_records(
         &self,
         domain_name: &str,
-    ) -> impl Future<Output = trc::Result<Vec<DnsRecord>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Vec<DnsRecord>>> + Send;
 }
 
 impl DnsManagement for Server {
@@ -49,7 +49,7 @@ impl DnsManagement for Server {
         req: &HttpRequest,
         path: Vec<&str>,
         access_token: &AccessToken,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         match (
             path.get(1).copied().unwrap_or_default(),
             path.get(2),
@@ -66,11 +66,11 @@ impl DnsManagement for Server {
                 }))
                 .into_http_response())
             }
-            _ => Err(trc::ResourceEvent::NotFound.into_err()),
+            _ => Err(crate::trc::ResourceEvent::NotFound.into_err()),
         }
     }
 
-    async fn build_dns_records(&self, domain_name: &str) -> trc::Result<Vec<DnsRecord>> {
+    async fn build_dns_records(&self, domain_name: &str) -> crate::trc::Result<Vec<DnsRecord>> {
         // Obtain server name
         let server_name = &self.core.network.server_name;
         let mut records = Vec::new();
@@ -132,7 +132,7 @@ impl DnsManagement for Server {
                         });
                     }
                     Err(err) => {
-                        trc::error!(err);
+                        crate::trc::error!(err);
                     }
                 }
             }
@@ -252,7 +252,7 @@ impl DnsManagement for Server {
                 let parsed_cert = match parse_x509_certificate(cert) {
                     Ok((_, parsed_cert)) => parsed_cert,
                     Err(err) => {
-                        trc::error!(manage::error(
+                        crate::trc::error!(manage::error(
                             "Failed to parse certificate",
                             err.to_string().into()
                         ));

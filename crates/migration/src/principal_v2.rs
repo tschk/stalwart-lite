@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::Server;
+use crate::directory::{Principal, PrincipalData, Type, backend::internal::SpecialSecrets};
+use crate::migration::{
     addressbook_v2::migrate_addressbook_v013,
     calendar_v2::migrate_calendar_v013,
     contact_v2::migrate_contacts_v013,
@@ -13,23 +15,21 @@ use crate::{
     push_v2::migrate_push_subscriptions_v013,
     sieve_v2::migrate_sieve_v013,
 };
-use common::Server;
-use directory::{Principal, PrincipalData, Type, backend::internal::SpecialSecrets};
-use proc_macros::EnumMethods;
-use std::time::Instant;
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, DirectoryClass, ValueClass},
 };
-use trc::AddContext;
-use types::collection::Collection;
+use crate::trc::AddContext;
+use crate::types::collection::Collection;
+use proc_macros::EnumMethods;
+use std::time::Instant;
 
-pub(crate) async fn migrate_principals_v0_13(server: &Server) -> trc::Result<RoaringBitmap> {
+pub(crate) async fn migrate_principals_v0_13(server: &Server) -> crate::trc::Result<RoaringBitmap> {
     // Obtain email ids
     let principal_ids = get_document_ids(server, u32::MAX, Collection::Principal)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_principals = principal_ids.len();
     if num_principals == 0 {
@@ -155,7 +155,7 @@ pub(crate) async fn migrate_principals_v0_13(server: &Server) -> trc::Result<Roa
                         ValueClass::Directory(DirectoryClass::Principal(principal_id)),
                         Archiver::new(principal)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                     num_migrated += 1;
 
@@ -163,24 +163,28 @@ pub(crate) async fn migrate_principals_v0_13(server: &Server) -> trc::Result<Roa
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
                 Err(_) => {
                     if let Err(err) = legacy.deserialize_untrusted::<Principal>() {
-                        return Err(err.account_id(principal_id).caused_by(trc::location!()));
+                        return Err(err
+                            .account_id(principal_id)
+                            .caused_by(crate::trc::location!()));
                     }
                 }
             },
             Ok(None) => (),
             Err(err) => {
-                return Err(err.account_id(principal_id).caused_by(trc::location!()));
+                return Err(err
+                    .account_id(principal_id)
+                    .caused_by(crate::trc::location!()));
             }
         }
     }
 
     if num_migrated > 0 {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!("Migrated {num_migrated} principals",)
         );
     }
@@ -188,29 +192,32 @@ pub(crate) async fn migrate_principals_v0_13(server: &Server) -> trc::Result<Roa
     Ok(principal_ids)
 }
 
-pub(crate) async fn migrate_principal_v0_13(server: &Server, account_id: u32) -> trc::Result<()> {
+pub(crate) async fn migrate_principal_v0_13(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<()> {
     let start_time = Instant::now();
     let num_push = migrate_push_subscriptions_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_sieve = migrate_sieve_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_calendars = migrate_calendar_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_events = migrate_calendar_events_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_event_scheduling = migrate_calendar_scheduling_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_books = migrate_addressbook_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let num_contacts = migrate_contacts_v013(server, account_id)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     if num_sieve > 0
         || num_books > 0
@@ -220,8 +227,8 @@ pub(crate) async fn migrate_principal_v0_13(server: &Server, account_id: u32) ->
         || num_push > 0
         || num_event_scheduling > 0
     {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!(
                 "Migrated accountId {account_id} with {num_sieve} sieve scripts, {num_push} push subscriptions, {num_calendars} calendars, {num_events} calendar events, {num_event_scheduling} event scheduling, {num_books} address books and {num_contacts} contacts"
             ),

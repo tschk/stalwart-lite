@@ -6,7 +6,7 @@
 
 use compact_str::{CompactString, ToCompactString, format_compact};
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{
         Flag,
@@ -18,7 +18,7 @@ use crate::{
 use super::{parse_number, parse_sequence_set};
 
 impl Request<Command> {
-    pub fn parse_store(self) -> trc::Result<store::Arguments> {
+    pub fn parse_store(self) -> crate::trc::Result<store::Arguments> {
         let mut tokens = self.tokens.into_iter().peekable();
 
         // Sequence set
@@ -147,7 +147,7 @@ impl Request<Command> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Flag, Sequence,
             store::{self, Operation},

@@ -4,18 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::blob::UploadResponse;
-use common::ipc::{CalendarAlert, PushNotification};
-use http_proto::{HttpResponse, JsonResponse, ToHttpResponse};
-use hyper::StatusCode;
-use jmap_proto::{
+use crate::common::ipc::{CalendarAlert, PushNotification};
+use crate::http_proto::{HttpResponse, JsonResponse, ToHttpResponse};
+use crate::jmap::blob::UploadResponse;
+use crate::jmap_proto::{
     error::request::{RequestError, RequestLimitError},
     request::capability::Session,
     response::{Response, status::PushObject},
     types::state::State,
 };
-use types::{id::Id, type_state::DataType};
-use utils::map::vec_map::VecMap;
+use crate::types::{id::Id, type_state::DataType};
+use crate::utils::map::vec_map::VecMap;
+use hyper::StatusCode;
 
 pub mod acl;
 pub mod auth;
@@ -58,66 +58,73 @@ pub trait ToRequestError {
     fn to_request_error(&self) -> RequestError<'_>;
 }
 
-impl ToRequestError for trc::Error {
+impl ToRequestError for crate::trc::Error {
     fn to_request_error(&self) -> RequestError<'_> {
         let details_or_reason = self
-            .value(trc::Key::Details)
-            .or_else(|| self.value(trc::Key::Reason))
+            .value(crate::trc::Key::Details)
+            .or_else(|| self.value(crate::trc::Key::Reason))
             .and_then(|v| v.as_str());
         let details = details_or_reason.unwrap_or_else(|| self.as_ref().message());
 
         match self.as_ref() {
-            trc::EventType::Jmap(cause) => match cause {
-                trc::JmapEvent::UnknownCapability => RequestError::unknown_capability(details),
-                trc::JmapEvent::NotJson => RequestError::not_json(details),
-                trc::JmapEvent::NotRequest => RequestError::not_request(details),
+            crate::trc::EventType::Jmap(cause) => match cause {
+                crate::trc::JmapEvent::UnknownCapability => {
+                    RequestError::unknown_capability(details)
+                }
+                crate::trc::JmapEvent::NotJson => RequestError::not_json(details),
+                crate::trc::JmapEvent::NotRequest => RequestError::not_request(details),
                 _ => RequestError::invalid_parameters(),
             },
-            trc::EventType::Limit(cause) => match cause {
-                trc::LimitEvent::SizeRequest => RequestError::limit(RequestLimitError::SizeRequest),
-                trc::LimitEvent::SizeUpload => RequestError::limit(RequestLimitError::SizeUpload),
-                trc::LimitEvent::CallsIn => RequestError::limit(RequestLimitError::CallsIn),
-                trc::LimitEvent::ConcurrentRequest | trc::LimitEvent::ConcurrentConnection => {
+            crate::trc::EventType::Limit(cause) => match cause {
+                crate::trc::LimitEvent::SizeRequest => {
+                    RequestError::limit(RequestLimitError::SizeRequest)
+                }
+                crate::trc::LimitEvent::SizeUpload => {
+                    RequestError::limit(RequestLimitError::SizeUpload)
+                }
+                crate::trc::LimitEvent::CallsIn => RequestError::limit(RequestLimitError::CallsIn),
+                crate::trc::LimitEvent::ConcurrentRequest
+                | crate::trc::LimitEvent::ConcurrentConnection => {
                     RequestError::limit(RequestLimitError::ConcurrentRequest)
                 }
-                trc::LimitEvent::ConcurrentUpload => {
+                crate::trc::LimitEvent::ConcurrentUpload => {
                     RequestError::limit(RequestLimitError::ConcurrentUpload)
                 }
-                trc::LimitEvent::Quota => RequestError::over_quota(),
-                trc::LimitEvent::TenantQuota => RequestError::tenant_over_quota(),
-                trc::LimitEvent::BlobQuota => RequestError::over_blob_quota(
-                    self.value(trc::Key::Total)
+                crate::trc::LimitEvent::Quota => RequestError::over_quota(),
+                crate::trc::LimitEvent::TenantQuota => RequestError::tenant_over_quota(),
+                crate::trc::LimitEvent::BlobQuota => RequestError::over_blob_quota(
+                    self.value(crate::trc::Key::Total)
                         .and_then(|v| v.to_uint())
                         .unwrap_or_default() as usize,
-                    self.value(trc::Key::Size)
+                    self.value(crate::trc::Key::Size)
                         .and_then(|v| v.to_uint())
                         .unwrap_or_default() as usize,
                 ),
-                trc::LimitEvent::TooManyRequests => RequestError::too_many_requests(),
+                crate::trc::LimitEvent::TooManyRequests => RequestError::too_many_requests(),
             },
-            trc::EventType::Auth(cause) => match cause {
-                trc::AuthEvent::MissingTotp => {
+            crate::trc::EventType::Auth(cause) => match cause {
+                crate::trc::AuthEvent::MissingTotp => {
                     RequestError::blank(402, "TOTP code required", cause.message())
                 }
-                trc::AuthEvent::TooManyAttempts => RequestError::too_many_auth_attempts(),
+                crate::trc::AuthEvent::TooManyAttempts => RequestError::too_many_auth_attempts(),
                 _ => RequestError::unauthorized(),
             },
-            trc::EventType::Security(cause) => match cause {
-                trc::SecurityEvent::AuthenticationBan
-                | trc::SecurityEvent::ScanBan
-                | trc::SecurityEvent::AbuseBan
-                | trc::SecurityEvent::LoiterBan
-                | trc::SecurityEvent::IpBlocked => RequestError::too_many_auth_attempts(),
-                trc::SecurityEvent::Unauthorized => RequestError::forbidden(),
+            crate::trc::EventType::Security(cause) => match cause {
+                crate::trc::SecurityEvent::AuthenticationBan
+                | crate::trc::SecurityEvent::ScanBan
+                | crate::trc::SecurityEvent::AbuseBan
+                | crate::trc::SecurityEvent::LoiterBan
+                | crate::trc::SecurityEvent::IpBlocked => RequestError::too_many_auth_attempts(),
+                crate::trc::SecurityEvent::Unauthorized => RequestError::forbidden(),
             },
-            trc::EventType::Resource(cause) => match cause {
-                trc::ResourceEvent::NotFound => RequestError::not_found(),
-                trc::ResourceEvent::BadParameters => RequestError::blank(
+            crate::trc::EventType::Resource(cause) => match cause {
+                crate::trc::ResourceEvent::NotFound => RequestError::not_found(),
+                crate::trc::ResourceEvent::BadParameters => RequestError::blank(
                     StatusCode::BAD_REQUEST.as_u16(),
                     "Invalid parameters",
                     details_or_reason.unwrap_or("One or multiple parameters could not be parsed."),
                 ),
-                trc::ResourceEvent::Error => RequestError::internal_server_error(),
+                crate::trc::ResourceEvent::Error => RequestError::internal_server_error(),
                 _ => RequestError::internal_server_error(),
             },
             _ => RequestError::internal_server_error(),

@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::message::metadata::{
+use crate::email::message::metadata::{
     ArchivedMessageMetadataContents, ArchivedMessageMetadataPart, ArchivedMetadataHeaderValue,
     MetadataHeaderName, MetadataHeaderValue,
 };
+use crate::nlp::language::Language;
 use mail_parser::{Addr, Address, Group, HeaderValue};
-use nlp::language::Language;
 use rkyv::option::ArchivedOption;
 use std::borrow::Cow;
 

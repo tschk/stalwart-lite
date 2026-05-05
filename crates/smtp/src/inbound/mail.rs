@@ -4,19 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    config::smtp::session::Stage, listener::SessionStream, scripts::ScriptModification,
+};
+use crate::smtp::{
     core::{Session, SessionAddress},
     scripts::ScriptResult,
 };
-use common::{config::smtp::session::Stage, listener::SessionStream, scripts::ScriptModification};
+use crate::trc::SmtpEvent;
+use crate::utils::{DomainPart, config::Rate};
 use mail_auth::{IprevOutput, IprevResult, SpfOutput, SpfResult, spf::verify::SpfParameters};
 use smtp_proto::{MAIL_BY_NOTIFY, MAIL_BY_RETURN, MAIL_REQUIRETLS, MailFrom, MtPriority};
 use std::{
     borrow::Cow,
     time::{Duration, Instant, SystemTime},
 };
-use trc::SmtpEvent;
-use utils::{DomainPart, config::Rate};
 
 impl<T: SessionStream> Session<T> {
     pub async fn handle_mail_from(&mut self, from: MailFrom<Cow<'_, str>>) -> Result<(), ()> {
@@ -25,7 +27,7 @@ impl<T: SessionStream> Session<T> {
                 || self.params.spf_ehlo.verify()
                 || self.params.spf_mail_from.verify())
         {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::DidNotSayEhlo),
                 SpanId = self.data.session_id,
             );
@@ -34,7 +36,7 @@ impl<T: SessionStream> Session<T> {
                 .write(b"503 5.5.1 Polite people say EHLO first.\r\n")
                 .await;
         } else if self.data.mail_from.is_some() {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MultipleMailFrom),
                 SpanId = self.data.session_id,
             );
@@ -43,7 +45,7 @@ impl<T: SessionStream> Session<T> {
                 .write(b"503 5.5.1 Multiple MAIL commands not allowed.\r\n")
                 .await;
         } else if self.params.auth_require && !self.is_authenticated() {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MailFromUnauthenticated),
                 SpanId = self.data.session_id,
             );
@@ -67,7 +69,7 @@ impl<T: SessionStream> Session<T> {
                 )
                 .await;
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(if matches!(iprev.result(), IprevResult::Pass) {
                     SmtpEvent::IprevPass
                 } else {
@@ -75,7 +77,7 @@ impl<T: SessionStream> Session<T> {
                 }),
                 SpanId = self.data.session_id,
                 Domain = self.data.helo_domain.clone(),
-                Result = trc::Error::from(&iprev),
+                Result = crate::trc::Error::from(&iprev),
                 Elapsed = time.elapsed(),
             );
 
@@ -137,7 +139,7 @@ impl<T: SessionStream> Session<T> {
             .unwrap_or(true)
         {
             let mail_from = self.data.mail_from.take().unwrap();
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MailFromNotAllowed),
                 From = mail_from.address_lcase,
                 SpanId = self.data.session_id,
@@ -211,7 +213,7 @@ impl<T: SessionStream> Session<T> {
         {
             let mail_from = self.data.mail_from.as_mut().unwrap();
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MailFromRewritten),
                 SpanId = self.data.session_id,
                 Details = mail_from.address_lcase.clone(),
@@ -249,16 +251,16 @@ impl<T: SessionStream> Session<T> {
                             || (e.starts_with('@') && address_lcase.ends_with(e.as_str()))
                     })
                 {
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::MailFromUnauthorized),
                         SpanId = self.data.session_id,
                         From = address_lcase.to_string(),
-                        Details = [trc::Value::String(authenticated_as.into())]
+                        Details = [crate::trc::Value::String(authenticated_as.into())]
                             .into_iter()
                             .chain(
                                 self.authenticated_emails()
                                     .iter()
-                                    .map(|e| trc::Value::String(e.as_str().into()))
+                                    .map(|e| crate::trc::Value::String(e.as_str().into()))
                             )
                             .collect::<Vec<_>>()
                     );
@@ -281,7 +283,7 @@ impl<T: SessionStream> Session<T> {
                 .await
                 .unwrap_or(false)
         {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RequireTlsDisabled),
                 SpanId = self.data.session_id,
             );
@@ -303,7 +305,7 @@ impl<T: SessionStream> Session<T> {
                 } else {
                     self.data.mail_from = None;
 
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::DeliverByInvalid),
                         SpanId = self.data.session_id,
                         Details = from.by,
@@ -320,7 +322,7 @@ impl<T: SessionStream> Session<T> {
                         .await;
                 }
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::DeliverByDisabled),
                     SpanId = self.data.session_id,
                 );
@@ -340,7 +342,7 @@ impl<T: SessionStream> Session<T> {
                 if (-6..6).contains(&from.mt_priority) {
                     self.data.priority = from.mt_priority as i16;
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::MtPriorityInvalid),
                         SpanId = self.data.session_id,
                         Details = from.mt_priority,
@@ -349,7 +351,7 @@ impl<T: SessionStream> Session<T> {
                     return self.write(b"501 5.5.4 Invalid priority value.\r\n").await;
                 }
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::MtPriorityDisabled),
                     SpanId = self.data.session_id,
                 );
@@ -367,7 +369,7 @@ impl<T: SessionStream> Session<T> {
                     .await
                     .unwrap_or(25 * 1024 * 1024)
         {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MessageTooLarge),
                 SpanId = self.data.session_id,
                 Size = from.size,
@@ -396,7 +398,7 @@ impl<T: SessionStream> Session<T> {
                 if hold_for <= max_hold {
                     self.data.future_release = hold_for;
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Smtp(SmtpEvent::FutureReleaseInvalid),
                         SpanId = self.data.session_id,
                         Details = hold_for,
@@ -412,7 +414,7 @@ impl<T: SessionStream> Session<T> {
                         .await;
                 }
             } else {
-                trc::event!(
+                crate::trc::event!(
                     Smtp(SmtpEvent::FutureReleaseDisabled),
                     SpanId = self.data.session_id,
                 );
@@ -429,7 +431,7 @@ impl<T: SessionStream> Session<T> {
                 .await
                 .unwrap_or(false)
         {
-            trc::event!(Smtp(SmtpEvent::DsnDisabled), SpanId = self.data.session_id,);
+            crate::trc::event!(Smtp(SmtpEvent::DsnDisabled), SpanId = self.data.session_id,);
             self.data.mail_from = None;
             return self
                 .write(b"501 5.5.4 DSN extension has been disabled.\r\n")
@@ -475,7 +477,7 @@ impl<T: SessionStream> Session<T> {
                         .await
                 };
 
-                trc::event!(
+                crate::trc::event!(
                     Smtp(if matches!(spf_output.result(), SpfResult::Pass) {
                         SmtpEvent::SpfFromPass
                     } else {
@@ -489,7 +491,7 @@ impl<T: SessionStream> Session<T> {
                         "<>"
                     }
                     .to_string(),
-                    Result = trc::Error::from(&spf_output),
+                    Result = crate::trc::Error::from(&spf_output),
                     Elapsed = time.elapsed(),
                 );
 
@@ -504,7 +506,7 @@ impl<T: SessionStream> Session<T> {
                 }
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::MailFrom),
                 SpanId = self.data.session_id,
                 From = self.data.mail_from.as_ref().unwrap().address_lcase.clone(),
@@ -513,7 +515,7 @@ impl<T: SessionStream> Session<T> {
             self.eval_rcpt_params().await;
             self.write(b"250 2.1.0 OK\r\n").await
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Smtp(SmtpEvent::RateLimitExceeded),
                 SpanId = self.data.session_id,
                 From = self.data.mail_from.as_ref().unwrap().address_lcase.clone(),
@@ -570,8 +572,8 @@ impl<T: SessionStream> Session<T> {
                 Ok(true) => return Ok(result),
                 Ok(false) => (),
                 Err(err) => {
-                    trc::error!(
-                        err.caused_by(trc::location!())
+                    crate::trc::error!(
+                        err.caused_by(crate::trc::location!())
                             .span_id(self.data.session_id)
                             .details("Failed to lookup local domain")
                     );

@@ -5,24 +5,24 @@
  */
 
 use super::*;
-use crate::{
+use crate::common::{
+    Server, auth::AccessToken, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
+};
+use crate::email::{
     cache::{MessageCacheFetch, email::MessageCacheAccess},
     message::metadata::MessageData,
 };
-use common::{
-    Server, auth::AccessToken, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
-};
-use store::{
+use crate::store::{
     SerializeInfallible,
     roaring::RoaringBitmap,
     write::{BatchBuilder, SearchIndex, TaskEpoch, TaskQueueClass, ValueClass},
 };
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, VanishedCollection},
     field::MailboxField,
@@ -35,7 +35,7 @@ pub trait MailboxDestroy: Sync + Send {
         document_id: u32,
         access_token: &AccessToken,
         remove_emails: bool,
-    ) -> impl Future<Output = trc::Result<Result<Option<u64>, MailboxDestroyError>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Result<Option<u64>, MailboxDestroyError>>> + Send;
 }
 
 pub enum MailboxDestroyError {
@@ -54,7 +54,7 @@ impl MailboxDestroy for Server {
         document_id: u32,
         access_token: &AccessToken,
         remove_emails: bool,
-    ) -> trc::Result<Result<Option<u64>, MailboxDestroyError>> {
+    ) -> crate::trc::Result<Result<Option<u64>, MailboxDestroyError>> {
         // Internal folders cannot be deleted
         #[cfg(not(feature = "test_mode"))]
         if [INBOX_ID, TRASH_ID, JUNK_ID].contains(&document_id) {
@@ -65,7 +65,7 @@ impl MailboxDestroy for Server {
         let cache = self
             .get_cached_messages(account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         if cache
             .mailboxes
             .items
@@ -96,7 +96,7 @@ impl MailboxDestroy for Server {
                         // Remove mailbox from list
                         let prev_message_data = message_data_
                             .to_unarchived::<MessageData>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         if !prev_message_data
                             .inner
                             .mailboxes
@@ -122,7 +122,7 @@ impl MailboxDestroy for Server {
                                         .with_access_token(access_token)
                                         .with_current(prev_message_data),
                                 )
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .set(
                                     ValueClass::TaskQueue(TaskQueueClass::UpdateIndex {
                                         index: SearchIndex::Email,
@@ -161,7 +161,7 @@ impl MailboxDestroy for Server {
                                         .with_changes(new_message_data)
                                         .with_current(prev_message_data),
                                 )
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .commit_point();
                         }
 
@@ -169,7 +169,7 @@ impl MailboxDestroy for Server {
                     },
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             } else {
                 return Ok(Err(MailboxDestroyError::HasEmails));
             }
@@ -184,11 +184,11 @@ impl MailboxDestroy for Server {
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         {
             let mailbox = mailbox_
                 .to_unarchived::<Mailbox>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             // Validate ACLs
             if access_token.is_shared(account_id) {
                 let acl = mailbox.inner.acls.effective_acl(access_token);
@@ -203,7 +203,7 @@ impl MailboxDestroy for Server {
                 .with_document(document_id)
                 .clear(MailboxField::UidCounter)
                 .custom(ObjectIndexBuilder::<_, ()>::new().with_current(mailbox))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         } else {
             return Ok(Err(MailboxDestroyError::NotFound));
         };
@@ -222,7 +222,7 @@ impl MailboxDestroy for Server {
                 Err(err) if err.is_assertion_failure() => {
                     Ok(Err(MailboxDestroyError::AssertionFailed))
                 }
-                Err(err) => Err(err.caused_by(trc::location!())),
+                Err(err) => Err(err.caused_by(crate::trc::location!())),
             }
         } else {
             Ok(Ok(None))

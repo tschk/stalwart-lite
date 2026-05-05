@@ -5,7 +5,7 @@
  */
 
 use super::DocumentSet;
-use crate::{
+use crate::store::{
     Deserialize, IterateParams, Key, QueryResult, SUBSPACE_BLOB_EXTRA, SUBSPACE_COUNTER,
     SUBSPACE_INDEXES, SUBSPACE_LOGS, Store, U32_LEN, Value, ValueKey,
     write::{
@@ -15,13 +15,13 @@ use crate::{
         now,
     },
 };
+use crate::trc::{AddContext, StoreEvent};
+use crate::types::collection::Collection;
 use compact_str::ToCompactString;
 use std::{ops::Range, time::Instant};
-use trc::{AddContext, StoreEvent};
-use types::collection::Collection;
 
 impl Store {
-    pub async fn get_value<U>(&self, key: impl Key) -> trc::Result<Option<U>>
+    pub async fn get_value<U>(&self, key: impl Key) -> crate::trc::Result<Option<U>>
     where
         U: Deserialize + 'static,
     {
@@ -42,16 +42,16 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.get_value(key).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     pub async fn iterate<T: Key>(
         &self,
         params: IterateParams<T>,
-        cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> trc::Result<bool> + Sync + Send,
-    ) -> trc::Result<()> {
+        cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> crate::trc::Result<bool> + Sync + Send,
+    ) -> crate::trc::Result<()> {
         let start_time = Instant::now();
         let result = match self {
             #[cfg(feature = "sqlite")]
@@ -70,11 +70,11 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.iterate(params, cb).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!());
+        .caused_by(crate::trc::location!());
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::DataIterate),
             Elapsed = start_time.elapsed(),
         );
@@ -85,7 +85,7 @@ impl Store {
     pub async fn get_counter(
         &self,
         key: impl Into<ValueKey<ValueClass>> + Sync + Send,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.get_counter(key).await,
@@ -103,9 +103,9 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.get_counter(key).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     #[allow(unreachable_patterns)]
@@ -114,7 +114,7 @@ impl Store {
         &self,
         query: &str,
         params: Vec<Value<'_>>,
-    ) -> trc::Result<T> {
+    ) -> crate::trc::Result<T> {
         let result = match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.sql_query(query, &params).await,
@@ -122,20 +122,20 @@ impl Store {
             Self::PostgreSQL(store) => store.sql_query(query, &params).await,
             #[cfg(feature = "mysql")]
             Self::MySQL(store) => store.sql_query(query, &params).await,
-            _ => Err(trc::StoreEvent::NotSupported.into_err()),
+            _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
         };
 
-        trc::event!(
-            Store(trc::StoreEvent::SqlQuery),
+        crate::trc::event!(
+            Store(crate::trc::StoreEvent::SqlQuery),
             Details = query.to_compact_string(),
             Value = params.as_slice(),
             Result = &result,
         );
 
-        result.caused_by(trc::location!())
+        result.caused_by(crate::trc::location!())
     }
 
-    pub async fn write(&self, batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub async fn write(&self, batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         let start_time = Instant::now();
         let ops = batch.ops.len();
 
@@ -156,10 +156,10 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.write(batch).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         };
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::DataWrite),
             Elapsed = start_time.elapsed(),
             Total = ops,
@@ -173,7 +173,7 @@ impl Store {
         account_id: u32,
         collection: Collection,
         num_ids: u64,
-    ) -> trc::Result<u32> {
+    ) -> crate::trc::Result<u32> {
         // Increment UID next
         let mut batch = BatchBuilder::new();
         batch
@@ -188,7 +188,7 @@ impl Store {
         })
     }
 
-    pub async fn purge_store(&self) -> trc::Result<()> {
+    pub async fn purge_store(&self) -> crate::trc::Result<()> {
         // Delete expired reports
         let now = now();
         self.delete_range(
@@ -199,7 +199,7 @@ impl Store {
             })),
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
         self.delete_range(
             ValueKey::from(ValueClass::Report(ReportClass::Tls { id: 0, expires: 0 })),
             ValueKey::from(ValueClass::Report(ReportClass::Tls {
@@ -208,7 +208,7 @@ impl Store {
             })),
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
         self.delete_range(
             ValueKey::from(ValueClass::Report(ReportClass::Arf { id: 0, expires: 0 })),
             ValueKey::from(ValueClass::Report(ReportClass::Arf {
@@ -217,7 +217,7 @@ impl Store {
             })),
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         match self {
             #[cfg(feature = "sqlite")]
@@ -236,12 +236,12 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.purge_store().await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub async fn delete_range(&self, from: impl Key, to: impl Key) -> crate::trc::Result<()> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.delete_range(from, to).await,
@@ -259,9 +259,9 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.delete_range(from, to).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
     pub async fn delete_documents(
@@ -271,7 +271,7 @@ impl Store {
         collection: u8,
         collection_offset: Option<usize>,
         document_ids: &impl DocumentSet,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         // Serialize keys
         let (from_key, to_key) = if collection_offset.is_some() {
             (
@@ -317,7 +317,7 @@ impl Store {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         // Remove keys
         let mut batch = BatchBuilder::new();
@@ -326,7 +326,7 @@ impl Store {
             if batch.is_large_batch() {
                 self.write(std::mem::take(&mut batch).build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             batch.any_op(Operation::Value {
                 class: ValueClass::Any(AnyClass { subspace, key }),
@@ -337,13 +337,13 @@ impl Store {
         if !batch.is_empty() {
             self.write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(())
     }
 
-    pub async fn danger_destroy_account(&self, account_id: u32) -> trc::Result<()> {
+    pub async fn danger_destroy_account(&self, account_id: u32) -> crate::trc::Result<()> {
         for subspace in [
             SUBSPACE_LOGS,
             SUBSPACE_INDEXES,
@@ -361,7 +361,7 @@ impl Store {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         }
 
         for (from_class, to_class) in [
@@ -383,13 +383,17 @@ impl Store {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         }
 
         Ok(())
     }
 
-    pub async fn get_blob(&self, key: &[u8], range: Range<usize>) -> trc::Result<Option<Vec<u8>>> {
+    pub async fn get_blob(
+        &self,
+        key: &[u8],
+        range: Range<usize>,
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.get_blob(key, range).await,
@@ -407,12 +411,12 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.get_blob(key, range).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.put_blob(key, data).await,
@@ -430,12 +434,12 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.put_blob(key, data).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 
-    pub async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         match self {
             #[cfg(feature = "sqlite")]
             Self::SQLite(store) => store.delete_blob(key).await,
@@ -453,8 +457,8 @@ impl Store {
             #[cfg(all(feature = "enterprise", any(feature = "postgres", feature = "mysql")))]
             Self::SQLReadReplica(store) => store.delete_blob(key).await,
             // SPDX-SnippetEnd
-            Self::None => Err(trc::StoreEvent::NotConfigured.into()),
+            Self::None => Err(crate::trc::StoreEvent::NotConfigured.into()),
         }
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 }

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavMethod, PropStatBuilder,
     common::{
         ETag, ExtractETag,
@@ -12,8 +13,7 @@ use crate::{
         uri::DavUriResource,
     },
 };
-use common::{Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{
         Namespace,
@@ -22,22 +22,22 @@ use dav_proto::{
         response::{BaseCondition, MultiStatus, Response},
     },
 };
-use groupware::{
+use crate::groupware::{
     cache::GroupwareCache,
     contact::{AddressBook, ContactCard},
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::BatchBuilder;
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::write::BatchBuilder;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait CardPropPatchRequestHandler: Sync + Send {
     fn handle_card_proppatch_request(
@@ -45,7 +45,7 @@ pub(crate) trait CardPropPatchRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PropertyUpdate,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn apply_addressbook_properties(
         &self,
@@ -71,7 +71,7 @@ impl CardPropPatchRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         mut request: PropertyUpdate,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -82,7 +82,7 @@ impl CardPropPatchRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::AddressBook)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resource_
             .resource
             .and_then(|r| resources.by_path(r))
@@ -120,7 +120,7 @@ impl CardPropPatchRequestHandler for Server {
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
         // Validate headers
@@ -148,10 +148,10 @@ impl CardPropPatchRequestHandler for Server {
             // Deserialize
             let book = archive
                 .to_unarchived::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_book = archive
                 .deserialize::<AddressBook>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Remove properties
             if !request.set_first && !request.remove.is_empty() {
@@ -185,7 +185,7 @@ impl CardPropPatchRequestHandler for Server {
             if is_success {
                 new_book
                     .update(access_token, book, account_id, document_id, &mut batch)
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .etag()
             } else {
                 book.etag().into()
@@ -194,10 +194,10 @@ impl CardPropPatchRequestHandler for Server {
             // Deserialize
             let card = archive
                 .to_unarchived::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_card = archive
                 .deserialize::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Remove properties
             if !request.set_first && !request.remove.is_empty() {
@@ -219,7 +219,7 @@ impl CardPropPatchRequestHandler for Server {
             if is_success {
                 new_card
                     .update(access_token, card, account_id, document_id, &mut batch)
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .etag()
             } else {
                 card.etag().into()
@@ -227,7 +227,9 @@ impl CardPropPatchRequestHandler for Server {
         };
 
         if is_success {
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
         }
 
         if headers.ret != Return::Minimal || !is_success {

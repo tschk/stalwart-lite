@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{Email, SpamFilterContext};
-use common::Server;
+use crate::common::Server;
+use crate::nlp::tokenizers::types::{TokenType, TypesTokenizer};
+use crate::spam_filter::{Email, SpamFilterContext};
 use mail_parser::HeaderName;
-use nlp::tokenizers::types::{TokenType, TypesTokenizer};
 use smtp_proto::{MAIL_BODY_8BITMIME, MAIL_BODY_BINARYMIME, MAIL_SMTPUTF8};
 use std::future::Future;
 

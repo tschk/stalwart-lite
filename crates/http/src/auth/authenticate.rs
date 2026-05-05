@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::auth::AccessToken;
-use common::{HttpAuthCache, Server, auth::AuthRequest, listener::limiter::InFlight};
-use http_proto::{HttpRequest, HttpSessionData};
+use crate::common::auth::AccessToken;
+use crate::common::{HttpAuthCache, Server, auth::AuthRequest, listener::limiter::InFlight};
+use crate::http_proto::{HttpRequest, HttpSessionData};
 use hyper::header;
 use mail_parser::decoders::base64::base64_decode;
 use mail_send::Credentials;
@@ -20,7 +20,7 @@ pub trait Authenticator: Sync + Send {
         req: &HttpRequest,
         session: &HttpSessionData,
         allow_api_access: bool,
-    ) -> impl Future<Output = trc::Result<(Option<InFlight>, Arc<AccessToken>)>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<(Option<InFlight>, Arc<AccessToken>)>> + Send;
 }
 
 impl Authenticator for Server {
@@ -29,7 +29,7 @@ impl Authenticator for Server {
         req: &HttpRequest,
         session: &HttpSessionData,
         allow_api_access: bool,
-    ) -> trc::Result<(Option<InFlight>, Arc<AccessToken>)> {
+    ) -> crate::trc::Result<(Option<InFlight>, Arc<AccessToken>)> {
         if let Some((mechanism, token)) = req.authorization() {
             // Check if the credentials are cached
             if let Some(http_cache) = self.inner.cache.http_auth.get(token) {
@@ -52,11 +52,11 @@ impl Authenticator for Server {
             let credentials = if mechanism.eq_ignore_ascii_case("basic") {
                 // Decode the base64 encoded credentials
                 decode_plain_auth(token).ok_or_else(|| {
-                    trc::AuthEvent::Error
+                    crate::trc::AuthEvent::Error
                         .into_err()
                         .details("Failed to decode Basic auth request.")
                         .id(token.to_string())
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?
             } else if mechanism.eq_ignore_ascii_case("bearer") {
                 // Enforce anonymous rate limit
@@ -64,22 +64,22 @@ impl Authenticator for Server {
                     .await?;
 
                 decode_bearer_token(token, allow_api_access).ok_or_else(|| {
-                    trc::AuthEvent::Error
+                    crate::trc::AuthEvent::Error
                         .into_err()
                         .details("Failed to decode Bearer token.")
                         .id(token.to_string())
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 })?
             } else {
                 // Enforce anonymous rate limit
                 self.is_http_anonymous_request_allowed(&session.remote_ip)
                     .await?;
 
-                return Err(trc::AuthEvent::Error
+                return Err(crate::trc::AuthEvent::Error
                     .into_err()
                     .reason("Unsupported authentication mechanism.")
                     .details(token.to_string())
-                    .caused_by(trc::location!()));
+                    .caused_by(crate::trc::location!()));
             };
 
             // Authenticate
@@ -114,10 +114,10 @@ impl Authenticator for Server {
             self.is_http_anonymous_request_allowed(&session.remote_ip)
                 .await?;
 
-            Err(trc::AuthEvent::Failed
+            Err(crate::trc::AuthEvent::Failed
                 .into_err()
                 .details("Missing Authorization header.")
-                .caused_by(trc::location!()))
+                .caused_by(crate::trc::location!()))
         }
     }
 }

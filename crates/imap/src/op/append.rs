@@ -5,28 +5,28 @@
  */
 
 use super::{ImapContext, ToModSeq};
-use crate::{
+use crate::common::{ipc::PushNotification, listener::SessionStream};
+use crate::directory::Permission;
+use crate::email::message::ingest::{EmailIngest, IngestEmail, IngestSource};
+use crate::imap::{
     core::{ImapUidToId, MailboxId, SelectedMailbox, Session, SessionData},
     spawn_op,
 };
-use common::{ipc::PushNotification, listener::SessionStream};
-use directory::Permission;
-use email::message::ingest::{EmailIngest, IngestEmail, IngestSource};
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     protocol::{append::Arguments, select::HighestModSeq},
     receiver::Request,
 };
-use mail_parser::MessageParser;
-use std::{sync::Arc, time::Instant};
-use types::{
+use crate::types::{
     acl::Acl,
     keyword::Keyword,
     type_state::{DataType, StateChange},
 };
+use mail_parser::MessageParser;
+use std::{sync::Arc, time::Instant};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_append(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_append(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapAppend)?;
 
@@ -37,13 +37,13 @@ impl<T: SessionStream> Session<T> {
         // Refresh mailboxes
         data.synchronize_mailboxes(false)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Obtain mailbox
         let mailbox = if let Some(mailbox) = data.get_mailbox_by_name(&arguments.mailbox_name) {
             mailbox
         } else {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details("Mailbox does not exist.")
                 .code(ResponseCode::TryCreate)
@@ -70,16 +70,16 @@ impl<T: SessionStream> SessionData<T> {
         mailbox: MailboxId,
         is_qresync: bool,
         op_start: Instant,
-    ) -> trc::Result<StatusResponse> {
+    ) -> crate::trc::Result<StatusResponse> {
         // Verify ACLs
         let account_id = mailbox.account_id;
         let mailbox_id = mailbox.mailbox_id;
         if !self
             .check_mailbox_acl(account_id, mailbox_id, Acl::AddItems)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?
+            .imap_ctx(&arguments.tag, crate::trc::location!())?
         {
-            return Err(trc::ImapEvent::Error
+            return Err(crate::trc::ImapEvent::Error
                 .into_err()
                 .details(
                     "You do not have the required permissions to append messages to this mailbox.",
@@ -93,7 +93,7 @@ impl<T: SessionStream> SessionData<T> {
             .server
             .get_access_token(mailbox.account_id)
             .await
-            .imap_ctx(&arguments.tag, trc::location!())?;
+            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
         // Append messages
         let mut response = StatusResponse::completed(Command::Append);
@@ -125,18 +125,20 @@ impl<T: SessionStream> SessionData<T> {
                     last_change_id = Some(email.change_id);
                 }
                 Err(err) => {
-                    return Err(
-                        if err.matches(trc::EventType::Limit(trc::LimitEvent::Quota)) {
-                            err.details("Disk quota exceeded.")
-                                .code(ResponseCode::OverQuota)
-                        } else if err.matches(trc::EventType::Limit(trc::LimitEvent::TenantQuota)) {
-                            err.details("Organization disk quota exceeded.")
-                                .code(ResponseCode::OverQuota)
-                        } else {
-                            err
-                        }
-                        .id(arguments.tag),
-                    );
+                    return Err(if err
+                        .matches(crate::trc::EventType::Limit(crate::trc::LimitEvent::Quota))
+                    {
+                        err.details("Disk quota exceeded.")
+                            .code(ResponseCode::OverQuota)
+                    } else if err.matches(crate::trc::EventType::Limit(
+                        crate::trc::LimitEvent::TenantQuota,
+                    )) {
+                        err.details("Organization disk quota exceeded.")
+                            .code(ResponseCode::OverQuota)
+                    } else {
+                        err
+                    }
+                    .id(arguments.tag));
                 }
             }
         }
@@ -154,15 +156,15 @@ impl<T: SessionStream> SessionData<T> {
                 .await;
         }
 
-        trc::event!(
-            Imap(trc::ImapEvent::Append),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Append),
             SpanId = self.session_id,
             MailboxName = arguments.mailbox_name.clone(),
             AccountId = account_id,
             MailboxId = mailbox_id,
             DocumentId = created_ids
                 .iter()
-                .map(|r| trc::Value::from(r.id))
+                .map(|r| crate::trc::Value::from(r.id))
                 .collect::<Vec<_>>(),
             Elapsed = op_start.elapsed()
         );

@@ -5,28 +5,30 @@
  */
 
 use super::{NextHop, lookup::ToNextHop, mta_sts, session::SessionParams};
-use crate::outbound::DeliveryResult;
-use crate::outbound::client::{
+use crate::common::Server;
+use crate::common::config::smtp::queue::RoutingStrategy;
+use crate::common::config::{server::ServerProtocol, smtp::report::AggregateFrequency};
+use crate::common::ipc::{PolicyType, QueueEvent, QueueEventStatus, TlsEvent};
+use crate::smtp::outbound::DeliveryResult;
+use crate::smtp::outbound::client::{
     SmtpClient, from_error_details, from_error_status, from_mail_send_error,
 };
-use crate::outbound::dane::dnssec::TlsaLookup;
-use crate::outbound::lookup::{DnsLookup, SourceIp};
-use crate::outbound::mta_sts::lookup::MtaStsLookup;
-use crate::outbound::mta_sts::verify::VerifyPolicy;
-use crate::outbound::{client::StartTlsResult, dane::verify::TlsaVerify};
-use crate::queue::dsn::SendDsn;
-use crate::queue::spool::SmtpSpool;
-use crate::queue::throttle::IsAllowed;
-use crate::queue::{
+use crate::smtp::outbound::dane::dnssec::TlsaLookup;
+use crate::smtp::outbound::lookup::{DnsLookup, SourceIp};
+use crate::smtp::outbound::mta_sts::lookup::MtaStsLookup;
+use crate::smtp::outbound::mta_sts::verify::VerifyPolicy;
+use crate::smtp::outbound::{client::StartTlsResult, dane::verify::TlsaVerify};
+use crate::smtp::queue::dsn::SendDsn;
+use crate::smtp::queue::spool::SmtpSpool;
+use crate::smtp::queue::throttle::IsAllowed;
+use crate::smtp::queue::{
     Error, FROM_REPORT, HostResponse, MessageWrapper, QueueEnvelope, QueuedMessage, Status,
 };
-use crate::reporting::SmtpReporting;
-use crate::{queue::ErrorDetails, reporting::tls::TlsRptOptions};
+use crate::smtp::reporting::SmtpReporting;
+use crate::smtp::{queue::ErrorDetails, reporting::tls::TlsRptOptions};
+use crate::store::write::{BatchBuilder, QueueClass, ValueClass, now};
+use crate::trc::{DaneEvent, DeliveryEvent, MtaStsEvent, ServerEvent, TlsRptEvent};
 use ahash::AHashMap;
-use common::Server;
-use common::config::smtp::queue::RoutingStrategy;
-use common::config::{server::ServerProtocol, smtp::report::AggregateFrequency};
-use common::ipc::{PolicyType, QueueEvent, QueueEventStatus, TlsEvent};
 use compact_str::ToCompactString;
 use mail_auth::{
     mta_sts::TlsRpt,
@@ -38,8 +40,6 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Instant,
 };
-use store::write::{BatchBuilder, QueueClass, ValueClass, now};
-use trc::{DaneEvent, DeliveryEvent, MtaStsEvent, ServerEvent, TlsRptEvent};
 
 impl QueuedMessage {
     pub fn try_deliver(self, server: Server) {
@@ -53,15 +53,15 @@ impl QueuedMessage {
                     message.span_id = server.inner.data.span_id_gen.generate();
                     let span_id = message.span_id;
 
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::AttemptStart),
                         SpanId = message.span_id,
                         QueueId = message.queue_id,
                         QueueName = message.queue_name.to_string(),
                         From = if !message.message.return_path.is_empty() {
-                            trc::Value::String(message.message.return_path.as_ref().into())
+                            crate::trc::Value::String(message.message.return_path.as_ref().into())
                         } else {
-                            trc::Value::String("<>".into())
+                            crate::trc::Value::String("<>".into())
                         },
                         To = message
                             .message
@@ -73,7 +73,7 @@ impl QueuedMessage {
                                     Status::Scheduled | Status::TemporaryFailure(_)
                                 ) && r.queue == message.queue_name
                                 {
-                                    Some(trc::Value::String(r.address().into()))
+                                    Some(crate::trc::Value::String(r.address().into()))
                                 } else {
                                     None
                                 }
@@ -87,7 +87,7 @@ impl QueuedMessage {
                     let start_time = Instant::now();
                     let queue_event = self.deliver_task(server.clone(), message).await;
 
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::AttemptEnd),
                         SpanId = span_id,
                         Elapsed = start_time.elapsed(),
@@ -101,7 +101,7 @@ impl QueuedMessage {
                     // Message no longer exists, delete queue event.
                     let mut batch = BatchBuilder::new();
                     batch.clear(ValueClass::Queue(QueueClass::MessageEvent(
-                        store::write::QueueEvent {
+                        crate::store::write::QueueEvent {
                             due: self.due,
                             queue_id: self.queue_id,
                             queue_name: self.queue_name.into_inner(),
@@ -109,9 +109,9 @@ impl QueuedMessage {
                     )));
 
                     if let Err(err) = server.store().write(batch.build_all()).await {
-                        trc::error!(
+                        crate::trc::error!(
                             err.details("Failed to delete queue event.")
-                                .caused_by(trc::location!())
+                                .caused_by(crate::trc::location!())
                         );
                     }
 
@@ -137,10 +137,10 @@ impl QueuedMessage {
                 .await
                 .is_err()
             {
-                trc::event!(
+                crate::trc::event!(
                     Server(ServerEvent::ThreadError),
                     Reason = "Channel closed.",
-                    CausedBy = trc::location!(),
+                    CausedBy = crate::trc::location!(),
                 );
             }
         });
@@ -161,10 +161,10 @@ impl QueuedMessage {
                     .next_delivery_event(self.queue_name.into())
                     .is_some_and(|due| due <= now()) => {}
             PendingDelivery::No => {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::Completed),
                     SpanId = span_id,
-                    Elapsed = trc::Value::Duration((now() - message.message.created) * 1000)
+                    Elapsed = crate::trc::Value::Duration((now() - message.message.created) * 1000)
                 );
 
                 // All message recipients expired, do not re-queue. (DSN has been already sent)
@@ -185,11 +185,11 @@ impl QueuedMessage {
                 .is_allowed(throttle, &message.message, message.span_id)
                 .await
             {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::RateLimitExceeded),
                     Id = throttle.id.clone(),
                     SpanId = span_id,
-                    NextRetry = trc::Value::Timestamp(retry_at)
+                    NextRetry = crate::trc::Value::Timestamp(retry_at)
                 );
 
                 let now = now();
@@ -244,7 +244,7 @@ impl QueuedMessage {
         let no_ip = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
         let mut delivery_results: Vec<DeliveryResult> = Vec::new();
         'next_route: for ((domain, route), rcpt_idxs) in routes {
-            trc::event!(
+            crate::trc::event!(
                 Delivery(DeliveryEvent::DomainDeliveryStart),
                 SpanId = message.span_id,
                 Domain = domain.to_string(),
@@ -260,7 +260,7 @@ impl QueuedMessage {
                     .is_allowed(throttle, &envelope, message.span_id)
                     .await
                 {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::RateLimitExceeded),
                         Id = throttle.id.clone(),
                         SpanId = span_id,
@@ -326,14 +326,14 @@ impl QueuedMessage {
                                 .await
                             {
                                 Ok(record) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         TlsRpt(TlsRptEvent::RecordFetch),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
                                         Details = record
                                             .rua
                                             .iter()
-                                            .map(|uri| trc::Value::from(match uri {
+                                            .map(|uri| crate::trc::Value::from(match uri {
                                                 mail_auth::mta_sts::ReportUri::Mail(uri)
                                                 | mail_auth::mta_sts::ReportUri::Http(uri) =>
                                                     uri.to_string(),
@@ -345,7 +345,7 @@ impl QueuedMessage {
                                     TlsRptOptions { record, interval }.into()
                                 }
                                 Err(mail_auth::Error::DnsRecordNotFound(_)) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         TlsRpt(TlsRptEvent::RecordNotFound),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
@@ -354,11 +354,11 @@ impl QueuedMessage {
                                     None
                                 }
                                 Err(err) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         TlsRpt(TlsRptEvent::RecordFetchError),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
-                                        CausedBy = trc::Error::from(err),
+                                        CausedBy = crate::trc::Error::from(err),
                                         Elapsed = time.elapsed(),
                                     );
                                     None
@@ -379,7 +379,7 @@ impl QueuedMessage {
                     .await
                 {
                     Ok(mta_sts_policy) => {
-                        trc::event!(
+                        crate::trc::event!(
                             MtaSts(MtaStsEvent::PolicyFetch),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -387,7 +387,7 @@ impl QueuedMessage {
                             Details = mta_sts_policy
                                 .mx
                                 .iter()
-                                .map(|mx| trc::Value::String(mx.to_compact_string()))
+                                .map(|mx| crate::trc::Value::String(mx.to_compact_string()))
                                 .collect::<Vec<_>>(),
                             Elapsed = time.elapsed(),
                         );
@@ -434,7 +434,7 @@ impl QueuedMessage {
 
                         match &err {
                             mta_sts::Error::Dns(mail_auth::Error::DnsRecordNotFound(_)) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     MtaSts(MtaStsEvent::PolicyNotFound),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -443,17 +443,17 @@ impl QueuedMessage {
                                 );
                             }
                             mta_sts::Error::Dns(err) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     MtaSts(MtaStsEvent::PolicyFetchError),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
-                                    CausedBy = trc::Error::from(err.clone()),
+                                    CausedBy = crate::trc::Error::from(err.clone()),
                                     Strict = strict,
                                     Elapsed = time.elapsed(),
                                 );
                             }
                             mta_sts::Error::Http(err) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     MtaSts(MtaStsEvent::PolicyFetchError),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -463,7 +463,7 @@ impl QueuedMessage {
                                 );
                             }
                             mta_sts::Error::InvalidPolicy(reason) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     MtaSts(MtaStsEvent::InvalidPolicy),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -504,7 +504,7 @@ impl QueuedMessage {
                 {
                     Ok(mx) => mx,
                     Err(mail_auth::Error::DnsRecordNotFound(_)) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::MxLookupFailed),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -515,11 +515,11 @@ impl QueuedMessage {
                         Arc::new(vec![])
                     }
                     Err(err) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::MxLookupFailed),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
-                            CausedBy = trc::Error::from(err.clone()),
+                            CausedBy = crate::trc::Error::from(err.clone()),
                             Elapsed = time.elapsed(),
                         );
 
@@ -532,19 +532,19 @@ impl QueuedMessage {
                 };
 
                 if let Some(remote_hosts_) = mx_list.to_remote_hosts(domain, mx_config) {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::MxLookup),
                         SpanId = message.span_id,
                         Domain = domain.to_string(),
                         Details = remote_hosts_
                             .iter()
-                            .map(|h| trc::Value::String(h.hostname().into()))
+                            .map(|h| crate::trc::Value::String(h.hostname().into()))
                             .collect::<Vec<_>>(),
                         Elapsed = time.elapsed(),
                     );
                     remote_hosts = remote_hosts_;
                 } else {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::NullMx),
                         SpanId = message.span_id,
                         Domain = domain.to_string(),
@@ -588,7 +588,7 @@ impl QueuedMessage {
                                 .await;
                         }
 
-                        trc::event!(
+                        crate::trc::event!(
                             MtaSts(MtaStsEvent::NotAuthorized),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -596,7 +596,7 @@ impl QueuedMessage {
                             Details = mta_sts_policy
                                 .mx
                                 .iter()
-                                .map(|mx| trc::Value::String(mx.to_compact_string()))
+                                .map(|mx| crate::trc::Value::String(mx.to_compact_string()))
                                 .collect::<Vec<_>>(),
                             Strict = strict,
                         );
@@ -612,7 +612,7 @@ impl QueuedMessage {
                             continue 'next_host;
                         }
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             MtaSts(MtaStsEvent::Authorized),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -620,7 +620,7 @@ impl QueuedMessage {
                             Details = mta_sts_policy
                                 .mx
                                 .iter()
-                                .map(|mx| trc::Value::String(mx.to_compact_string()))
+                                .map(|mx| crate::trc::Value::String(mx.to_compact_string()))
                                 .collect::<Vec<_>>(),
                             Strict = strict,
                         );
@@ -631,7 +631,7 @@ impl QueuedMessage {
                 let time = Instant::now();
                 let resolve_result = match server.resolve_host(remote_host, &envelope).await {
                     Ok(result) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::IpLookup),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -639,7 +639,7 @@ impl QueuedMessage {
                             Details = result
                                 .remote_ips
                                 .iter()
-                                .map(|ip| trc::Value::from(*ip))
+                                .map(|ip| crate::trc::Value::from(*ip))
                                 .collect::<Vec<_>>(),
                             Limit = remote_host.max_multi_homed(),
                             Elapsed = time.elapsed(),
@@ -648,7 +648,7 @@ impl QueuedMessage {
                         result
                     }
                     Err(status) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::IpLookupFailed),
                             SpanId = message.span_id,
                             Domain = domain.to_string(),
@@ -681,7 +681,7 @@ impl QueuedMessage {
                     {
                         Ok(Some(tlsa)) => {
                             if tlsa.has_end_entities {
-                                trc::event!(
+                                crate::trc::event!(
                                     Dane(DaneEvent::TlsaRecordFetch),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -693,7 +693,7 @@ impl QueuedMessage {
 
                                 tlsa.into()
                             } else {
-                                trc::event!(
+                                crate::trc::event!(
                                     Dane(DaneEvent::TlsaRecordInvalid),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -732,7 +732,7 @@ impl QueuedMessage {
                             }
                         }
                         Ok(None) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 Dane(DaneEvent::TlsaRecordNotDnssecSigned),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -774,7 +774,7 @@ impl QueuedMessage {
                             let not_found = matches!(&err, mail_auth::Error::DnsRecordNotFound(_));
 
                             if not_found {
-                                trc::event!(
+                                crate::trc::event!(
                                     Dane(DaneEvent::TlsaRecordNotFound),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -783,12 +783,12 @@ impl QueuedMessage {
                                     Elapsed = time.elapsed(),
                                 );
                             } else {
-                                trc::event!(
+                                crate::trc::event!(
                                     Dane(DaneEvent::TlsaRecordFetchError),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
                                     Hostname = envelope.mx.to_string(),
-                                    CausedBy = trc::Error::from(err.clone()),
+                                    CausedBy = crate::trc::Error::from(err.clone()),
                                     Strict = strict,
                                     Elapsed = time.elapsed(),
                                 );
@@ -841,7 +841,7 @@ impl QueuedMessage {
                             .is_allowed(throttle, &envelope, message.span_id)
                             .await
                         {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::RateLimitExceeded),
                                 SpanId = message.span_id,
                                 Id = throttle.id.clone(),
@@ -890,7 +890,7 @@ impl QueuedMessage {
                         .await
                     } {
                         Ok(smtp_client) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::Connect),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -904,7 +904,7 @@ impl QueuedMessage {
                             smtp_client
                         }
                         Err(err) => {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::ConnectError),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -956,7 +956,7 @@ impl QueuedMessage {
                         // Read greeting
                         smtp_client.timeout = conn_strategy.timeout_greeting;
                         if let Err(status) = smtp_client.read_greeting(envelope.mx).await {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::GreetingFailed),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -972,7 +972,7 @@ impl QueuedMessage {
                         let time = Instant::now();
                         let capabilities = match smtp_client.say_helo(&params).await {
                             Ok(capabilities) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Delivery(DeliveryEvent::Ehlo),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -984,7 +984,7 @@ impl QueuedMessage {
                                 capabilities
                             }
                             Err(status) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Delivery(DeliveryEvent::EhloRejected),
                                     SpanId = message.span_id,
                                     Domain = domain.to_string(),
@@ -1007,7 +1007,7 @@ impl QueuedMessage {
                                 .await
                             {
                                 StartTlsResult::Success { smtp_client } => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Delivery(DeliveryEvent::StartTls),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
@@ -1095,7 +1095,7 @@ impl QueuedMessage {
                                             || "STARTTLS was not advertised by host".to_string(),
                                         );
 
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Delivery(DeliveryEvent::StartTlsUnavailable),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
@@ -1145,7 +1145,7 @@ impl QueuedMessage {
                                     }
                                 }
                                 StartTlsResult::Error { error } => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Delivery(DeliveryEvent::StartTlsError),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
@@ -1185,7 +1185,7 @@ impl QueuedMessage {
                             }
                         } else {
                             // TLS has been disabled
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::StartTlsDisabled),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -1203,7 +1203,7 @@ impl QueuedMessage {
                             match smtp_client.into_tls(tls_connector, envelope.mx).await {
                                 Ok(smtp_client) => smtp_client,
                                 Err(error) => {
-                                    trc::event!(
+                                    crate::trc::event!(
                                         Delivery(DeliveryEvent::ImplicitTlsError),
                                         SpanId = message.span_id,
                                         Domain = domain.to_string(),
@@ -1219,7 +1219,7 @@ impl QueuedMessage {
                         // Read greeting
                         smtp_client.timeout = conn_strategy.timeout_greeting;
                         if let Err(status) = smtp_client.read_greeting(envelope.mx).await {
-                            trc::event!(
+                            crate::trc::event!(
                                 Delivery(DeliveryEvent::GreetingFailed),
                                 SpanId = message.span_id,
                                 Domain = domain.to_string(),
@@ -1275,15 +1275,21 @@ impl QueuedMessage {
 
         // Notify queue manager
         if message.message.next_event(None).is_some() {
-            trc::event!(
-                Queue(trc::QueueEvent::Rescheduled),
+            crate::trc::event!(
+                Queue(crate::trc::QueueEvent::Rescheduled),
                 SpanId = span_id,
                 NextRetry = message
                     .message
                     .next_delivery_event(None)
-                    .map(trc::Value::Timestamp),
-                NextDsn = message.message.next_dsn(None).map(trc::Value::Timestamp),
-                Expires = message.message.expires(None).map(trc::Value::Timestamp),
+                    .map(crate::trc::Value::Timestamp),
+                NextDsn = message
+                    .message
+                    .next_dsn(None)
+                    .map(crate::trc::Value::Timestamp),
+                Expires = message
+                    .message
+                    .expires(None)
+                    .map(crate::trc::Value::Timestamp),
             );
 
             // Save changes to disk
@@ -1291,10 +1297,10 @@ impl QueuedMessage {
 
             QueueEventStatus::Deferred
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Delivery(DeliveryEvent::Completed),
                 SpanId = span_id,
-                Elapsed = trc::Value::Duration((now() - message.message.created) * 1000)
+                Elapsed = crate::trc::Value::Duration((now() - message.message.created) * 1000)
             );
 
             // Delete message from queue
@@ -1321,38 +1327,38 @@ impl MessageWrapper {
         for rcpt in self.message.recipients.iter_mut() {
             match &rcpt.status {
                 Status::TemporaryFailure(err) if rcpt.is_expired(self.message.created, now) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::Failed),
                         SpanId = self.span_id,
                         QueueId = self.queue_id,
                         QueueName = self.queue_name.as_str().to_string(),
                         To = rcpt.address().to_string(),
                         Reason = from_error_details(&err.details),
-                        Details = trc::Value::Timestamp(now),
+                        Details = crate::trc::Value::Timestamp(now),
                         Expires = rcpt
                             .expiration_time(self.message.created)
-                            .map(trc::Value::Timestamp),
-                        NextRetry = trc::Value::Timestamp(rcpt.retry.due),
-                        NextDsn = trc::Value::Timestamp(rcpt.notify.due),
+                            .map(crate::trc::Value::Timestamp),
+                        NextRetry = crate::trc::Value::Timestamp(rcpt.retry.due),
+                        NextDsn = crate::trc::Value::Timestamp(rcpt.notify.due),
                     );
 
                     rcpt.status =
                         std::mem::replace(&mut rcpt.status, Status::Scheduled).into_permanent();
                 }
                 Status::Scheduled if rcpt.is_expired(self.message.created, now) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Delivery(DeliveryEvent::Failed),
                         SpanId = self.span_id,
                         QueueId = self.queue_id,
                         QueueName = self.queue_name.as_str().to_string(),
                         To = rcpt.address().to_string(),
                         Reason = "Message expired without any delivery attempts made.",
-                        Details = trc::Value::Timestamp(now),
+                        Details = crate::trc::Value::Timestamp(now),
                         Expires = rcpt
                             .expiration_time(self.message.created)
-                            .map(trc::Value::Timestamp),
-                        NextRetry = trc::Value::Timestamp(rcpt.retry.due),
-                        NextDsn = trc::Value::Timestamp(rcpt.notify.due),
+                            .map(crate::trc::Value::Timestamp),
+                        NextRetry = crate::trc::Value::Timestamp(rcpt.retry.due),
+                        NextDsn = crate::trc::Value::Timestamp(rcpt.notify.due),
                     );
 
                     rcpt.status = Status::PermanentFailure(ErrorDetails {

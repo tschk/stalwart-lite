@@ -12,7 +12,7 @@ use std::fmt::Display;
 pub enum Error {
     NeedsMoreData,
     NeedsLiteral { size: u32 },
-    Error { response: trc::Error },
+    Error { response: crate::trc::Error },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,7 +98,7 @@ impl<T: CommandParser> Receiver<T> {
         }
     }
 
-    pub fn error_reset(&mut self, message: impl Into<trc::Value>) -> Error {
+    pub fn error_reset(&mut self, message: impl Into<crate::trc::Value>) -> Error {
         let request = std::mem::take(&mut self.request);
         let err = Error::err(
             if !request.tag.is_empty() {
@@ -447,7 +447,7 @@ impl ArgumentBuffer {
 }
 
 impl Token {
-    pub fn unwrap_string(self) -> crate::parser::Result<String> {
+    pub fn unwrap_string(self) -> crate::imap_proto::parser::Result<String> {
         match self {
             Token::Argument(value) => {
                 String::from_utf8(value).map_err(|_| "Invalid UTF-8 in argument.".into())
@@ -541,12 +541,15 @@ impl Token {
 }
 
 impl Error {
-    pub fn err(tag: Option<impl Into<CompactString>>, message: impl Into<trc::Value>) -> Self {
+    pub fn err(
+        tag: Option<impl Into<CompactString>>,
+        message: impl Into<crate::trc::Value>,
+    ) -> Self {
         Error::Error {
-            response: trc::ImapEvent::Error
-                .ctx(trc::Key::Details, message)
-                .ctx_opt(trc::Key::Id, tag.map(Into::into))
-                .ctx(trc::Key::Type, ResponseType::Bad)
+            response: crate::trc::ImapEvent::Error
+                .ctx(crate::trc::Key::Details, message)
+                .ctx_opt(crate::trc::Key::Id, tag.map(Into::into))
+                .ctx(crate::trc::Key::Type, ResponseType::Bad)
                 .code(ResponseCode::Parse),
         }
     }
@@ -566,26 +569,35 @@ impl<T: CommandParser> Default for Receiver<T> {
 }
 
 impl<T: CommandParser> Request<T> {
-    pub fn into_error(self, message: impl Into<trc::Value>) -> trc::Error {
-        trc::ImapEvent::Error
-            .ctx(trc::Key::Details, message)
-            .ctx(trc::Key::Id, CompactString::from_string_buffer(self.tag))
+    pub fn into_error(self, message: impl Into<crate::trc::Value>) -> crate::trc::Error {
+        crate::trc::ImapEvent::Error
+            .ctx(crate::trc::Key::Details, message)
+            .ctx(
+                crate::trc::Key::Id,
+                CompactString::from_string_buffer(self.tag),
+            )
     }
 
-    pub fn into_parse_error(self, message: impl Into<trc::Value>) -> trc::Error {
-        trc::ImapEvent::Error
-            .ctx(trc::Key::Details, message)
-            .ctx(trc::Key::Id, CompactString::from_string_buffer(self.tag))
-            .ctx(trc::Key::Code, ResponseCode::Parse)
-            .ctx(trc::Key::Type, ResponseType::Bad)
+    pub fn into_parse_error(self, message: impl Into<crate::trc::Value>) -> crate::trc::Error {
+        crate::trc::ImapEvent::Error
+            .ctx(crate::trc::Key::Details, message)
+            .ctx(
+                crate::trc::Key::Id,
+                CompactString::from_string_buffer(self.tag),
+            )
+            .ctx(crate::trc::Key::Code, ResponseCode::Parse)
+            .ctx(crate::trc::Key::Type, ResponseType::Bad)
     }
 }
 
-pub(crate) fn bad(tag: impl Into<trc::Value>, message: impl Into<trc::Value>) -> trc::Error {
-    trc::ImapEvent::Error
-        .ctx(trc::Key::Details, message)
-        .ctx(trc::Key::Id, tag)
-        .ctx(trc::Key::Type, ResponseType::Bad)
+pub(crate) fn bad(
+    tag: impl Into<crate::trc::Value>,
+    message: impl Into<crate::trc::Value>,
+) -> crate::trc::Error {
+    crate::trc::ImapEvent::Error
+        .ctx(crate::trc::Key::Details, message)
+        .ctx(crate::trc::Key::Id, tag)
+        .ctx(crate::trc::Key::Type, ResponseType::Bad)
 }
 
 /*
@@ -620,7 +632,7 @@ DQUOTE         =  %x22 ; " (Double Quote)
 #[cfg(test)]
 mod tests {
 
-    use crate::Command;
+    use crate::imap_proto::Command;
 
     use super::{Error, Receiver, Request, Token};
 

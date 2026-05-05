@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     backend::meili::{MeiliSearchStore, Task, TaskStatus, TaskUid},
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, SearchableField,
         TracingSearchField,
     },
 };
+use crate::utils::config::{Config, http::build_http_client, utils::AsKey};
 use reqwest::{Error, Response, Url};
 use serde_json::{Value, json};
 use std::time::Duration;
-use utils::config::{Config, http::build_http_client, utils::AsKey};
 
 impl MeiliSearchStore {
     pub async fn open(config: &mut Config, prefix: impl AsKey) -> Option<Self> {
@@ -58,7 +58,7 @@ impl MeiliSearchStore {
         })
     }
 
-    pub async fn create_indexes(&self) -> trc::Result<()> {
+    pub async fn create_indexes(&self) -> crate::trc::Result<()> {
         self.create_index::<EmailSearchField>().await?;
         self.create_index::<CalendarSearchField>().await?;
         self.create_index::<ContactSearchField>().await?;
@@ -66,7 +66,7 @@ impl MeiliSearchStore {
         Ok(())
     }
 
-    async fn create_index<T: SearchableField>(&self) -> trc::Result<()> {
+    async fn create_index<T: SearchableField>(&self) -> crate::trc::Result<()> {
         let index_name = T::index().index_name();
         let response = assert_success(
             self.client
@@ -141,7 +141,7 @@ impl MeiliSearchStore {
         index_uid: &str,
         setting: &str,
         value: Value,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         let response = assert_success(
             self.client
                 .put(format!(
@@ -157,8 +157,8 @@ impl MeiliSearchStore {
     }
 
     #[cfg(feature = "test_mode")]
-    pub async fn drop_indexes(&self) -> trc::Result<()> {
-        use crate::write::SearchIndex;
+    pub async fn drop_indexes(&self) -> crate::trc::Result<()> {
+        use crate::store::write::SearchIndex;
 
         for index in &[
             SearchIndex::Email,
@@ -171,7 +171,7 @@ impl MeiliSearchStore {
                 .delete(format!("{}/indexes/{}", self.url, index.index_name()))
                 .send()
                 .await
-                .map_err(|err| trc::StoreEvent::MeilisearchError.reason(err))?;
+                .map_err(|err| crate::trc::StoreEvent::MeilisearchError.reason(err))?;
 
             match response.status().as_u16() {
                 200..=299 => {
@@ -184,9 +184,9 @@ impl MeiliSearchStore {
                 _ => {
                     let status = response.status();
                     let msg = response.text().await.unwrap_or_default();
-                    return Err(trc::StoreEvent::MeilisearchError
+                    return Err(crate::trc::StoreEvent::MeilisearchError
                         .reason(msg)
-                        .ctx(trc::Key::Code, status.as_u16()));
+                        .ctx(crate::trc::Key::Code, status.as_u16()));
                 }
             }
         }
@@ -194,14 +194,14 @@ impl MeiliSearchStore {
         Ok(())
     }
 
-    pub(crate) async fn wait_for_task(&self, response: Response) -> trc::Result<bool> {
+    pub(crate) async fn wait_for_task(&self, response: Response) -> crate::trc::Result<bool> {
         let response_body = response.text().await.map_err(|err| {
-            trc::StoreEvent::MeilisearchError
+            crate::trc::StoreEvent::MeilisearchError
                 .reason(err)
                 .details("Request failed")
         })?;
         let task_uid = serde_json::from_str::<TaskUid>(&response_body)
-            .map_err(|err| trc::StoreEvent::MeilisearchError.reason(err))?
+            .map_err(|err| crate::trc::StoreEvent::MeilisearchError.reason(err))?
             .task_uid;
 
         let mut loop_count = 0;
@@ -213,10 +213,10 @@ impl MeiliSearchStore {
             let text = resp
                 .text()
                 .await
-                .map_err(|err| trc::StoreEvent::MeilisearchError.reason(err))?;
+                .map_err(|err| crate::trc::StoreEvent::MeilisearchError.reason(err))?;
 
             let task = serde_json::from_str::<Task>(&text).map_err(|err| {
-                trc::StoreEvent::MeilisearchError
+                crate::trc::StoreEvent::MeilisearchError
                     .reason(err)
                     .details(text.clone())
             })?;
@@ -231,7 +231,7 @@ impl MeiliSearchStore {
                     return if matches!(code.as_deref(), Some("index_already_exists")) {
                         Ok(false)
                     } else {
-                        Err(trc::StoreEvent::MeilisearchError
+                        Err(crate::trc::StoreEvent::MeilisearchError
                             .reason("Meilisearch task failed.")
                             .id(task_uid)
                             .code(code)
@@ -239,7 +239,7 @@ impl MeiliSearchStore {
                     };
                 }
                 TaskStatus::Canceled => {
-                    return Err(trc::StoreEvent::MeilisearchError
+                    return Err(crate::trc::StoreEvent::MeilisearchError
                         .reason("Meilisearch task was canceled")
                         .id(task_uid));
                 }
@@ -248,7 +248,7 @@ impl MeiliSearchStore {
                     tokio::time::sleep(self.task_poll_interval).await;
                 }
                 TaskStatus::Unknown => {
-                    return Err(trc::StoreEvent::MeilisearchError
+                    return Err(crate::trc::StoreEvent::MeilisearchError
                         .reason("Meilisearch task returned an unknown status")
                         .id(task_uid)
                         .details(text));
@@ -257,7 +257,7 @@ impl MeiliSearchStore {
         }
 
         if self.task_fail_on_timeout {
-            Err(trc::StoreEvent::MeilisearchError
+            Err(crate::trc::StoreEvent::MeilisearchError
                 .reason("Timed out waiting for Meilisearch task")
                 .id(task_uid))
         } else {
@@ -266,18 +266,20 @@ impl MeiliSearchStore {
     }
 }
 
-pub(crate) async fn assert_success(response: Result<Response, Error>) -> trc::Result<Response> {
+pub(crate) async fn assert_success(
+    response: Result<Response, Error>,
+) -> crate::trc::Result<Response> {
     match response {
         Ok(response) => {
             let status = response.status();
             if status.is_success() {
                 Ok(response)
             } else {
-                Err(trc::StoreEvent::MeilisearchError
+                Err(crate::trc::StoreEvent::MeilisearchError
                     .reason(response.text().await.unwrap_or_default())
-                    .ctx(trc::Key::Code, status.as_u16()))
+                    .ctx(crate::trc::Key::Code, status.as_u16()))
             }
         }
-        Err(err) => Err(trc::StoreEvent::MeilisearchError.reason(err)),
+        Err(err) => Err(crate::trc::StoreEvent::MeilisearchError.reason(err)),
     }
 }

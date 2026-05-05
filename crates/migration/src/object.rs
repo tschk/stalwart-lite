@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use std::slice::Iter;
-use store::{Deserialize, U64_LEN};
-use types::{acl::AclGrant, blob::BlobId, id::Id, keyword::*};
-use utils::{
+use crate::store::{Deserialize, U64_LEN};
+use crate::types::{acl::AclGrant, blob::BlobId, id::Id, keyword::*};
+use crate::utils::{
     codec::leb128::Leb128Iterator,
     map::{bitmap::Bitmap, vec_map::VecMap},
 };
+use std::slice::Iter;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Object<T> {
@@ -202,11 +202,11 @@ pub trait DeserializeFrom: Sized {
 }
 
 impl Deserialize for Object<Value> {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Object::deserialize_from(&mut bytes.iter()).ok_or_else(|| {
-            trc::StoreEvent::DataCorruption
-                .caused_by(trc::location!())
-                .ctx(trc::Key::Value, bytes)
+            crate::trc::StoreEvent::DataCorruption
+                .caused_by(crate::trc::location!())
+                .ctx(crate::trc::Key::Value, bytes)
         })
     }
 }

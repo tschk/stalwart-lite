@@ -6,9 +6,9 @@
 
 use std::{cmp::Ordering, fmt::Display};
 
+use crate::trc::EvalEvent;
 use compact_str::{CompactString, ToCompactString, format_compact};
 use hyper::StatusCode;
-use trc::EvalEvent;
 
 use crate::Server;
 
@@ -27,7 +27,7 @@ impl Server {
         session_id: u64,
     ) -> Option<R> {
         if if_block.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Eval(EvalEvent::Result),
                 SpanId = session_id,
                 Id = if_block.key.clone(),
@@ -48,7 +48,7 @@ impl Server {
         .await
         {
             Ok(result) => {
-                trc::event!(
+                crate::trc::event!(
                     Eval(EvalEvent::Result),
                     SpanId = session_id,
                     Id = if_block.key.clone(),
@@ -58,7 +58,7 @@ impl Server {
                 match result.try_into() {
                     Ok(value) => Some(value),
                     Err(_) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Eval(EvalEvent::Result),
                             SpanId = session_id,
                             Id = if_block.key.clone(),
@@ -70,7 +70,7 @@ impl Server {
                 }
             }
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Eval(EvalEvent::Error),
                     SpanId = session_id,
                     Id = if_block.key.clone(),
@@ -104,7 +104,7 @@ impl Server {
         .await
         {
             Ok(result) => {
-                trc::event!(
+                crate::trc::event!(
                     Eval(EvalEvent::Result),
                     SpanId = session_id,
                     Id = expr_id.to_compact_string(),
@@ -114,7 +114,7 @@ impl Server {
                 match result.try_into() {
                     Ok(value) => Some(value),
                     Err(_) => {
-                        trc::event!(
+                        crate::trc::event!(
                             Eval(EvalEvent::Error),
                             SpanId = session_id,
                             Id = expr_id.to_compact_string(),
@@ -126,7 +126,7 @@ impl Server {
                 }
             }
             Err(err) => {
-                trc::event!(
+                crate::trc::event!(
                     Eval(EvalEvent::Error),
                     SpanId = session_id,
                     Id = expr_id.to_compact_string(),
@@ -148,7 +148,7 @@ struct EvalContext<'x, V: ResolveVariable, T, C> {
 }
 
 impl<'x, V: ResolveVariable> EvalContext<'x, V, IfBlock, Vec<CompactString>> {
-    async fn eval(&mut self) -> trc::Result<Variable<'x>> {
+    async fn eval(&mut self) -> crate::trc::Result<Variable<'x>> {
         for if_then in &self.expr.if_then {
             if (EvalContext {
                 resolver: self.resolver,
@@ -186,7 +186,7 @@ impl<'x, V: ResolveVariable> EvalContext<'x, V, IfBlock, Vec<CompactString>> {
 }
 
 impl<'x, V: ResolveVariable> EvalContext<'x, V, Expression, &mut Vec<CompactString>> {
-    async fn eval(&mut self) -> trc::Result<Variable<'x>> {
+    async fn eval(&mut self) -> crate::trc::Result<Variable<'x>> {
         let mut stack = Vec::new();
         let mut exprs = self.expr.items.iter();
 

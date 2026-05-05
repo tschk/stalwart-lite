@@ -5,7 +5,7 @@
  */
 
 use super::{SqlDirectory, SqlMappings};
-use crate::{
+use crate::directory::{
     Principal, PrincipalData, QueryBy, QueryParams, ROLE_ADMIN, ROLE_USER, Type,
     backend::{
         RcptType,
@@ -16,12 +16,12 @@ use crate::{
         },
     },
 };
+use crate::store::{NamedRows, Rows, Value};
+use crate::trc::AddContext;
 use mail_send::Credentials;
-use store::{NamedRows, Rows, Value};
-use trc::AddContext;
 
 impl SqlDirectory {
-    pub async fn query(&self, by: QueryParams<'_>) -> trc::Result<Option<Principal>> {
+    pub async fn query(&self, by: QueryParams<'_>) -> crate::trc::Result<Option<Principal>> {
         let (external_principal, stored_principal) = match by.by {
             QueryBy::Name(username) => (
                 self.mappings
@@ -32,9 +32,9 @@ impl SqlDirectory {
                                 vec![username.into()],
                             )
                             .await
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     )
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                     .map(|mut p| {
                         p.name = username.into();
                         p
@@ -46,7 +46,7 @@ impl SqlDirectory {
                     .data_store
                     .query(QueryParams::id(uid).with_return_member_of(by.return_member_of))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 {
                     (
                         self.mappings
@@ -57,9 +57,9 @@ impl SqlDirectory {
                                         vec![principal.name().into()],
                                     )
                                     .await
-                                    .caused_by(trc::location!())?,
+                                    .caused_by(crate::trc::location!())?,
                             )
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                         Some(principal),
                     )
                 } else {
@@ -82,9 +82,9 @@ impl SqlDirectory {
                                 vec![username.into()],
                             )
                             .await
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     )
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 {
                     Some(mut principal) => {
                         // Obtain secrets
@@ -96,7 +96,7 @@ impl SqlDirectory {
                                     vec![username.into()],
                                 )
                                 .await
-                                .caused_by(trc::location!())?;
+                                .caused_by(crate::trc::location!())?;
 
                             for row in secrets.rows {
                                 for value in row.values {
@@ -126,7 +126,7 @@ impl SqlDirectory {
                         if principal
                             .verify_secret(secret, false, false)
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                         {
                             principal.name = username.into();
                             (Some(principal), None)
@@ -155,7 +155,7 @@ impl SqlDirectory {
                     vec![external_principal.name().into()],
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .rows
             {
                 if let Some(Value::Text(account_name)) = row.values.first() {
@@ -163,7 +163,7 @@ impl SqlDirectory {
                         .data_store
                         .get_or_create_principal_id(account_name, Type::Group)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     external_principal
                         .data
                         .push(PrincipalData::MemberOf(account_id));
@@ -180,7 +180,7 @@ impl SqlDirectory {
                     vec![external_principal.name().into()],
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .rows
                 .into_iter()
                 .flat_map(|v| v.values.into_iter().map(|v| v.into_lower_string()));
@@ -206,13 +206,13 @@ impl SqlDirectory {
                 .data_store
                 .get_or_create_principal_id(external_principal.name(), Type::Individual)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             self.data_store
                 .query(QueryParams::id(id).with_return_member_of(by.return_member_of))
                 .await
-                .caused_by(trc::location!())?
-                .ok_or_else(|| manage::not_found(id).caused_by(trc::location!()))?
+                .caused_by(crate::trc::location!())?
+                .ok_or_else(|| manage::not_found(id).caused_by(crate::trc::location!()))?
         };
 
         // Keep the internal store up to date with the SQL server
@@ -225,18 +225,18 @@ impl SqlDirectory {
                         .create_domains(),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(Some(principal))
     }
 
-    pub async fn email_to_id(&self, address: &str) -> trc::Result<Option<u32>> {
+    pub async fn email_to_id(&self, address: &str) -> crate::trc::Result<Option<u32>> {
         let names = self
             .sql_store
             .sql_query::<Rows>(&self.mappings.query_recipients, vec![address.into()])
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         for row in names.rows {
             if let Some(Value::Text(name)) = row.values.first() {
@@ -244,7 +244,7 @@ impl SqlDirectory {
                     .data_store
                     .get_or_create_principal_id(name, Type::Individual)
                     .await
-                    .caused_by(trc::location!())
+                    .caused_by(crate::trc::location!())
                     .map(Some);
             }
         }
@@ -252,7 +252,7 @@ impl SqlDirectory {
         Ok(None)
     }
 
-    pub async fn rcpt(&self, address: &str) -> trc::Result<RcptType> {
+    pub async fn rcpt(&self, address: &str) -> crate::trc::Result<RcptType> {
         let result = self
             .sql_store
             .sql_query::<bool>(
@@ -274,21 +274,21 @@ impl SqlDirectory {
         }
     }
 
-    pub async fn vrfy(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn vrfy(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.vrfy(address).await
     }
 
-    pub async fn expn(&self, address: &str) -> trc::Result<Vec<String>> {
+    pub async fn expn(&self, address: &str) -> crate::trc::Result<Vec<String>> {
         self.data_store.expn(address).await
     }
 
-    pub async fn is_local_domain(&self, domain: &str) -> trc::Result<bool> {
+    pub async fn is_local_domain(&self, domain: &str) -> crate::trc::Result<bool> {
         self.data_store.is_local_domain(domain).await
     }
 }
 
 impl SqlMappings {
-    pub fn row_to_principal(&self, rows: NamedRows) -> trc::Result<Option<Principal>> {
+    pub fn row_to_principal(&self, rows: NamedRows) -> crate::trc::Result<Option<Principal>> {
         if rows.rows.is_empty() {
             return Ok(None);
         }

@@ -4,11 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::JmapObject,
     request::deserialize::{DeserializeArguments, deserialize_request},
     types::state::State,
 };
+use crate::types::id::Id;
 use serde::{
     Deserialize, Deserializer,
     de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor},
@@ -17,7 +18,6 @@ use std::{
     borrow::Cow,
     fmt::{self},
 };
-use types::id::Id;
 
 #[derive(Debug, Clone)]
 pub struct QueryRequest<T: JmapObject> {

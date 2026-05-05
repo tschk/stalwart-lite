@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{calendar::Availability, calendar_event::CalendarSyntheticId};
+use crate::jmap::{calendar::Availability, calendar_event::CalendarSyntheticId};
 use calcard::{
     common::timezone::Tz,
     icalendar::{
@@ -14,13 +14,13 @@ use calcard::{
     },
     jscalendar::{JSCalendar, JSCalendarProperty, JSCalendarValue},
 };
-use common::{Server, TinyCalendarPreferences, auth::AccessToken};
-use directory::Permission;
-use groupware::{
+use crate::common::{Server, TinyCalendarPreferences, auth::AccessToken};
+use crate::directory::Permission;
+use crate::groupware::{
     cache::GroupwareCache,
     calendar::{CALENDAR_SUBSCRIBED, CalendarEvent},
 };
-use jmap_proto::{
+use crate::jmap_proto::{
     method::availability::{
         BusyPeriod, BusyStatus, GetAvailabilityRequest, GetAvailabilityResponse,
     },
@@ -30,22 +30,22 @@ use jmap_proto::{
 };
 use jmap_tools::{Key, Map, Value};
 use std::{collections::hash_map::Entry, future::Future};
-use store::{ValueKey, ahash::AHashMap, write::{AlignedBytes, Archive}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, ahash::AHashMap, write::{AlignedBytes, Archive}};
+use crate::trc::AddContext;
+use crate::types::{
     TimeRange,
     acl::Acl,
     collection::{Collection, SyncCollection},
     id::Id,
 };
-use utils::sanitize_email;
+use crate::utils::sanitize_email;
 
 pub trait PrincipalGetAvailability: Sync + Send {
     fn principal_get_availability(
         &self,
         request: GetAvailabilityRequest,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetAvailabilityResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetAvailabilityResponse>> + Send;
 }
 
 impl PrincipalGetAvailability for Server {
@@ -53,18 +53,18 @@ impl PrincipalGetAvailability for Server {
         &self,
         request: GetAvailabilityRequest,
         access_token: &AccessToken,
-    ) -> trc::Result<GetAvailabilityResponse> {
+    ) -> crate::trc::Result<GetAvailabilityResponse> {
         if !self.core.groupware.allow_directory_query
             && !access_token.has_permission(Permission::IndividualList)
         {
-            return Err(trc::JmapEvent::Forbidden
+            return Err(crate::trc::JmapEvent::Forbidden
                 .into_err()
                 .details("The administrator has disabled directory queries.".to_string()));
         }
 
         // Process parameters
         if !request.id.is_valid() {
-            return Err(trc::JmapEvent::InvalidArguments
+            return Err(crate::trc::JmapEvent::InvalidArguments
                 .into_err()
                 .details("Missing principal id"));
         }
@@ -76,7 +76,7 @@ impl PrincipalGetAvailability for Server {
             .iter()
             .any(|p| !matches!(p, JSCalendarProperty::Id | JSCalendarProperty::BaseEventId))
         {
-            return Err(trc::JmapEvent::InvalidArguments
+            return Err(crate::trc::JmapEvent::InvalidArguments
                 .into_err()
                 .details("Only 'id' and 'baseEventId' properties are supported in results"));
         }
@@ -90,14 +90,14 @@ impl PrincipalGetAvailability for Server {
         let principal = self
             .get_access_token(principal_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut periods = Vec::new();
 
         for account_id in principal.all_ids_by_collection(Collection::Calendar) {
             let resources = self
                 .fetch_dav_resources(access_token, account_id, SyncCollection::Calendar)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             // Obtain shared ids
             let is_account_owner = principal_id == account_id;
@@ -185,13 +185,13 @@ impl PrincipalGetAvailability for Server {
                         document_id,
                     ))
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
                 else {
                     continue;
                 };
                 let event = archive
                     .unarchive::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 // Find the component ids that match the criteria
                 let mut matching_component_ids = AHashMap::new();
@@ -315,7 +315,7 @@ impl PrincipalGetAvailability for Server {
                             document_id,
                         });
                     } else {
-                        return Err(trc::JmapEvent::RequestTooLarge
+                        return Err(crate::trc::JmapEvent::RequestTooLarge
                             .into_err()
                             .details("The number of expanded instances exceeds the server limit"));
                     }

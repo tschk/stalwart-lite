@@ -10,7 +10,8 @@ use super::{
     lock::{LockData, build_lock_key},
     uri::{UriResource, Urn},
 };
-use crate::{
+use crate::common::{DavResourcePath, DavResources, Server, auth::AccessToken};
+use crate::dav::{
     DavError, DavErrorCondition,
     calendar::{
         CALENDAR_CONTAINER_PROPS, CALENDAR_ITEM_PROPS,
@@ -27,9 +28,7 @@ use crate::{
         propfind::{PrincipalPropFind, build_home_set},
     },
 };
-use calcard::{common::timezone::Tz, icalendar::ICalendarComponentType};
-use common::{DavResourcePath, DavResources, Server, auth::AccessToken};
-use dav_proto::{
+use crate::dav_proto::{
     Depth, RequestHeaders,
     parser::header::dav_base_uri,
     requests::NsDeadProperty,
@@ -47,30 +46,31 @@ use dav_proto::{
         },
     },
 };
-use directory::{Permission, Type, backend::internal::manage::ManageDirectory};
-use groupware::calendar::{SCHEDULE_INBOX_ID, SupportedComponent};
-use groupware::{
+use crate::directory::{Permission, Type, backend::internal::manage::ManageDirectory};
+use crate::groupware::calendar::{SCHEDULE_INBOX_ID, SupportedComponent};
+use crate::groupware::{
     DavCalendarResource, DavResourceName, cache::GroupwareCache, calendar::ArchivedTimezone,
 };
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use std::sync::Arc;
-use store::{
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{
+use crate::store::{
     ahash::AHashMap,
     query::log::{Change, Query},
     roaring::RoaringBitmap,
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
     dead_property::DeadProperty,
 };
-use utils::map::bitmap::Bitmap;
+use crate::utils::map::bitmap::Bitmap;
+use calcard::{common::timezone::Tz, icalendar::ICalendarComponentType};
+use hyper::StatusCode;
+use std::sync::Arc;
 
 pub(crate) trait PropFindRequestHandler: Sync + Send {
     fn handle_propfind_request(
@@ -78,19 +78,19 @@ pub(crate) trait PropFindRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PropFind,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn handle_dav_query(
         &self,
         access_token: &AccessToken,
         query: DavQuery<'_>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 
     fn dav_quota(
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<PropFindAccountQuota>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<PropFindAccountQuota>> + Send;
 }
 
 pub(crate) struct PropFindData {
@@ -127,7 +127,7 @@ impl PropFindRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: PropFind,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource = self.validate_uri(access_token, headers.uri).await?;
 
@@ -266,7 +266,7 @@ impl PropFindRequestHandler for Server {
                             0,
                         )
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     RoaringBitmap::from_iter(principals.items.into_iter().map(|p| p.id()))
                 } else {
@@ -291,7 +291,7 @@ impl PropFindRequestHandler for Server {
         &self,
         access_token: &AccessToken,
         mut query: DavQuery<'_>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         let mut response = MultiStatus::new(Vec::with_capacity(16));
         let mut data = PropFindData::new();
         let collection_container;
@@ -441,10 +441,11 @@ impl PropFindRequestHandler for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 archive_ = archive;
-                ArchivedResource::from_archive(&archive_, collection).caused_by(trc::location!())?
+                ArchivedResource::from_archive(&archive_, collection)
+                    .caused_by(crate::trc::location!())?
             } else {
                 response.add_response(Response::new_status([item.name], StatusCode::NOT_FOUND));
                 continue;
@@ -472,7 +473,7 @@ impl PropFindRequestHandler for Server {
                         } else if let Some(calendar_id) = item.parent_id {
                             data.resources(self, access_token, account_id, SyncCollection::Calendar)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .calendar_default_tz(calendar_id, account_id)
                                 .unwrap_or(Tz::UTC)
                         } else {
@@ -548,7 +549,7 @@ impl PropFindRequestHandler for Server {
                                 let ctag = data
                                     .resources(self, access_token, account_id, sync_collection)
                                     .await
-                                    .caused_by(trc::location!())?
+                                    .caused_by(crate::trc::location!())?
                                     .highest_change_id;
 
                                 fields.push(DavPropertyValue::new(
@@ -577,7 +578,7 @@ impl PropFindRequestHandler for Server {
                             if let Some(locks) = data
                                 .locks(self, account_id, collection_container, &item)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                             {
                                 fields.push(DavPropertyValue::new(property.clone(), locks));
                             } else {
@@ -605,7 +606,7 @@ impl PropFindRequestHandler for Server {
                             let sync_token = data
                                 .resources(self, access_token, account_id, sync_collection)
                                 .await
-                                .caused_by(trc::location!())?
+                                .caused_by(crate::trc::location!())?
                                 .sync_token();
 
                             fields.push(DavPropertyValue::new(property.clone(), sync_token));
@@ -636,7 +637,7 @@ impl PropFindRequestHandler for Server {
                                     property.clone(),
                                     data.quota(self, access_token, account_id)
                                         .await
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                         .available,
                                 ));
                             } else if !skip_not_found {
@@ -649,7 +650,7 @@ impl PropFindRequestHandler for Server {
                                     property.clone(),
                                     data.quota(self, access_token, account_id)
                                         .await
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                         .used,
                                 ));
                             } else if !skip_not_found {
@@ -663,7 +664,7 @@ impl PropFindRequestHandler for Server {
                                     vec![
                                         data.owner(self, access_token, account_id)
                                             .await
-                                            .caused_by(trc::location!())?,
+                                            .caused_by(crate::trc::location!())?,
                                     ],
                                 ));
                             } else {
@@ -731,7 +732,7 @@ impl PropFindRequestHandler for Server {
                                 current_user_privilege_set(
                                     data.resources(self, access_token, account_id, sync_collection)
                                         .await
-                                        .caused_by(trc::location!())?
+                                        .caused_by(crate::trc::location!())?
                                         .container_acl(access_token, parent_id),
                                 )
                             } else {
@@ -1134,11 +1135,11 @@ impl PropFindRequestHandler for Server {
         &self,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> trc::Result<PropFindAccountQuota> {
+    ) -> crate::trc::Result<PropFindAccountQuota> {
         let resource_token = self
             .get_resource_token(access_token, account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let quota = if resource_token.quota > 0 {
             resource_token.quota
         } else if let Some(tenant) = resource_token.tenant.filter(|t| t.quota > 0) {
@@ -1149,7 +1150,7 @@ impl PropFindRequestHandler for Server {
         let used = self
             .get_used_quota(account_id)
             .await
-            .caused_by(trc::location!())? as u64;
+            .caused_by(crate::trc::location!())? as u64;
 
         Ok(PropFindAccountQuota {
             used,
@@ -1170,7 +1171,7 @@ async fn get(
     resource: UriResource<u32, Option<&str>>,
     limit: usize,
     is_sync_limited: &mut bool,
-) -> crate::Result<Vec<PropFindItem>> {
+) -> crate::dav::Result<Vec<PropFindItem>> {
     let container_has_children = collection_children != collection_container;
     response.set_namespace(collection_container.namespace());
 
@@ -1178,7 +1179,7 @@ async fn get(
     let resources = data
         .resources(server, access_token, account_id, sync_collection)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // Obtain document ids
     let mut display_containers = if !access_token.is_member(account_id) {
@@ -1218,7 +1219,7 @@ async fn get(
                 .store()
                 .changes(account_id, sync_collection.into(), Query::Since(id))
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut vanished: Vec<String> = Vec::new();
 
             // Merge changes
@@ -1294,7 +1295,7 @@ async fn get(
                     .store()
                     .vanished(account_id, vanished_collection.into(), Query::Since(id))
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 total_changes += vanished.len();
             }
 
@@ -1433,7 +1434,7 @@ async fn get(
                     let shared_resources = data
                         .resources(server, access_token, shared_account_id, sync_collection)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     let shared_containers =
                         (!access_token.is_member(shared_account_id)).then(|| {
                             shared_resources.shared_containers(
@@ -1486,7 +1487,7 @@ async fn multiget(
     data: &mut PropFindData,
     response: &mut MultiStatus,
     hrefs: Vec<String>,
-) -> crate::Result<Vec<PropFindItem>> {
+) -> crate::dav::Result<Vec<PropFindItem>> {
     let mut paths = Vec::with_capacity(hrefs.len() * 2);
     let mut shared_folders_by_account: AHashMap<u32, Arc<RoaringBitmap>> =
         AHashMap::with_capacity(3);
@@ -1511,7 +1512,7 @@ async fn multiget(
         let resources = data
             .resources(server, access_token, account_id, sync_collection)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let document_ids = if !access_token.is_member(account_id) {
             if let Some(document_ids) = shared_folders_by_account.get(&account_id) {
@@ -1590,7 +1591,7 @@ impl PropFindData {
         server: &Server,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> trc::Result<PropFindAccountQuota> {
+    ) -> crate::trc::Result<PropFindAccountQuota> {
         let data = self.accounts.entry(account_id).or_default();
 
         if data.quota.is_none() {
@@ -1605,14 +1606,14 @@ impl PropFindData {
         server: &Server,
         access_token: &AccessToken,
         account_id: u32,
-    ) -> trc::Result<Href> {
+    ) -> crate::trc::Result<Href> {
         let data = self.accounts.entry(account_id).or_default();
 
         if data.owner.is_none() {
             data.owner = server
                 .owner_href(access_token, account_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .into();
         }
 
@@ -1625,14 +1626,14 @@ impl PropFindData {
         access_token: &AccessToken,
         account_id: u32,
         sync_collection: SyncCollection,
-    ) -> trc::Result<Arc<DavResources>> {
+    ) -> crate::trc::Result<Arc<DavResources>> {
         let data = self.accounts.entry(account_id).or_default();
 
         if data.resources.is_none() {
             let resources = server
                 .fetch_dav_resources(access_token, account_id, sync_collection)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             data.resources = resources.into();
         }
 
@@ -1645,7 +1646,7 @@ impl PropFindData {
         account_id: u32,
         collection_container: Collection,
         item: &PropFindItem,
-    ) -> trc::Result<Option<Vec<ActiveLock>>> {
+    ) -> crate::trc::Result<Option<Vec<ActiveLock>>> {
         let data = self.accounts.entry(account_id).or_default();
 
         if data.locks.is_none() && !data.locks_not_found {
@@ -1655,7 +1656,7 @@ impl PropFindData {
                     build_lock_key(account_id, collection_container).as_slice(),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             if data.locks.is_none() {
                 data.locks_not_found = true;
             }
@@ -1697,7 +1698,7 @@ async fn add_base_collection_response(
     collection: Collection,
     access_token: &AccessToken,
     response: &mut MultiStatus,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     let properties = match request {
         PropFind::PropName => {
             response.add_response(Response::new_propstat(
@@ -1749,7 +1750,7 @@ async fn add_base_collection_response(
                     true,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 fields.push(DavPropertyValue::new(prop.clone(), hrefs));
                 response.set_namespace(Namespace::CalDav);
@@ -1763,7 +1764,7 @@ async fn add_base_collection_response(
                     false,
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 fields.push(DavPropertyValue::new(prop.clone(), hrefs));
                 response.set_namespace(Namespace::CardDav);

@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::request::deserialize::DeserializeArguments;
+use crate::jmap_proto::request::deserialize::DeserializeArguments;
+use crate::types::{acl::Acl, blob::BlobId, id::Id};
 use jmap_tools::{Element, Null, Property};
 use serde::Serialize;
 use std::{fmt::Debug, str::FromStr};
-use types::{acl::Acl, blob::BlobId, id::Id};
 
 pub mod addressbook;
 pub mod blob;

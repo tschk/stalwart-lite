@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{DavResources, auth::AccessToken};
-use store::roaring::RoaringBitmap;
-use types::acl::Acl;
-use utils::map::bitmap::Bitmap;
+use crate::common::{DavResources, auth::AccessToken};
+use crate::store::roaring::RoaringBitmap;
+use crate::types::acl::Acl;
+use crate::utils::map::bitmap::Bitmap;
 
 impl DavResources {
     pub fn shared_containers(

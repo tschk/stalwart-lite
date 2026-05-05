@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    api::acl::{JmapAcl, JmapRights},
-    changes::state::JmapCacheState,
-};
-use common::{
+use crate::common::{
     Server, auth::AccessToken, sharing::EffectiveAcl, storage::index::ObjectIndexBuilder,
 };
 #[allow(unused_imports)]
-use email::mailbox::{INBOX_ID, JUNK_ID, TRASH_ID, UidMailbox};
-use email::{
+use crate::email::mailbox::{INBOX_ID, JUNK_ID, TRASH_ID, UidMailbox};
+use crate::email::{
     cache::{MessageCacheFetch, mailbox::MailboxCacheAccess},
     mailbox::{
         Mailbox,
         destroy::{MailboxDestroy, MailboxDestroyError},
     },
 };
-use jmap_proto::{
+use crate::jmap::{
+    api::acl::{JmapAcl, JmapRights},
+    changes::state::JmapCacheState,
+};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::mailbox::{self, MailboxProperty, MailboxValue},
@@ -28,17 +28,17 @@ use jmap_proto::{
     request::IntoValid,
     types::state::State,
 };
-use jmap_tools::{JsonPointerItem, Key, Map, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     roaring::RoaringBitmap,
     write::{AlignedBytes, Archive, BatchBuilder, assert::AssertValue},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl, collection::Collection, field::MailboxField, id::Id, special_use::SpecialUse,
 };
+use jmap_tools::{JsonPointerItem, Key, Map, Value};
+use std::future::Future;
 
 pub struct SetContext<'x> {
     account_id: u32,
@@ -54,7 +54,7 @@ pub trait MailboxSet: Sync + Send {
         &self,
         request: SetRequest<'_, mailbox::Mailbox>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<SetResponse<mailbox::Mailbox>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<mailbox::Mailbox>>> + Send;
 
     fn mailbox_set_item(
         &self,
@@ -62,7 +62,7 @@ pub trait MailboxSet: Sync + Send {
         update: Option<(u32, Archive<Mailbox>)>,
         ctx: &SetContext,
     ) -> impl Future<
-        Output = trc::Result<
+        Output = crate::trc::Result<
             Result<ObjectIndexBuilder<Mailbox, Mailbox>, SetError<MailboxProperty>>,
         >,
     > + Send;
@@ -74,7 +74,7 @@ impl MailboxSet for Server {
         &self,
         mut request: SetRequest<'_, mailbox::Mailbox>,
         access_token: &AccessToken,
-    ) -> trc::Result<SetResponse<mailbox::Mailbox>> {
+    ) -> crate::trc::Result<SetResponse<mailbox::Mailbox>> {
         // Prepare response
         let account_id = request.account_id.document_id();
         let on_destroy_remove_emails = request.arguments.on_destroy_remove_emails.unwrap_or(false);
@@ -126,12 +126,12 @@ impl MailboxSet for Server {
                         .store()
                         .assign_document_ids(account_id, Collection::Mailbox, 1)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
                     batch
                         .with_document(document_id)
                         .custom(builder)
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                         .commit_point();
 
                     ctx.mailbox_ids.insert(document_id);
@@ -149,7 +149,7 @@ impl MailboxSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .into();
         }
 
@@ -181,8 +181,8 @@ impl MailboxSet for Server {
             {
                 // Validate ACL
                 let mailbox = mailbox
-                    .into_deserialized::<email::mailbox::Mailbox>()
-                    .caused_by(trc::location!())?;
+                    .into_deserialized::<crate::email::mailbox::Mailbox>()
+                    .caused_by(crate::trc::location!())?;
                 if ctx.is_shared {
                     let acl = mailbox.inner.acls.effective_acl(access_token);
                     if !acl.contains(Acl::Modify) {
@@ -224,7 +224,7 @@ impl MailboxSet for Server {
                         batch
                             .with_document(document_id)
                             .custom(builder)
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .commit_point();
                         will_update.push(id);
                     }
@@ -261,7 +261,7 @@ impl MailboxSet for Server {
                     }
                 }
                 Err(err) => {
-                    return Err(err.caused_by(trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }
@@ -327,7 +327,8 @@ impl MailboxSet for Server {
         changes_: Map<'_, MailboxProperty, MailboxValue>,
         update: Option<(u32, Archive<Mailbox>)>,
         ctx: &SetContext<'_>,
-    ) -> trc::Result<Result<ObjectIndexBuilder<Mailbox, Mailbox>, SetError<MailboxProperty>>> {
+    ) -> crate::trc::Result<Result<ObjectIndexBuilder<Mailbox, Mailbox>, SetError<MailboxProperty>>>
+    {
         // Parse properties
         let mut changes = update
             .as_ref()
@@ -473,8 +474,8 @@ impl MailboxSet for Server {
                     .await?
                 {
                     let mailbox = mailbox_
-                        .unarchive::<email::mailbox::Mailbox>()
-                        .caused_by(trc::location!())?;
+                        .unarchive::<crate::email::mailbox::Mailbox>()
+                        .caused_by(crate::trc::location!())?;
                     if depth == 0
                         && ctx.is_shared
                         && !mailbox

@@ -4,21 +4,24 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::{Command, ResponseCode, Session, StatusResponse};
-use common::listener::SessionStream;
-use directory::Permission;
-use email::sieve::SieveScript;
-use imap_proto::receiver::Request;
-use std::time::Instant;
-use store::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::sieve::SieveScript;
+use crate::imap_proto::receiver::Request;
+use crate::managesieve::core::{Command, ResponseCode, Session, StatusResponse};
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{blob::BlobSection, blob_hash::BlobHash, collection::Collection};
+use crate::trc::AddContext;
+use crate::types::{blob::BlobSection, blob_hash::BlobHash, collection::Collection};
+use std::time::Instant;
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_getscript(&mut self, request: Request<Command>) -> trc::Result<Vec<u8>> {
+    pub async fn handle_getscript(
+        &mut self,
+        request: Request<Command>,
+    ) -> crate::trc::Result<Vec<u8>> {
         // Validate access
         self.assert_has_permission(Permission::SieveGetScript)?;
 
@@ -29,7 +32,7 @@ impl<T: SessionStream> Session<T> {
             .next()
             .and_then(|s| s.unwrap_string().ok())
             .ok_or_else(|| {
-                trc::ManageSieveEvent::Error
+                crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Expected script name as a parameter.")
             })?;
@@ -44,16 +47,16 @@ impl<T: SessionStream> Session<T> {
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or_else(|| {
-                trc::ManageSieveEvent::Error
+                crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Script not found")
                     .code(ResponseCode::NonExistent)
             })?;
         let sieve = sieve_
             .unarchive::<SieveScript>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let blob_size = u32::from(sieve.size) as usize;
         let script = self
             .server
@@ -65,9 +68,9 @@ impl<T: SessionStream> Session<T> {
                 },
             )
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or_else(|| {
-                trc::ManageSieveEvent::Error
+                crate::trc::ManageSieveEvent::Error
                     .into_err()
                     .details("Script blob not found")
                     .code(ResponseCode::NonExistent)
@@ -81,8 +84,8 @@ impl<T: SessionStream> Session<T> {
         response.extend(script);
         response.extend_from_slice(b"\r\n");
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::GetScript),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::GetScript),
             SpanId = self.session_id,
             Id = name,
             DocumentId = document_id,

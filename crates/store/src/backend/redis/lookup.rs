@@ -11,7 +11,12 @@ use crate::Deserialize;
 use super::{RedisPool, RedisStore, into_error};
 
 impl RedisStore {
-    pub async fn key_set(&self, key: &[u8], value: &[u8], expires: Option<u64>) -> trc::Result<()> {
+    pub async fn key_set(
+        &self,
+        key: &[u8],
+        value: &[u8],
+        expires: Option<u64>,
+    ) -> crate::trc::Result<()> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_set_(
@@ -34,7 +39,12 @@ impl RedisStore {
         }
     }
 
-    pub async fn key_incr(&self, key: &[u8], value: i64, expires: Option<u64>) -> trc::Result<i64> {
+    pub async fn key_incr(
+        &self,
+        key: &[u8],
+        value: i64,
+        expires: Option<u64>,
+    ) -> crate::trc::Result<i64> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_incr_(
@@ -57,7 +67,7 @@ impl RedisStore {
         }
     }
 
-    pub async fn key_delete(&self, key: &[u8]) -> trc::Result<()> {
+    pub async fn key_delete(&self, key: &[u8]) -> crate::trc::Result<()> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_delete_(pool.get().await.map_err(into_error)?.as_mut(), key)
@@ -70,7 +80,7 @@ impl RedisStore {
         }
     }
 
-    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> trc::Result<()> {
+    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> crate::trc::Result<()> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_delete_prefix_(pool.get().await.map_err(into_error)?.as_mut(), prefix)
@@ -86,7 +96,7 @@ impl RedisStore {
     pub async fn key_get<T: Deserialize + std::fmt::Debug + 'static>(
         &self,
         key: &[u8],
-    ) -> trc::Result<Option<T>> {
+    ) -> crate::trc::Result<Option<T>> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_get_(pool.get().await.map_err(into_error)?.as_mut(), key)
@@ -99,7 +109,7 @@ impl RedisStore {
         }
     }
 
-    pub async fn counter_get(&self, key: &[u8]) -> trc::Result<i64> {
+    pub async fn counter_get(&self, key: &[u8]) -> crate::trc::Result<i64> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.counter_get_(pool.get().await.map_err(into_error)?.as_mut(), key)
@@ -112,7 +122,7 @@ impl RedisStore {
         }
     }
 
-    pub async fn key_exists(&self, key: &[u8]) -> trc::Result<bool> {
+    pub async fn key_exists(&self, key: &[u8]) -> crate::trc::Result<bool> {
         match &self.pool {
             RedisPool::Single(pool) => {
                 self.key_exists_(pool.get().await.map_err(into_error)?.as_mut(), key)
@@ -129,7 +139,7 @@ impl RedisStore {
         &self,
         conn: &mut impl AsyncCommands,
         key: &[u8],
-    ) -> trc::Result<Option<T>> {
+    ) -> crate::trc::Result<Option<T>> {
         if let Some(value) = redis::cmd("GET")
             .arg(key)
             .query_async::<Option<Vec<u8>>>(conn)
@@ -142,7 +152,11 @@ impl RedisStore {
         }
     }
 
-    async fn counter_get_(&self, conn: &mut impl AsyncCommands, key: &[u8]) -> trc::Result<i64> {
+    async fn counter_get_(
+        &self,
+        conn: &mut impl AsyncCommands,
+        key: &[u8],
+    ) -> crate::trc::Result<i64> {
         redis::cmd("GET")
             .arg(key)
             .query_async::<Option<i64>>(conn)
@@ -151,7 +165,11 @@ impl RedisStore {
             .map_err(into_error)
     }
 
-    async fn key_exists_(&self, conn: &mut impl AsyncCommands, key: &[u8]) -> trc::Result<bool> {
+    async fn key_exists_(
+        &self,
+        conn: &mut impl AsyncCommands,
+        key: &[u8],
+    ) -> crate::trc::Result<bool> {
         conn.exists(key).await.map_err(into_error)
     }
 
@@ -161,7 +179,7 @@ impl RedisStore {
         key: &[u8],
         value: &[u8],
         expires: Option<u64>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         if let Some(expires) = expires {
             conn.set_ex(key, value, expires).await.map_err(into_error)
         } else {
@@ -175,7 +193,7 @@ impl RedisStore {
         key: &[u8],
         value: i64,
         expires: Option<u64>,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         if let Some(expires) = expires {
             redis::pipe()
                 .atomic()
@@ -191,7 +209,11 @@ impl RedisStore {
         }
     }
 
-    async fn key_delete_(&self, conn: &mut impl AsyncCommands, key: &[u8]) -> trc::Result<()> {
+    async fn key_delete_(
+        &self,
+        conn: &mut impl AsyncCommands,
+        key: &[u8],
+    ) -> crate::trc::Result<()> {
         conn.del(key).await.map_err(into_error)
     }
 
@@ -199,7 +221,7 @@ impl RedisStore {
         &self,
         conn: &mut impl AsyncCommands,
         prefix: &[u8],
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let mut pattern = Vec::with_capacity(prefix.len() + 1);
         pattern.extend_from_slice(prefix);
         pattern.push(b'*');

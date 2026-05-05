@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     Depth,
     parser::{
         DavParser, RawElement, Token, XmlValueParser, property::TimeRangeFromRaw,
@@ -21,14 +21,14 @@ use crate::{
         },
     },
 };
+use crate::types::{TimeRange, dead_property::DeadElementTag};
 use calcard::{
     icalendar::{ICalendarComponentType, ICalendarParameterName, ICalendarProperty},
     vcard::VCardParameterName,
 };
-use types::{TimeRange, dead_property::DeadElementTag};
 
 impl DavParser for Report {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         match stream.unwrap_named_element()? {
             NamedElement {
                 ns: Namespace::CalDav,
@@ -82,7 +82,7 @@ impl DavParser for Report {
 }
 
 impl DavParser for CalendarQuery {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut cq = CalendarQuery {
             properties: PropFind::AllProp(vec![]),
             filters: vec![],
@@ -250,7 +250,7 @@ impl DavParser for CalendarQuery {
 }
 
 impl DavParser for AddressbookQuery {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut aq = AddressbookQuery {
             properties: PropFind::AllProp(vec![]),
             filters: vec![],
@@ -383,7 +383,7 @@ impl DavParser for AddressbookQuery {
 }
 
 impl DavParser for FreeBusyQuery {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         match stream.token()? {
             Token::ElementStart {
                 name:
@@ -399,7 +399,7 @@ impl DavParser for FreeBusyQuery {
 }
 
 impl DavParser for MultiGet {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut mg = MultiGet {
             properties: PropFind::AllProp(vec![]),
             hrefs: vec![],
@@ -449,7 +449,7 @@ impl DavParser for MultiGet {
 }
 
 impl DavParser for SyncCollection {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut sc = SyncCollection {
             properties: PropFind::AllProp(vec![]),
             limit: None,
@@ -507,7 +507,7 @@ impl DavParser for SyncCollection {
 }
 
 impl DavParser for ExpandProperty {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut ep = ExpandProperty { properties: vec![] };
         let mut depth = 1;
 
@@ -568,7 +568,7 @@ impl DavParser for ExpandProperty {
 }
 
 impl TextMatch {
-    fn parse(raw: RawElement<'_>) -> crate::parser::Result<Self> {
+    fn parse(raw: RawElement<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut tm = TextMatch {
             match_type: MatchType::Contains,
             value: String::new(),
@@ -619,7 +619,7 @@ impl<A, B, C> Filter<A, B, C> {
         }
     }
 
-    fn parse(raw: RawElement<'_>) -> crate::parser::Result<Option<Self>> {
+    fn parse(raw: RawElement<'_>) -> crate::dav_proto::parser::Result<Option<Self>> {
         for attribute in raw.attributes::<String>() {
             if let Attribute::TestAllOf(all_of) = attribute? {
                 return Ok(Some(if all_of { Filter::AllOf } else { Filter::AnyOf }));

@@ -6,10 +6,10 @@
 
 use std::borrow::Cow;
 
-use ahash::AHashMap;
-use common::{
+use crate::common::{
     Server, auth::AccessToken, expr::functions::ResolveVariable, scripts::ScriptModification,
 };
+use ahash::AHashMap;
 
 use mail_parser::Message;
 use sieve::{Envelope, runtime::Variable};

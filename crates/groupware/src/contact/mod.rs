@@ -7,9 +7,9 @@
 pub mod index;
 pub mod storage;
 
+use crate::common::{DavName, auth::AccessToken};
+use crate::types::{acl::AclGrant, dead_property::DeadProperty};
 use calcard::vcard::VCard;
-use common::{DavName, auth::AccessToken};
-use types::{acl::AclGrant, dead_property::DeadProperty};
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,

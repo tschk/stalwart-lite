@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::copy_move,
     receiver::{Request, bad},
@@ -16,7 +16,7 @@ use crate::{
 use super::parse_sequence_set;
 
 impl Request<Command> {
-    pub fn parse_copy_move(self, is_utf8: bool) -> trc::Result<copy_move::Arguments> {
+    pub fn parse_copy_move(self, is_utf8: bool) -> crate::trc::Result<copy_move::Arguments> {
         if self.tokens.len() > 1 {
             let mut tokens = self.tokens.into_iter();
 
@@ -46,7 +46,7 @@ impl Request<Command> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{Sequence, copy_move},
         receiver::Receiver,
     };

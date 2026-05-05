@@ -6,14 +6,14 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::authenticate::{self, Mechanism},
     receiver::{Request, bad},
 };
 
 impl Request<Command> {
-    pub fn parse_authenticate(self) -> trc::Result<authenticate::Arguments> {
+    pub fn parse_authenticate(self) -> crate::trc::Result<authenticate::Arguments> {
         if !self.tokens.is_empty() {
             let mut tokens = self.tokens.into_iter();
             Ok(authenticate::Arguments {
@@ -58,7 +58,7 @@ impl Mechanism {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::authenticate::{self, Mechanism},
         receiver::Receiver,
     };

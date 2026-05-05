@@ -8,6 +8,7 @@
  *
  */
 
+use crate::trc::{Collector, MetricType, TOTAL_EVENT_COUNT, TelemetryEvent};
 use mail_builder::{
     MessageBuilder,
     headers::{
@@ -15,10 +16,9 @@ use mail_builder::{
         address::{Address, EmailAddress},
     },
 };
-use trc::{Collector, MetricType, TOTAL_EVENT_COUNT, TelemetryEvent};
 
 use super::{AlertContent, AlertContentToken, AlertMethod};
-use crate::{
+use crate::common::{
     Server,
     expr::{Variable, functions::ResolveVariable},
 };
@@ -87,7 +87,7 @@ impl Server {
                         });
                     }
                     AlertMethod::Event { message } => {
-                        trc::event!(
+                        crate::trc::event!(
                             Telemetry(TelemetryEvent::Alert),
                             Id = alert.id.to_string(),
                             Details = message.as_ref().map(|m| m.build())
@@ -95,7 +95,7 @@ impl Server {
 
                         #[cfg(feature = "test_mode")]
                         Collector::update_event_counter(
-                            trc::EventType::Telemetry(TelemetryEvent::Alert),
+                            crate::trc::EventType::Telemetry(TelemetryEvent::Alert),
                             1,
                         );
                     }

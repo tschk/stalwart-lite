@@ -6,6 +6,7 @@
 
 use std::{fmt::Display, time::Duration};
 
+use crate::utils::config::{Config, utils::AsKey};
 use deadpool::{
     Runtime,
     managed::{Manager, Pool},
@@ -14,7 +15,6 @@ use redis::{
     Client, ProtocolVersion,
     cluster::{ClusterClient, ClusterClientBuilder},
 };
-use utils::config::{Config, utils::AsKey};
 
 pub mod lookup;
 pub mod pool;
@@ -192,8 +192,8 @@ fn build_pool<M: Manager>(
 }
 
 #[inline(always)]
-fn into_error(err: impl Display) -> trc::Error {
-    trc::StoreEvent::RedisError.reason(err)
+fn into_error(err: impl Display) -> crate::trc::Error {
+    crate::trc::StoreEvent::RedisError.reason(err)
 }
 
 impl std::fmt::Debug for RedisPool {

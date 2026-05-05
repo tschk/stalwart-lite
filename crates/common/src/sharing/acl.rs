@@ -5,11 +5,11 @@
  */
 
 use crate::Server;
-use directory::{
+use crate::directory::{
     Type,
     backend::internal::{PrincipalField, manage::ChangedPrincipals},
 };
-use types::acl::{AclGrant, ArchivedAclGrant};
+use crate::types::acl::{AclGrant, ArchivedAclGrant};
 
 impl Server {
     pub async fn refresh_acls(&self, acl_changes: &[AclGrant], current: Option<&[AclGrant]>) {

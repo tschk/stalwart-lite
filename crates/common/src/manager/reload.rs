@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::store::Stores;
+use crate::utils::config::Config;
 use ahash::AHashMap;
 use arc_swap::ArcSwap;
-use store::Stores;
-use utils::config::Config;
 
-use crate::{
+use crate::common::{
     Core, Server,
     config::{
         server::{Listeners, tls::parse_certificates},
@@ -27,7 +27,7 @@ pub struct ReloadResult {
 }
 
 impl Server {
-    pub async fn reload_blocked_ips(&self) -> trc::Result<ReloadResult> {
+    pub async fn reload_blocked_ips(&self) -> crate::trc::Result<ReloadResult> {
         let mut config = self
             .core
             .storage
@@ -39,7 +39,7 @@ impl Server {
         Ok(config.into())
     }
 
-    pub async fn reload_certificates(&self) -> trc::Result<ReloadResult> {
+    pub async fn reload_certificates(&self) -> crate::trc::Result<ReloadResult> {
         let mut config = self.core.storage.config.build_config("certificate").await?;
         let mut certificates = self.inner.data.tls_certificates.load().as_ref().clone();
 
@@ -50,7 +50,7 @@ impl Server {
         Ok(config.into())
     }
 
-    pub async fn reload_lookups(&self) -> trc::Result<ReloadResult> {
+    pub async fn reload_lookups(&self) -> crate::trc::Result<ReloadResult> {
         let mut config = self.core.storage.config.build_config("lookup").await?;
         let mut stores = Stores::default();
         stores.parse_static_stores(&mut config, true);
@@ -67,7 +67,7 @@ impl Server {
         })
     }
 
-    pub async fn reload(&self) -> trc::Result<ReloadResult> {
+    pub async fn reload(&self) -> crate::trc::Result<ReloadResult> {
         let mut config = self.core.storage.config.build_config("").await?;
 
         // Load stores

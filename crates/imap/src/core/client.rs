@@ -6,25 +6,25 @@
 
 use std::{iter::Peekable, sync::Arc, vec::IntoIter};
 
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_IMAP,
     listener::{SessionResult, SessionStream},
 };
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseType, StatusResponse,
     receiver::{self, Request},
 };
-use trc::SecurityEvent;
+use crate::trc::SecurityEvent;
 
 use super::{SelectedMailbox, Session, SessionData, State};
 
 impl<T: SessionStream> Session<T> {
     pub async fn ingest(&mut self, bytes: &[u8]) -> SessionResult {
-        trc::event!(
-            Imap(trc::ImapEvent::RawInput),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::RawInput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         let mut bytes = bytes.iter();
@@ -53,15 +53,15 @@ impl<T: SessionStream> Session<T> {
                 Err(receiver::Error::Error { response }) => {
                     // Check for port scanners
                     if matches!(
-                        (&self.state, response.key(trc::Key::Code)),
+                        (&self.state, response.key(crate::trc::Key::Code)),
                         (
                             State::NotAuthenticated { .. },
-                            Some(trc::Value::String(v))
+                            Some(crate::trc::Value::String(v))
                         ) if v == "PARSE"
                     ) {
                         match self.server.is_scanner_fail2banned(self.remote_addr).await {
                             Ok(true) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Security(SecurityEvent::ScanBan),
                                     SpanId = self.session_id,
                                     RemoteIp = self.remote_addr,
@@ -72,7 +72,7 @@ impl<T: SessionStream> Session<T> {
                             }
                             Ok(false) => {}
                             Err(err) => {
-                                trc::error!(
+                                crate::trc::error!(
                                     err.span_id(self.session_id)
                                         .details("Failed to check for fail2ban")
                                 );
@@ -290,7 +290,7 @@ pub fn group_requests(
 }
 
 impl<T: SessionStream> Session<T> {
-    async fn is_allowed(&self, request: Request<Command>) -> trc::Result<Request<Command>> {
+    async fn is_allowed(&self, request: Request<Command>) -> crate::trc::Result<Request<Command>> {
         let state = &self.state;
         // Rate limit request
         if let State::Authenticated { data } | State::Selected { data, .. } = state
@@ -309,7 +309,7 @@ impl<T: SessionStream> Session<T> {
                 .await?
                 .is_some()
         {
-            return Err(trc::LimitEvent::TooManyRequests.into_err());
+            return Err(crate::trc::LimitEvent::TooManyRequests.into_err());
         }
 
         match &request.command {
@@ -319,13 +319,13 @@ impl<T: SessionStream> Session<T> {
                     if self.instance.acceptor.is_tls() {
                         Ok(request)
                     } else {
-                        Err(trc::ImapEvent::Error
+                        Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details("TLS is not available.")
                             .id(request.tag))
                     }
                 } else {
-                    Err(trc::ImapEvent::Error
+                    Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Already in TLS mode.")
                         .id(request.tag))
@@ -335,7 +335,7 @@ impl<T: SessionStream> Session<T> {
                 if let State::NotAuthenticated { .. } = state {
                     Ok(request)
                 } else {
-                    Err(trc::ImapEvent::Error
+                    Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Already authenticated.")
                         .id(request.tag))
@@ -346,13 +346,13 @@ impl<T: SessionStream> Session<T> {
                     if self.is_tls || self.server.core.imap.allow_plain_auth {
                         Ok(request)
                     } else {
-                        Err(trc::ImapEvent::Error
+                        Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details("LOGIN is disabled on the clear-text port.")
                             .id(request.tag))
                     }
                 } else {
-                    Err(trc::ImapEvent::Error
+                    Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Already authenticated.")
                         .id(request.tag))
@@ -383,7 +383,7 @@ impl<T: SessionStream> Session<T> {
                 if let State::Authenticated { .. } | State::Selected { .. } = state {
                     Ok(request)
                 } else {
-                    Err(trc::ImapEvent::Error
+                    Err(crate::trc::ImapEvent::Error
                         .into_err()
                         .details("Not authenticated.")
                         .id(request.tag))
@@ -409,18 +409,18 @@ impl<T: SessionStream> Session<T> {
                     {
                         Ok(request)
                     } else {
-                        Err(trc::ImapEvent::Error
+                        Err(crate::trc::ImapEvent::Error
                             .into_err()
                             .details("Not permitted in EXAMINE state.")
                             .id(request.tag))
                     }
                 }
-                State::Authenticated { .. } => Err(trc::ImapEvent::Error
+                State::Authenticated { .. } => Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("No mailbox is selected.")
-                    .ctx(trc::Key::Type, ResponseType::Bad)
+                    .ctx(crate::trc::Key::Type, ResponseType::Bad)
                     .id(request.tag)),
-                State::NotAuthenticated { .. } => Err(trc::ImapEvent::Error
+                State::NotAuthenticated { .. } => Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Not authenticated.")
                     .id(request.tag)),
@@ -467,11 +467,11 @@ impl<T: SessionStream> State<T> {
         }
     }
 
-    pub fn spawn_task<F, R, P>(&self, params: P, fnc: F) -> trc::Result<()>
+    pub fn spawn_task<F, R, P>(&self, params: P, fnc: F) -> crate::trc::Result<()>
     where
         F: FnOnce(P, &super::SessionData<T>) -> R + Send + 'static,
         P: Send + Sync + 'static,
-        R: std::future::Future<Output = trc::Result<()>> + Send + 'static,
+        R: std::future::Future<Output = crate::trc::Result<()>> + Send + 'static,
     {
         let data = self.session_data();
 

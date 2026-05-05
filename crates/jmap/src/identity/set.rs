@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use directory::QueryParams;
-use email::identity::{EmailAddress, Identity};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::directory::QueryParams;
+use crate::email::identity::{EmailAddress, Identity};
+use crate::jmap_proto::{
     error::set::{SetError, SetErrorType},
     method::set::{SetRequest, SetResponse},
     object::identity::{self, IdentityProperty, IdentityValue},
@@ -15,25 +15,25 @@ use jmap_proto::{
     request::IntoValid,
     types::state::State,
 };
-use jmap_tools::{Key, Value};
-use std::future::Future;
-use store::{
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive, BatchBuilder},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::{Field, IdentityField},
 };
-use utils::sanitize_email;
+use crate::utils::sanitize_email;
+use jmap_tools::{Key, Value};
+use std::future::Future;
 
 pub trait IdentitySet: Sync + Send {
     fn identity_set(
         &self,
         request: SetRequest<'_, identity::Identity>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<SetResponse<identity::Identity>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<SetResponse<identity::Identity>>> + Send;
 }
 
 impl IdentitySet for Server {
@@ -41,7 +41,7 @@ impl IdentitySet for Server {
         &self,
         mut request: SetRequest<'_, identity::Identity>,
         access_token: &AccessToken,
-    ) -> trc::Result<SetResponse<identity::Identity>> {
+    ) -> crate::trc::Result<SetResponse<identity::Identity>> {
         let account_id = request.account_id.document_id();
         let identity_ids = self
             .document_ids(account_id, Collection::Identity, IdentityField::DocumentId)
@@ -109,14 +109,14 @@ impl IdentitySet for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::Identity, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             batch
                 .with_account_id(account_id)
                 .with_collection(Collection::Identity)
                 .with_document(document_id)
                 .tag(IdentityField::DocumentId)
                 .custom(ObjectIndexBuilder::<(), _>::new().with_changes(identity))
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .commit_point();
             response.created(id, document_id);
         }
@@ -147,10 +147,10 @@ impl IdentitySet for Server {
             };
             let identity = identity_
                 .to_unarchived::<Identity>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut new_identity = identity
                 .deserialize::<Identity>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             for (property, mut value) in object.into_expanded_object() {
                 if let Err(err) = response.resolve_self_references(&mut value).and_then(|_| {
@@ -171,7 +171,7 @@ impl IdentitySet for Server {
                         .with_current(identity)
                         .with_changes(new_identity),
                 )
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .commit_point();
             response.updated.append(id, None);
         }
@@ -201,7 +201,7 @@ impl IdentitySet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.new_state = State::Exact(change_id).into();
         }

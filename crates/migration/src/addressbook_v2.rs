@@ -4,16 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use groupware::contact::{AddressBook, AddressBookPreferences};
-use store::{
+use crate::common::Server;
+use crate::groupware::contact::{AddressBook, AddressBookPreferences};
+use crate::store::{
     Serialize, ValueKey,
     write::{AlignedBytes, Archive, Archiver, BatchBuilder, serialize::rkyv_deserialize},
 };
-use trc::AddContext;
-use types::{acl::AclGrant, collection::Collection, dead_property::DeadProperty, field::Field};
+use crate::trc::AddContext;
+use crate::types::{
+    acl::AclGrant, collection::Collection, dead_property::DeadProperty, field::Field,
+};
 
-use crate::get_document_ids;
+use crate::migration::get_document_ids;
 
 #[derive(
     rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default, Clone, PartialEq, Eq,
@@ -32,10 +34,13 @@ pub struct AddressBookV2 {
     pub modified: i64,
 }
 
-pub(crate) async fn migrate_addressbook_v013(server: &Server, account_id: u32) -> trc::Result<u64> {
+pub(crate) async fn migrate_addressbook_v013(
+    server: &Server,
+    account_id: u32,
+) -> crate::trc::Result<u64> {
     let document_ids = get_document_ids(server, account_id, Collection::AddressBook)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     if document_ids.is_empty() {
         return Ok(0);
@@ -51,7 +56,7 @@ pub(crate) async fn migrate_addressbook_v013(server: &Server, account_id: u32) -
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
         else {
             continue;
         };
@@ -85,19 +90,19 @@ pub(crate) async fn migrate_addressbook_v013(server: &Server, account_id: u32) -
                         Field::ARCHIVE,
                         Archiver::new(new_book)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 num_migrated += 1;
             }
             Err(err) => {
                 if let Err(err_) = archive.unarchive_untrusted::<AddressBook>() {
-                    trc::error!(err_.caused_by(trc::location!()));
-                    return Err(err.caused_by(trc::location!()));
+                    crate::trc::error!(err_.caused_by(crate::trc::location!()));
+                    return Err(err.caused_by(crate::trc::location!()));
                 }
             }
         }

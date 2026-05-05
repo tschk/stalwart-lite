@@ -4,40 +4,40 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{DavPath, DavResource, DavResourceMetadata, DavResources, Server};
+use crate::directory::backend::internal::manage::ManageDirectory;
+use crate::groupware::{
     DavResourceName, RFC_3986,
     file::{ArchivedFileNode, FileNode},
 };
-use common::{DavPath, DavResource, DavResourceMetadata, DavResources, Server};
-use directory::backend::internal::manage::ManageDirectory;
-use std::sync::Arc;
-use store::ahash::{AHashMap, AHashSet};
-use tokio::sync::Semaphore;
-use trc::AddContext;
-use types::{
+use crate::store::ahash::{AHashMap, AHashSet};
+use crate::trc::AddContext;
+use crate::types::{
     acl::AclGrant,
     collection::{Collection, SyncCollection},
 };
-use utils::{map::bitmap::Bitmap, topological::TopologicalSort};
+use crate::utils::{map::bitmap::Bitmap, topological::TopologicalSort};
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 pub(super) async fn build_file_resources(
     server: &Server,
     account_id: u32,
     update_lock: Arc<Semaphore>,
-) -> trc::Result<DavResources> {
+) -> crate::trc::Result<DavResources> {
     let last_change_id = server
         .core
         .storage
         .data
         .get_last_change_id(account_id, SyncCollection::FileNode.into())
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let name = server
         .store()
         .get_principal_name(account_id)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_else(|| format!("_{account_id}"));
 
     let mut resources = Vec::with_capacity(16);
@@ -56,7 +56,7 @@ pub(super) async fn build_file_resources(
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let mut files = DavResources {
         base_path: format!(

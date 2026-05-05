@@ -14,7 +14,7 @@ pub(crate) fn sign(
     nonce: String,
     url: &str,
     payload: &str,
-) -> trc::Result<String> {
+) -> crate::trc::Result<String> {
     let jwk = match kid {
         None => Some(Jwk::new(key)),
         Some(_) => None,
@@ -25,8 +25,8 @@ pub(crate) fn sign(
     let signature = key
         .sign(&SystemRandom::new(), combined.as_bytes())
         .map_err(|err| {
-            trc::EventType::Acme(trc::AcmeEvent::Error)
-                .caused_by(trc::location!())
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error)
+                .caused_by(crate::trc::location!())
                 .reason(err)
         })?;
 
@@ -35,7 +35,7 @@ pub(crate) fn sign(
         payload,
         signature: URL_SAFE_NO_PAD.encode(signature.as_ref()),
     })
-    .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+    .map_err(|err| crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err))
 }
 
 pub(crate) fn eab_sign(
@@ -43,7 +43,7 @@ pub(crate) fn eab_sign(
     kid: &str,
     hmac_key: &[u8],
     url: &str,
-) -> trc::Result<Body> {
+) -> crate::trc::Result<Body> {
     let protected = Protected::encode("HS256", None, kid.into(), None, url)?;
     let payload = Jwk::new(key).base64()?;
     let combined = format!("{}.{}", &protected, &payload);
@@ -59,7 +59,7 @@ pub(crate) fn eab_sign(
     })
 }
 
-pub(crate) fn key_authorization(key: &EcdsaKeyPair, token: &str) -> trc::Result<String> {
+pub(crate) fn key_authorization(key: &EcdsaKeyPair, token: &str) -> crate::trc::Result<String> {
     Ok(format!(
         "{}.{}",
         token,
@@ -67,14 +67,17 @@ pub(crate) fn key_authorization(key: &EcdsaKeyPair, token: &str) -> trc::Result<
     ))
 }
 
-pub(crate) fn key_authorization_sha256(key: &EcdsaKeyPair, token: &str) -> trc::Result<Digest> {
+pub(crate) fn key_authorization_sha256(
+    key: &EcdsaKeyPair,
+    token: &str,
+) -> crate::trc::Result<Digest> {
     key_authorization(key, token).map(|s| digest(&SHA256, s.as_bytes()))
 }
 
 pub(crate) fn key_authorization_sha256_base64(
     key: &EcdsaKeyPair,
     token: &str,
-) -> trc::Result<String> {
+) -> crate::trc::Result<String> {
     key_authorization_sha256(key, token).map(|s| URL_SAFE_NO_PAD.encode(s.as_ref()))
 }
 
@@ -104,7 +107,7 @@ impl<'a> Protected<'a> {
         kid: Option<&'a str>,
         nonce: Option<String>,
         url: &'a str,
-    ) -> trc::Result<String> {
+    ) -> crate::trc::Result<String> {
         serde_json::to_vec(&Protected {
             alg,
             jwk,
@@ -112,7 +115,9 @@ impl<'a> Protected<'a> {
             nonce,
             url,
         })
-        .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+        .map_err(|err| {
+            crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+        })
         .map(|v| URL_SAFE_NO_PAD.encode(v.as_slice()))
     }
 }
@@ -141,13 +146,15 @@ impl Jwk {
         }
     }
 
-    pub(crate) fn base64(&self) -> trc::Result<String> {
+    pub(crate) fn base64(&self) -> crate::trc::Result<String> {
         serde_json::to_vec(self)
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))
+            .map_err(|err| {
+                crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+            })
             .map(|v| URL_SAFE_NO_PAD.encode(v.as_slice()))
     }
 
-    pub(crate) fn thumb_sha256_base64(&self) -> trc::Result<String> {
+    pub(crate) fn thumb_sha256_base64(&self) -> crate::trc::Result<String> {
         Ok(URL_SAFE_NO_PAD.encode(digest(
             &SHA256,
             &serde_json::to_vec(&JwkThumb {
@@ -156,7 +163,9 @@ impl Jwk {
                 x: &self.x,
                 y: &self.y,
             })
-            .map_err(|err| trc::EventType::Acme(trc::AcmeEvent::Error).from_json_error(err))?,
+            .map_err(|err| {
+                crate::trc::EventType::Acme(crate::trc::AcmeEvent::Error).from_json_error(err)
+            })?,
         )))
     }
 }

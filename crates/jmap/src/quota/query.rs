@@ -4,21 +4,21 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap_proto::{
     method::query::{QueryRequest, QueryResponse},
     object::quota::Quota,
     types::state::State,
 };
+use crate::types::id::Id;
 use std::future::Future;
-use types::id::Id;
 
 pub trait QuotaQuery: Sync + Send {
     fn quota_query(
         &self,
         request: QueryRequest<Quota>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<QueryResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<QueryResponse>> + Send;
 }
 
 impl QuotaQuery for Server {
@@ -26,7 +26,7 @@ impl QuotaQuery for Server {
         &self,
         request: QueryRequest<Quota>,
         access_token: &AccessToken,
-    ) -> trc::Result<QueryResponse> {
+    ) -> crate::trc::Result<QueryResponse> {
         Ok(QueryResponse {
             account_id: request.account_id,
             query_state: State::Initial,

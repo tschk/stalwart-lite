@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::classifier::{Optimizer, gradient, model::FhClassifier};
+use crate::nlp::classifier::{Optimizer, gradient, model::FhClassifier};
 
 #[derive(rkyv::Archive, rkyv::Deserialize, rkyv::Serialize, Debug, Default)]
 pub struct Sgd {
@@ -122,7 +122,7 @@ impl Optimizer for Sgd {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::classifier::{
+    use crate::nlp::classifier::{
         Optimizer,
         adam::Adam,
         feature::{

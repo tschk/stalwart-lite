@@ -5,7 +5,7 @@
  */
 
 use super::{CF_INDEXES, CF_LOGS, CfHandle, RocksDbStore, into_error};
-use crate::{
+use crate::store::{
     Deserialize, IndexKey, Key, LogKey, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER,
     SUBSPACE_QUOTA,
     backend::deserialize_i64_le,
@@ -26,7 +26,7 @@ use std::{
 };
 
 impl RocksDbStore {
-    pub(crate) async fn write(&self, mut batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub(crate) async fn write(&self, mut batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         let db = self.db.clone();
 
         self.spawn_worker(move || {
@@ -65,7 +65,11 @@ impl RocksDbStore {
         .await
     }
 
-    pub(crate) async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub(crate) async fn delete_range(
+        &self,
+        from: impl Key,
+        to: impl Key,
+    ) -> crate::trc::Result<()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             db.delete_range_cf(
@@ -79,7 +83,7 @@ impl RocksDbStore {
         .await
     }
 
-    pub(crate) async fn purge_store(&self) -> trc::Result<()> {
+    pub(crate) async fn purge_store(&self) -> crate::trc::Result<()> {
         let db = self.db.clone();
         self.spawn_worker(move || {
             for subspace in [SUBSPACE_QUOTA, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER] {
@@ -129,7 +133,7 @@ struct RocksDBTransaction<'x, 'y> {
 }
 
 enum CommitError {
-    Internal(trc::Error),
+    Internal(crate::trc::Error),
     RocksDB(rocksdb::Error),
 }
 
@@ -282,7 +286,7 @@ impl RocksDBTransaction<'_, '_> {
                     if !matches {
                         txn.rollback()?;
                         return Err(CommitError::Internal(
-                            trc::StoreEvent::AssertValueFailed.into(),
+                            crate::trc::StoreEvent::AssertValueFailed.into(),
                         ));
                     }
                 }
@@ -299,8 +303,8 @@ impl From<rocksdb::Error> for CommitError {
     }
 }
 
-impl From<trc::Error> for CommitError {
-    fn from(err: trc::Error) -> Self {
+impl From<crate::trc::Error> for CommitError {
+    fn from(err: crate::trc::Error) -> Self {
         CommitError::Internal(err)
     }
 }

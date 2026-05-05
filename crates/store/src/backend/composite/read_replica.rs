@@ -8,17 +8,17 @@
  *
  */
 
-use crate::{
+use crate::store::{
     Deserialize, IterateParams, Key, Store, Stores, ValueKey,
     search::{IndexDocument, SearchComparator, SearchDocumentId, SearchFilter, SearchQuery},
     write::{AssignedIds, Batch, SearchIndex, ValueClass},
 };
+use crate::utils::config::{Config, utils::AsKey};
 use std::{
     future::Future,
     ops::Range,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use utils::config::{Config, utils::AsKey};
 
 pub struct SQLReadReplica {
     primary: Store,
@@ -124,10 +124,10 @@ impl SQLReadReplica {
         }
     }
 
-    async fn run_op<'x, F, T, R>(&'x self, f: F) -> trc::Result<T>
+    async fn run_op<'x, F, T, R>(&'x self, f: F) -> crate::trc::Result<T>
     where
         F: Fn(&'x Store) -> R,
-        R: Future<Output = trc::Result<T>>,
+        R: Future<Output = crate::trc::Result<T>>,
         T: 'static,
     {
         let mut last_error = None;
@@ -151,7 +151,11 @@ impl SQLReadReplica {
         Err(last_error.unwrap())
     }
 
-    pub async fn get_blob(&self, key: &[u8], range: Range<usize>) -> trc::Result<Option<Vec<u8>>> {
+    pub async fn get_blob(
+        &self,
+        key: &[u8],
+        range: Range<usize>,
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         self.run_op(move |store| {
             let range = range.clone();
 
@@ -168,7 +172,7 @@ impl SQLReadReplica {
         .await
     }
 
-    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.put_blob(key, data).await,
@@ -178,7 +182,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.delete_blob(key).await,
@@ -188,7 +192,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn get_value<U>(&self, key: impl Key) -> trc::Result<Option<U>>
+    pub async fn get_value<U>(&self, key: impl Key) -> crate::trc::Result<Option<U>>
     where
         U: Deserialize + 'static,
     {
@@ -211,8 +215,8 @@ impl SQLReadReplica {
     pub async fn iterate<T: Key>(
         &self,
         params: IterateParams<T>,
-        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> trc::Result<bool> + Sync + Send,
-    ) -> trc::Result<()> {
+        mut cb: impl for<'x> FnMut(&'x [u8], &'x [u8]) -> crate::trc::Result<bool> + Sync + Send,
+    ) -> crate::trc::Result<()> {
         let mut last_error = None;
         for store in [
             &self.replicas
@@ -239,7 +243,7 @@ impl SQLReadReplica {
     pub async fn get_counter(
         &self,
         key: impl Into<ValueKey<ValueClass>> + Sync + Send,
-    ) -> trc::Result<i64> {
+    ) -> crate::trc::Result<i64> {
         let key = key.into();
         self.run_op(move |store| {
             let key = key.clone();
@@ -257,7 +261,7 @@ impl SQLReadReplica {
         .await
     }
 
-    pub async fn write(&self, batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub async fn write(&self, batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.write(batch).await,
@@ -267,7 +271,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub async fn delete_range(&self, from: impl Key, to: impl Key) -> crate::trc::Result<()> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.delete_range(from, to).await,
@@ -277,7 +281,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn purge_store(&self) -> trc::Result<()> {
+    pub async fn purge_store(&self) -> crate::trc::Result<()> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.purge_store().await,
@@ -287,7 +291,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.index(documents).await,
@@ -297,7 +301,7 @@ impl SQLReadReplica {
         }
     }
 
-    pub async fn unindex(&self, query: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, query: SearchQuery) -> crate::trc::Result<u64> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.unindex(query).await,
@@ -312,7 +316,7 @@ impl SQLReadReplica {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<R>> {
+    ) -> crate::trc::Result<Vec<R>> {
         match &self.primary {
             #[cfg(feature = "postgres")]
             Store::PostgreSQL(store) => store.query(index, filters, sort).await,

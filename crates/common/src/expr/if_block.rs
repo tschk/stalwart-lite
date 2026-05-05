@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::config::{Config, utils::AsKey};
 use compact_str::CompactString;
-use utils::config::{Config, utils::AsKey};
 
-use crate::expr::{Constant, Expression};
+use crate::common::expr::{Constant, Expression};
 
 use super::{
     ConstantValue, ExpressionItem,

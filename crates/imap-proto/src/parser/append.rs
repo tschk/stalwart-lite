@@ -6,7 +6,7 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{
         Flag,
@@ -26,7 +26,7 @@ enum State {
 }
 
 impl Request<Command> {
-    pub fn parse_append(self, is_utf8: bool) -> trc::Result<append::Arguments> {
+    pub fn parse_append(self, is_utf8: bool) -> crate::trc::Result<append::Arguments> {
         match self.tokens.len() {
             0 | 1 => Err(self.into_error("Missing arguments.")),
             _ => {
@@ -152,7 +152,7 @@ impl Request<Command> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
+    use crate::imap_proto::{
         protocol::{
             Flag,
             append::{self, Message},

@@ -193,15 +193,15 @@ pub enum Modification {
     DeleteHeader { index: u32, name: String },
 }
 
-impl From<common::config::smtp::session::Stage> for Stage {
-    fn from(value: common::config::smtp::session::Stage) -> Self {
+impl From<crate::common::config::smtp::session::Stage> for Stage {
+    fn from(value: crate::common::config::smtp::session::Stage) -> Self {
         match value {
-            common::config::smtp::session::Stage::Connect => Stage::Connect,
-            common::config::smtp::session::Stage::Ehlo => Stage::Ehlo,
-            common::config::smtp::session::Stage::Auth => Stage::Auth,
-            common::config::smtp::session::Stage::Mail => Stage::Mail,
-            common::config::smtp::session::Stage::Rcpt => Stage::Rcpt,
-            common::config::smtp::session::Stage::Data => Stage::Data,
+            crate::common::config::smtp::session::Stage::Connect => Stage::Connect,
+            crate::common::config::smtp::session::Stage::Ehlo => Stage::Ehlo,
+            crate::common::config::smtp::session::Stage::Auth => Stage::Auth,
+            crate::common::config::smtp::session::Stage::Mail => Stage::Mail,
+            crate::common::config::smtp::session::Stage::Rcpt => Stage::Rcpt,
+            crate::common::config::smtp::session::Stage::Data => Stage::Data,
         }
     }
 }

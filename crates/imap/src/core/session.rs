@@ -6,18 +6,18 @@
 
 use std::sync::Arc;
 
-use common::{
+use crate::common::{
     core::BuildServer,
     listener::{SessionData, SessionManager, SessionResult, SessionStream, stream::NullIo},
 };
-use imap_proto::{
+use crate::imap_proto::{
     protocol::{ProtocolVersion, SerializeResponse},
     receiver::Receiver,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_rustls::server::TlsStream;
 
-use crate::{GREETING_WITH_TLS, GREETING_WITHOUT_TLS};
+use crate::imap::{GREETING_WITH_TLS, GREETING_WITHOUT_TLS};
 
 use super::{ImapSessionManager, Session, State};
 
@@ -71,28 +71,28 @@ impl<T: SessionStream> Session<T> {
                                     }
                                 }
                             } else {
-                                trc::event!(
-                                    Network(trc::NetworkEvent::Closed),
+                                crate::trc::event!(
+                                    Network(crate::trc::NetworkEvent::Closed),
                                     SpanId = self.session_id,
-                                    CausedBy = trc::location!()
+                                    CausedBy = crate::trc::location!()
                                 );
                                 break;
                             }
                         },
                         Ok(Err(err)) => {
-                            trc::event!(
-                                Network(trc::NetworkEvent::ReadError),
+                            crate::trc::event!(
+                                Network(crate::trc::NetworkEvent::ReadError),
                                 SpanId = self.session_id,
                                 Reason = err.to_string(),
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
                             break;
                         },
                         Err(_) => {
-                            trc::event!(
-                                Network(trc::NetworkEvent::Timeout),
+                            crate::trc::event!(
+                                Network(crate::trc::NetworkEvent::Timeout),
                                 SpanId = self.session_id,
-                                CausedBy = trc::location!()
+                                CausedBy = crate::trc::location!()
                             );
                             self.write_bytes(&b"* BYE Connection timed out.\r\n"[..]).await.ok();
                             break;
@@ -100,11 +100,11 @@ impl<T: SessionStream> Session<T> {
                     }
                 },
                 _ = shutdown_rx.changed() => {
-                    trc::event!(
-                        Network(trc::NetworkEvent::Closed),
+                    crate::trc::event!(
+                        Network(crate::trc::NetworkEvent::Closed),
                         SpanId = self.session_id,
                         Reason = "Server shutting down",
-                        CausedBy = trc::location!()
+                        CausedBy = crate::trc::location!()
                     );
                     self.write_bytes(&b"* BYE Server shutting down.\r\n"[..]).await.ok();
                     break;
@@ -128,8 +128,8 @@ impl<T: SessionStream> Session<T> {
         };
 
         if let Err(err) = session.stream.write_all(greeting).await {
-            trc::event!(
-                Network(trc::NetworkEvent::WriteError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::WriteError),
                 Reason = err.to_string(),
                 SpanId = session.session_id,
                 Details = "Failed to write to stream"
@@ -169,8 +169,8 @@ impl<T: SessionStream> Session<T> {
                 ))) {
             state
         } else {
-            trc::event!(
-                Network(trc::NetworkEvent::SplitError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::SplitError),
                 SpanId = self.session_id,
                 Details = "Failed to obtain write half state"
             );
@@ -183,8 +183,8 @@ impl<T: SessionStream> Session<T> {
         {
             self.stream_rx.unsplit(stream_tx)
         } else {
-            trc::event!(
-                Network(trc::NetworkEvent::SplitError),
+            crate::trc::event!(
+                Network(crate::trc::NetworkEvent::SplitError),
                 SpanId = self.session_id,
                 Details = "Failed to take ownership of write half"
             );
@@ -217,19 +217,19 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> Session<T> {
-    pub async fn write_bytes(&self, bytes: impl AsRef<[u8]>) -> trc::Result<()> {
+    pub async fn write_bytes(&self, bytes: impl AsRef<[u8]>) -> crate::trc::Result<()> {
         let bytes = bytes.as_ref();
 
-        trc::event!(
-            Imap(trc::ImapEvent::RawOutput),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::RawOutput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         let mut stream = self.stream_tx.lock().await;
         if let Err(err) = stream.write_all(bytes).await {
-            Err(trc::NetworkEvent::WriteError
+            Err(crate::trc::NetworkEvent::WriteError
                 .into_err()
                 .reason(err)
                 .details("Failed to write to stream"))
@@ -239,20 +239,20 @@ impl<T: SessionStream> Session<T> {
         }
     }
 
-    pub async fn write_error(&self, err: trc::Error) -> bool {
+    pub async fn write_error(&self, err: crate::trc::Error) -> bool {
         if err.should_write_err() {
             let disconnect = err.must_disconnect();
             let bytes = err.serialize();
-            trc::error!(err.span_id(self.session_id));
+            crate::trc::error!(err.span_id(self.session_id));
 
             if let Err(err) = self.write_bytes(bytes).await {
-                trc::error!(err.span_id(self.session_id));
+                crate::trc::error!(err.span_id(self.session_id));
                 false
             } else {
                 !disconnect
             }
         } else {
-            trc::error!(err);
+            crate::trc::error!(err);
 
             false
         }
@@ -260,19 +260,19 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> super::SessionData<T> {
-    pub async fn write_bytes(&self, bytes: impl AsRef<[u8]>) -> trc::Result<()> {
+    pub async fn write_bytes(&self, bytes: impl AsRef<[u8]>) -> crate::trc::Result<()> {
         let bytes = bytes.as_ref();
 
-        trc::event!(
-            Imap(trc::ImapEvent::RawOutput),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::RawOutput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         let mut stream = self.stream_tx.lock().await;
         if let Err(err) = stream.write_all(bytes.as_ref()).await {
-            Err(trc::NetworkEvent::WriteError
+            Err(crate::trc::NetworkEvent::WriteError
                 .into_err()
                 .reason(err)
                 .details("Failed to write to stream"))
@@ -282,13 +282,13 @@ impl<T: SessionStream> super::SessionData<T> {
         }
     }
 
-    pub async fn write_error(&self, err: trc::Error) -> trc::Result<()> {
+    pub async fn write_error(&self, err: crate::trc::Error) -> crate::trc::Result<()> {
         if err.should_write_err() {
             let bytes = err.serialize();
-            trc::error!(err.span_id(self.session_id));
+            crate::trc::error!(err.span_id(self.session_id));
             self.write_bytes(bytes).await
         } else {
-            trc::error!(err.span_id(self.session_id));
+            crate::trc::error!(err.span_id(self.session_id));
             Ok(())
         }
     }

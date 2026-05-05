@@ -4,23 +4,23 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::blob::download::BlobDownload;
+use crate::jmap::blob::download::BlobDownload;
 use calcard::vcard::VCard;
-use common::{Server, auth::AccessToken};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::jmap_proto::{
     method::parse::{ParseRequest, ParseResponse},
     object::contact::ContactCard,
     request::IntoValid,
 };
-use types::{blob::BlobId, id::Id};
-use utils::map::vec_map::VecMap;
+use crate::types::{blob::BlobId, id::Id};
+use crate::utils::map::vec_map::VecMap;
 
 pub trait ContactCardParse: Sync + Send {
     fn contact_card_parse(
         &self,
         request: ParseRequest<ContactCard>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<ParseResponse<ContactCard>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ParseResponse<ContactCard>>> + Send;
 }
 
 impl ContactCardParse for Server {
@@ -28,9 +28,9 @@ impl ContactCardParse for Server {
         &self,
         request: ParseRequest<ContactCard>,
         access_token: &AccessToken,
-    ) -> trc::Result<ParseResponse<ContactCard>> {
+    ) -> crate::trc::Result<ParseResponse<ContactCard>> {
         if request.blob_ids.len() > self.core.jmap.contact_parse_max_items {
-            return Err(trc::JmapEvent::RequestTooLarge.into_err());
+            return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
         }
         let return_all_properties = request.properties.is_none();
         let properties = request

@@ -4,21 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
-    LegacyBincode,
-    queue_v2::{LegacyHostResponse, LegacyQuotaKey},
-};
-use common::{
+use crate::common::{
     Server,
     config::smtp::queue::{DEFAULT_QUEUE_NAME, QueueExpiry, QueueName},
 };
-use smtp::queue::{
+use crate::migration::{
+    LegacyBincode,
+    queue_v2::{LegacyHostResponse, LegacyQuotaKey},
+};
+use crate::smtp::queue::{
     Error, ErrorDetails, HostResponse, Message, QueueId, Recipient, Schedule, Status,
     UnexpectedResponse,
 };
-use smtp_proto::Response;
-use std::net::{IpAddr, Ipv4Addr};
-use store::{
+use crate::store::{
     IterateParams, SUBSPACE_QUEUE_EVENT, Serialize, U64_LEN, ValueKey,
     ahash::AHashMap,
     write::{
@@ -27,10 +25,12 @@ use store::{
         now,
     },
 };
-use trc::AddContext;
-use types::blob_hash::BlobHash;
+use crate::trc::AddContext;
+use crate::types::blob_hash::BlobHash;
+use smtp_proto::Response;
+use std::net::{IpAddr, Ipv4Addr};
 
-pub(crate) async fn migrate_queue_v011(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_queue_v011(server: &Server) -> crate::trc::Result<()> {
     let mut count = 0;
     let now = now();
 
@@ -53,25 +53,27 @@ pub(crate) async fn migrate_queue_v011(server: &Server) -> trc::Result<()> {
                 }
                 batch
                     .set(
-                        ValueClass::Queue(QueueClass::MessageEvent(store::write::QueueEvent {
-                            due: due.unwrap_or(now),
-                            queue_id,
-                            queue_name: DEFAULT_QUEUE_NAME.into_inner(),
-                        })),
+                        ValueClass::Queue(QueueClass::MessageEvent(
+                            crate::store::write::QueueEvent {
+                                due: due.unwrap_or(now),
+                                queue_id,
+                                queue_name: DEFAULT_QUEUE_NAME.into_inner(),
+                            },
+                        )),
                         vec![],
                     )
                     .set(
                         ValueClass::Queue(QueueClass::Message(queue_id)),
                         Archiver::new(message)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 count += 1;
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => {
                 if let Some(due) = due {
@@ -84,7 +86,7 @@ pub(crate) async fn migrate_queue_v011(server: &Server) -> trc::Result<()> {
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
             }
             Err(err) => {
@@ -97,16 +99,16 @@ pub(crate) async fn migrate_queue_v011(server: &Server) -> trc::Result<()> {
                     .is_err()
                 {
                     return Err(err
-                        .ctx(trc::Key::QueueId, queue_id)
-                        .caused_by(trc::location!()));
+                        .ctx(crate::trc::Key::QueueId, queue_id)
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
     }
 
     if count > 0 {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!("Migrated {count} queued messages",)
         );
     }
@@ -114,7 +116,7 @@ pub(crate) async fn migrate_queue_v011(server: &Server) -> trc::Result<()> {
     Ok(())
 }
 
-pub(crate) async fn migrate_queue_v012(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_queue_v012(server: &Server) -> crate::trc::Result<()> {
     let mut count = 0;
     let now = now();
 
@@ -143,25 +145,27 @@ pub(crate) async fn migrate_queue_v012(server: &Server) -> trc::Result<()> {
                 }
                 batch
                     .set(
-                        ValueClass::Queue(QueueClass::MessageEvent(store::write::QueueEvent {
-                            due: due.unwrap_or(now),
-                            queue_id,
-                            queue_name: DEFAULT_QUEUE_NAME.into_inner(),
-                        })),
+                        ValueClass::Queue(QueueClass::MessageEvent(
+                            crate::store::write::QueueEvent {
+                                due: due.unwrap_or(now),
+                                queue_id,
+                                queue_name: DEFAULT_QUEUE_NAME.into_inner(),
+                            },
+                        )),
                         vec![],
                     )
                     .set(
                         ValueClass::Queue(QueueClass::Message(queue_id)),
                         Archiver::new(message)
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                     );
                 count += 1;
                 server
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
             Ok(None) => {
                 if let Some(due) = due {
@@ -174,7 +178,7 @@ pub(crate) async fn migrate_queue_v012(server: &Server) -> trc::Result<()> {
                         .store()
                         .write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
             }
             Err(err) => {
@@ -194,16 +198,16 @@ pub(crate) async fn migrate_queue_v012(server: &Server) -> trc::Result<()> {
                     .is_err()
                 {
                     return Err(err
-                        .ctx(trc::Key::QueueId, queue_id)
-                        .caused_by(trc::location!()));
+                        .ctx(crate::trc::Key::QueueId, queue_id)
+                        .caused_by(crate::trc::location!()));
                 }
             }
         }
     }
 
     if count > 0 {
-        trc::event!(
-            Server(trc::ServerEvent::Startup),
+        crate::trc::event!(
+            Server(crate::trc::ServerEvent::Startup),
             Details = format!("Migrated {count} queued messages",)
         );
     }
@@ -211,16 +215,16 @@ pub(crate) async fn migrate_queue_v012(server: &Server) -> trc::Result<()> {
     Ok(())
 }
 
-async fn get_queue_events(server: &Server) -> trc::Result<AHashMap<u64, Option<u64>>> {
+async fn get_queue_events(server: &Server) -> crate::trc::Result<AHashMap<u64, Option<u64>>> {
     let from_key = ValueKey::from(ValueClass::Queue(QueueClass::MessageEvent(
-        store::write::QueueEvent {
+        crate::store::write::QueueEvent {
             due: 0,
             queue_id: 0,
             queue_name: [0; 8],
         },
     )));
     let to_key = ValueKey::from(ValueClass::Queue(QueueClass::MessageEvent(
-        store::write::QueueEvent {
+        crate::store::write::QueueEvent {
             due: u64::MAX,
             queue_id: u64::MAX,
             queue_name: [u8::MAX; 8],
@@ -242,7 +246,7 @@ async fn get_queue_events(server: &Server) -> trc::Result<AHashMap<u64, Option<u
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let from_key = ValueKey::from(ValueClass::Queue(QueueClass::Message(0)));
     let to_key = ValueKey::from(ValueClass::Queue(QueueClass::Message(u64::MAX)));
@@ -261,7 +265,7 @@ async fn get_queue_events(server: &Server) -> trc::Result<AHashMap<u64, Option<u
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(queue_ids)
 }

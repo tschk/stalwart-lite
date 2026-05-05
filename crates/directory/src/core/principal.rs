@@ -4,13 +4,18 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::directory::{
     ArchivedPrincipal, ArchivedPrincipalData, FALLBACK_ADMIN_ID, Permission, PermissionGrant,
     Principal, PrincipalData, ROLE_ADMIN, Type,
     backend::internal::{PrincipalField, PrincipalSet, PrincipalUpdate, PrincipalValue},
 };
+use crate::nlp::tokenizers::word::WordTokenizer;
+use crate::store::{
+    U32_LEN, U64_LEN,
+    backend::MAX_TOKEN_LENGTH,
+    write::{BatchBuilder, DirectoryClass},
+};
 use ahash::AHashSet;
-use nlp::tokenizers::word::WordTokenizer;
 use serde::{
     Deserializer, Serializer,
     de::{self, IgnoredAny, Visitor},
@@ -18,11 +23,6 @@ use serde::{
 };
 use serde_json::Value;
 use std::{cmp::Ordering, collections::hash_map::Entry, fmt, str::FromStr};
-use store::{
-    U32_LEN, U64_LEN,
-    backend::MAX_TOKEN_LENGTH,
-    write::{BatchBuilder, DirectoryClass},
-};
 
 impl Principal {
     pub fn new(id: u32, typ: Type) -> Self {

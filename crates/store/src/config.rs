@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     BlobStore, CompressionAlgo, InMemoryStore, PurgeSchedule, PurgeStore, Store, Stores,
     backend::{elastic::ElasticSearchStore, fs::FsStore, meili::MeiliSearchStore},
 };
-use utils::config::{Config, cron::SimpleCron, utils::ParseValue};
+use crate::utils::config::{Config, cron::SimpleCron, utils::ParseValue};
 
 // SPDX-SnippetBegin
 // SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
@@ -80,9 +80,10 @@ impl Stores {
                         continue;
                     }
 
-                    if let Some(db) = crate::backend::rocksdb::RocksDbStore::open(config, prefix)
-                        .await
-                        .map(Store::from)
+                    if let Some(db) =
+                        crate::store::backend::rocksdb::RocksDbStore::open(config, prefix)
+                            .await
+                            .map(Store::from)
                     {
                         self.stores.insert(store_id.clone(), db.clone());
                         self.search_stores
@@ -106,9 +107,10 @@ impl Stores {
                         continue;
                     }
 
-                    if let Some(db) = crate::backend::foundationdb::FdbStore::open(config, prefix)
-                        .await
-                        .map(Store::from)
+                    if let Some(db) =
+                        crate::store::backend::foundationdb::FdbStore::open(config, prefix)
+                            .await
+                            .map(Store::from)
                     {
                         self.stores.insert(store_id.clone(), db.clone());
                         self.search_stores
@@ -122,7 +124,7 @@ impl Stores {
                 }
                 #[cfg(feature = "postgres")]
                 "postgresql" => {
-                    if let Some(db) = crate::backend::postgres::PostgresStore::open(
+                    if let Some(db) = crate::store::backend::postgres::PostgresStore::open(
                         config,
                         prefix,
                         config.is_active_store(id),
@@ -143,7 +145,7 @@ impl Stores {
                 }
                 #[cfg(feature = "mysql")]
                 "mysql" => {
-                    if let Some(db) = crate::backend::mysql::MysqlStore::open(
+                    if let Some(db) = crate::store::backend::mysql::MysqlStore::open(
                         config,
                         prefix,
                         config.is_active_store(id),
@@ -175,7 +177,8 @@ impl Stores {
                     }
 
                     if let Some(db) =
-                        crate::backend::sqlite::SqliteStore::open(config, prefix).map(Store::from)
+                        crate::store::backend::sqlite::SqliteStore::open(config, prefix)
+                            .map(Store::from)
                     {
                         self.stores.insert(store_id.clone(), db.clone());
                         self.search_stores
@@ -195,7 +198,7 @@ impl Stores {
                 }
                 #[cfg(feature = "s3")]
                 "s3" => {
-                    if let Some(db) = crate::backend::s3::S3Store::open(config, prefix)
+                    if let Some(db) = crate::store::backend::s3::S3Store::open(config, prefix)
                         .await
                         .map(BlobStore::from)
                     {
@@ -206,7 +209,7 @@ impl Stores {
                 "elasticsearch" => {
                     if let Some(db) = ElasticSearchStore::open(config, prefix)
                         .await
-                        .map(crate::SearchStore::from)
+                        .map(crate::store::SearchStore::from)
                     {
                         self.search_stores.insert(store_id, db);
                     }
@@ -214,14 +217,14 @@ impl Stores {
                 "meilisearch" => {
                     if let Some(db) = MeiliSearchStore::open(config, prefix)
                         .await
-                        .map(crate::SearchStore::from)
+                        .map(crate::store::SearchStore::from)
                     {
                         self.search_stores.insert(store_id, db);
                     }
                 }
                 #[cfg(feature = "redis")]
                 "redis" => {
-                    if let Some(db) = crate::backend::redis::RedisStore::open(config, prefix)
+                    if let Some(db) = crate::store::backend::redis::RedisStore::open(config, prefix)
                         .await
                         .map(std::sync::Arc::new)
                     {
@@ -233,7 +236,7 @@ impl Stores {
                 }
                 #[cfg(feature = "nats")]
                 "nats" => {
-                    if let Some(db) = crate::backend::nats::NatsPubSub::open(config, prefix)
+                    if let Some(db) = crate::store::backend::nats::NatsPubSub::open(config, prefix)
                         .await
                         .map(std::sync::Arc::new)
                     {
@@ -243,9 +246,10 @@ impl Stores {
                 }
                 #[cfg(feature = "zenoh")]
                 "zenoh" => {
-                    if let Some(db) = crate::backend::zenoh::ZenohPubSub::open(config, prefix)
-                        .await
-                        .map(std::sync::Arc::new)
+                    if let Some(db) =
+                        crate::store::backend::zenoh::ZenohPubSub::open(config, prefix)
+                            .await
+                            .map(std::sync::Arc::new)
                     {
                         self.pubsub_stores
                             .insert(store_id, crate::PubSubStore::Zenoh(db));
@@ -253,9 +257,10 @@ impl Stores {
                 }
                 #[cfg(feature = "kafka")]
                 "kafka" => {
-                    if let Some(db) = crate::backend::kafka::KafkaPubSub::open(config, prefix)
-                        .await
-                        .map(std::sync::Arc::new)
+                    if let Some(db) =
+                        crate::store::backend::kafka::KafkaPubSub::open(config, prefix)
+                            .await
+                            .map(std::sync::Arc::new)
                     {
                         self.pubsub_stores
                             .insert(store_id, crate::PubSubStore::Kafka(db));
@@ -280,7 +285,7 @@ impl Stores {
                 // SPDX-SnippetEnd
                 #[cfg(feature = "azure")]
                 "azure" => {
-                    if let Some(db) = crate::backend::azure::AzureStore::open(config, prefix)
+                    if let Some(db) = crate::store::backend::azure::AzureStore::open(config, prefix)
                         .await
                         .map(BlobStore::from)
                     {
@@ -306,14 +311,15 @@ impl Stores {
                 #[cfg(any(feature = "postgres", feature = "mysql"))]
                 CompositeStore::SQLReadReplica(id) => {
                     let prefix = ("store", id.as_str());
-                    if let Some(db) = crate::backend::composite::read_replica::SQLReadReplica::open(
-                        config,
-                        prefix,
-                        self,
-                        config.is_active_store(&id),
-                        config.is_active_search_store(&id),
-                    )
-                    .await
+                    if let Some(db) =
+                        crate::store::backend::composite::read_replica::SQLReadReplica::open(
+                            config,
+                            prefix,
+                            self,
+                            config.is_active_store(&id),
+                            config.is_active_search_store(&id),
+                        )
+                        .await
                     {
                         let db = Store::SQLReadReplica(db.into());
                         self.stores.insert(id.to_string(), db.clone());
@@ -334,11 +340,13 @@ impl Stores {
                 }
                 CompositeStore::ShardedBlob(id) => {
                     let prefix = ("store", id.as_str());
-                    if let Some(db) = crate::backend::composite::sharded_blob::ShardedBlob::open(
-                        config, prefix, self,
-                    ) {
+                    if let Some(db) =
+                        crate::store::backend::composite::sharded_blob::ShardedBlob::open(
+                            config, prefix, self,
+                        )
+                    {
                         let store = BlobStore {
-                            backend: crate::BlobBackend::Sharded(db.into()),
+                            backend: crate::store::BlobBackend::Sharded(db.into()),
                             compression: config
                                 .property_or_default::<CompressionAlgo>(
                                     ("store", id.as_str(), "compression"),
@@ -352,7 +360,7 @@ impl Stores {
                 CompositeStore::ShardedInMemory(id) => {
                     let prefix = ("store", id.as_str());
                     if let Some(db) =
-                        crate::backend::composite::sharded_lookup::ShardedInMemory::open(
+                        crate::store::backend::composite::sharded_lookup::ShardedInMemory::open(
                             config, prefix, self,
                         )
                     {

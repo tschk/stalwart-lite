@@ -6,14 +6,14 @@
 
 use compact_str::ToCompactString;
 
-use crate::{
+use crate::imap_proto::{
     Command,
     protocol::{capability::Capability, enable},
     receiver::{Request, bad},
 };
 
 impl Request<Command> {
-    pub fn parse_enable(self) -> trc::Result<enable::Arguments> {
+    pub fn parse_enable(self) -> crate::trc::Result<enable::Arguments> {
         let len = self.tokens.len();
         if len > 0 {
             let mut capabilities = Vec::with_capacity(len);
@@ -55,7 +55,7 @@ impl Capability {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
+    use crate::imap_proto::{
         protocol::{capability::Capability, enable},
         receiver::Receiver,
     };

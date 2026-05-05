@@ -8,21 +8,21 @@
  *
  */
 
-use crate::config::telemetry::StoreTracer;
-use ahash::{AHashMap, AHashSet};
-use std::{collections::HashSet, future::Future, time::Duration};
-use store::{
+use crate::common::config::telemetry::StoreTracer;
+use crate::store::{
     Deserialize, SearchStore, Store, ValueKey,
     search::{IndexDocument, SearchField, SearchFilter, SearchQuery, TracingSearchField},
     write::{BatchBuilder, SearchIndex, TaskEpoch, TaskQueueClass, TelemetryClass, ValueClass},
 };
-use trc::{
+use crate::trc::{
     AddContext, AuthEvent, Event, EventDetails, EventType, Key, MessageIngestEvent,
     OutgoingReportEvent, QueueEvent, Value,
     ipc::subscriber::SubscriberBuilder,
     serializers::binary::{deserialize_events, serialize_events},
 };
-use utils::snowflake::SnowflakeIdGenerator;
+use crate::utils::snowflake::SnowflakeIdGenerator;
+use ahash::{AHashMap, AHashSet};
+use std::{collections::HashSet, future::Future, time::Duration};
 
 const MAX_EVENTS: usize = 2048;
 
@@ -77,7 +77,7 @@ pub(crate) fn spawn_store_tracer(builder: SubscriberBuilder, settings: StoreTrac
 
             if !batch.is_empty() {
                 if let Err(err) = store.write(batch.build_all()).await {
-                    trc::error!(err.caused_by(trc::location!()));
+                    crate::trc::error!(err.caused_by(crate::trc::location!()));
                 }
                 batch = BatchBuilder::new();
             }
@@ -89,34 +89,34 @@ pub trait TracingStore: Sync + Send {
     fn get_span(
         &self,
         span_id: u64,
-    ) -> impl Future<Output = trc::Result<Vec<Event<EventDetails>>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Vec<Event<EventDetails>>>> + Send;
     fn get_raw_span(
         &self,
         span_id: u64,
-    ) -> impl Future<Output = trc::Result<Option<Vec<u8>>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Option<Vec<u8>>>> + Send;
     fn purge_spans(
         &self,
         period: Duration,
         search_store: Option<&SearchStore>,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 }
 
 impl TracingStore for Store {
-    async fn get_span(&self, span_id: u64) -> trc::Result<Vec<Event<EventDetails>>> {
+    async fn get_span(&self, span_id: u64) -> crate::trc::Result<Vec<Event<EventDetails>>> {
         self.get_value::<Span>(ValueKey::from(ValueClass::Telemetry(
             TelemetryClass::Span { span_id },
         )))
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|span| span.map(|span| span.0).unwrap_or_default())
     }
 
-    async fn get_raw_span(&self, span_id: u64) -> trc::Result<Option<Vec<u8>>> {
+    async fn get_raw_span(&self, span_id: u64) -> crate::trc::Result<Option<Vec<u8>>> {
         self.get_value::<RawSpan>(ValueKey::from(ValueClass::Telemetry(
             TelemetryClass::Span { span_id },
         )))
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
         .map(|span| span.map(|span| span.0))
     }
 
@@ -124,11 +124,14 @@ impl TracingStore for Store {
         &self,
         period: Duration,
         search_store: Option<&SearchStore>,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let until_span_id = SnowflakeIdGenerator::from_duration(period).ok_or_else(|| {
-            trc::StoreEvent::UnexpectedError
-                .caused_by(trc::location!())
-                .ctx(trc::Key::Reason, "Failed to generate reference span id.")
+            crate::trc::StoreEvent::UnexpectedError
+                .caused_by(crate::trc::location!())
+                .ctx(
+                    crate::trc::Key::Reason,
+                    "Failed to generate reference span id.",
+                )
         })?;
 
         self.delete_range(
@@ -138,7 +141,7 @@ impl TracingStore for Store {
             })),
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         if let Some(search_store) = search_store {
             search_store
@@ -147,7 +150,7 @@ impl TracingStore for Store {
                         .with_filter(SearchFilter::lt(SearchField::Id, until_span_id)),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(())
@@ -224,13 +227,13 @@ struct RawSpan(Vec<u8>);
 struct Span(Vec<Event<EventDetails>>);
 
 impl Deserialize for Span {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         deserialize_events(bytes).map(Self)
     }
 }
 
 impl Deserialize for RawSpan {
-    fn deserialize(bytes: &[u8]) -> trc::Result<Self> {
+    fn deserialize(bytes: &[u8]) -> crate::trc::Result<Self> {
         Ok(Self(bytes.to_vec()))
     }
 }

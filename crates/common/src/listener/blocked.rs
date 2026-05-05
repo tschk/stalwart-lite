@@ -6,8 +6,7 @@
 
 use std::{fmt::Debug, net::IpAddr};
 
-use ahash::AHashSet;
-use utils::{
+use crate::utils::{
     config::{
         Config, ConfigKey, Rate,
         ipmask::{IpAddrMask, IpAddrOrMask},
@@ -15,8 +14,9 @@ use utils::{
     },
     glob::GlobPattern,
 };
+use ahash::AHashSet;
 
-use crate::{
+use crate::common::{
     KV_RATE_LIMIT_AUTH, KV_RATE_LIMIT_LOITER, KV_RATE_LIMIT_RCPT, KV_RATE_LIMIT_SCAN, Server,
     ip_to_bytes, ipc::BroadcastEvent, manager::config::MatchType,
 };
@@ -137,7 +137,7 @@ impl Security {
 }
 
 impl Server {
-    pub async fn is_rcpt_fail2banned(&self, ip: IpAddr, rcpt: &str) -> trc::Result<bool> {
+    pub async fn is_rcpt_fail2banned(&self, ip: IpAddr, rcpt: &str) -> crate::trc::Result<bool> {
         if let Some(rate) = &self.core.network.security.rcpt_fail_rate {
             let is_allowed = self.is_ip_allowed(&ip)
                 || (self
@@ -159,7 +159,7 @@ impl Server {
         Ok(false)
     }
 
-    pub async fn is_scanner_fail2banned(&self, ip: IpAddr) -> trc::Result<bool> {
+    pub async fn is_scanner_fail2banned(&self, ip: IpAddr) -> crate::trc::Result<bool> {
         if let Some(rate) = &self.core.network.security.scanner_fail_rate {
             let is_allowed = self.is_ip_allowed(&ip)
                 || self
@@ -176,7 +176,7 @@ impl Server {
         Ok(false)
     }
 
-    pub async fn is_http_banned_path(&self, path: &str, ip: IpAddr) -> trc::Result<bool> {
+    pub async fn is_http_banned_path(&self, path: &str, ip: IpAddr) -> crate::trc::Result<bool> {
         let paths = &self.core.network.security.http_banned_paths;
 
         if !paths.is_empty() && paths.iter().any(|p| p.matches(path)) && !self.is_ip_allowed(&ip) {
@@ -186,7 +186,7 @@ impl Server {
         }
     }
 
-    pub async fn is_loiter_fail2banned(&self, ip: IpAddr) -> trc::Result<bool> {
+    pub async fn is_loiter_fail2banned(&self, ip: IpAddr) -> crate::trc::Result<bool> {
         if let Some(rate) = &self.core.network.security.loiter_fail_rate {
             let is_allowed = self.is_ip_allowed(&ip)
                 || self
@@ -203,7 +203,11 @@ impl Server {
         Ok(false)
     }
 
-    pub async fn is_auth_fail2banned(&self, ip: IpAddr, login: Option<&str>) -> trc::Result<bool> {
+    pub async fn is_auth_fail2banned(
+        &self,
+        ip: IpAddr,
+        login: Option<&str>,
+    ) -> crate::trc::Result<bool> {
         if let Some(rate) = &self.core.network.security.auth_fail_rate {
             let login = login.unwrap_or_default();
             let is_allowed = self.is_ip_allowed(&ip)
@@ -226,7 +230,7 @@ impl Server {
         Ok(false)
     }
 
-    pub async fn block_ip(&self, ip: IpAddr) -> trc::Result<()> {
+    pub async fn block_ip(&self, ip: IpAddr) -> crate::trc::Result<()> {
         // Add IP to blocked list
         self.inner.data.blocked_ips.write().insert(ip);
 

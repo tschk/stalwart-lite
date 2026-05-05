@@ -8,7 +8,7 @@ pub mod serialize;
 pub mod status;
 
 use self::serialize::serialize_hex;
-use crate::{
+use crate::jmap_proto::{
     error::method::MethodErrorWrapper,
     method::{
         availability::GetAvailabilityResponse,
@@ -202,14 +202,14 @@ impl<'x> Response<'x> {
     }
 }
 
-impl From<trc::Error> for ResponseMethod<'_> {
-    fn from(error: trc::Error) -> Self {
+impl From<crate::trc::Error> for ResponseMethod<'_> {
+    fn from(error: crate::trc::Error) -> Self {
         ResponseMethod::Error(error.into())
     }
 }
 
-impl<'x, T: Into<ResponseMethod<'x>>> From<trc::Result<T>> for ResponseMethod<'x> {
-    fn from(result: trc::Result<T>) -> Self {
+impl<'x, T: Into<ResponseMethod<'x>>> From<crate::trc::Result<T>> for ResponseMethod<'x> {
+    fn from(result: crate::trc::Result<T>) -> Self {
         match result {
             Ok(value) => value.into(),
             Err(error) => error.into(),

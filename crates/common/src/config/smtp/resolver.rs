@@ -11,6 +11,10 @@ use std::{
     time::Duration,
 };
 
+use crate::utils::{
+    cache::CacheItemWeight,
+    config::{Config, utils::ParseValue},
+};
 use mail_auth::{
     MessageAuthenticator,
     hickory_resolver::{
@@ -21,10 +25,6 @@ use mail_auth::{
     },
 };
 use serde::{Deserialize, Serialize};
-use utils::{
-    cache::CacheItemWeight,
-    config::{Config, utils::ParseValue},
-};
 
 use crate::Server;
 

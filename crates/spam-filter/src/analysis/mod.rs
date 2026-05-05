@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{Server, config::spamfilter::Location};
+use crate::spam_filter::{
     Recipient, SpamFilterContext, SpamFilterInput, SpamFilterOutput, SpamFilterResult, TextPart,
 };
-use common::{Server, config::spamfilter::Location};
 use mail_parser::{Header, parsers::MessageStream};
 use std::{
     borrow::Cow,
@@ -124,7 +124,7 @@ pub(crate) async fn is_trusted_domain(server: &Server, domain: &str, span_id: u6
             Ok(true) => return true,
             Ok(false) => (),
             Err(err) => {
-                trc::error!(err.span_id(span_id).caused_by(trc::location!()));
+                crate::trc::error!(err.span_id(span_id).caused_by(crate::trc::location!()));
             }
         }
     }
@@ -132,7 +132,7 @@ pub(crate) async fn is_trusted_domain(server: &Server, domain: &str, span_id: u6
     match server.core.storage.directory.is_local_domain(domain).await {
         Ok(result) => result,
         Err(err) => {
-            trc::error!(err.span_id(span_id).caused_by(trc::location!()));
+            crate::trc::error!(err.span_id(span_id).caused_by(crate::trc::location!()));
             false
         }
     }
@@ -143,7 +143,7 @@ pub(crate) async fn is_url_redirector(server: &Server, url: &str, span_id: u64) 
         match store.key_exists(url).await {
             Ok(result) => result,
             Err(err) => {
-                trc::error!(err.span_id(span_id).caused_by(trc::location!()));
+                crate::trc::error!(err.span_id(span_id).caused_by(crate::trc::location!()));
                 false
             }
         }

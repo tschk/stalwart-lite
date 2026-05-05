@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::store::{
     Deserialize, IterateParams, Store, U64_LEN, ValueKey,
     search::{
         IndexDocument, SearchField, SearchFilter, SearchOperator, SearchQuery, SearchValue,
@@ -16,12 +16,12 @@ use crate::{
         key::DeserializeBigEndian,
     },
 };
+use crate::trc::AddContext;
+use crate::utils::cheeky_hash::CheekyHash;
 use ahash::AHashMap;
-use trc::AddContext;
-use utils::cheeky_hash::CheekyHash;
 
 impl Store {
-    pub(crate) async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub(crate) async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         let truncate_at = if self.is_foundationdb() { 1_048_576 } else { 0 };
 
         for document in documents {
@@ -59,7 +59,7 @@ impl Store {
                             }),
                         ))
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                 {
                     old_term_index = Some(archive);
                 }
@@ -69,28 +69,28 @@ impl Store {
             if let Some(old_term_index) = old_term_index {
                 let old_term_index = old_term_index
                     .unarchive::<TermIndex>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 term_index_builder
                     .index
                     .merge_index(&mut batch, index, term_index_builder.id, old_term_index)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             } else {
                 term_index_builder
                     .index
                     .write_index(&mut batch, index, term_index_builder.id)
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
 
             let mut commit_points = batch.commit_points();
             for commit_point in commit_points.iter() {
                 let batch = batch.build_one(commit_point);
-                self.write(batch).await.caused_by(trc::location!())?;
+                self.write(batch).await.caused_by(crate::trc::location!())?;
             }
         }
         Ok(())
     }
 
-    pub(crate) async fn unindex(&self, query: SearchQuery) -> trc::Result<()> {
+    pub(crate) async fn unindex(&self, query: SearchQuery) -> crate::trc::Result<()> {
         let index = query.index;
         let mut account_documents: AHashMap<u32, Vec<u32>> = AHashMap::new();
         let mut ids = vec![];
@@ -125,20 +125,20 @@ impl Store {
                             ids.push(id);
                         }
                         _ => {
-                            return Err(trc::StoreEvent::UnexpectedError
+                            return Err(crate::trc::StoreEvent::UnexpectedError
                                 .into_err()
                                 .reason("Unsupported operator for Id field"));
                         }
                     },
                     filter => {
-                        return Err(trc::StoreEvent::UnexpectedError
+                        return Err(crate::trc::StoreEvent::UnexpectedError
                             .into_err()
                             .details(format!("Unsupported unindex filter {filter:?}")));
                     }
                 },
                 SearchFilter::And | SearchFilter::Or | SearchFilter::End => {}
                 SearchFilter::Not | SearchFilter::DocumentSet(_) => {
-                    return Err(trc::StoreEvent::UnexpectedError
+                    return Err(crate::trc::StoreEvent::UnexpectedError
                         .into_err()
                         .details(format!("Unsupported unindex filter {filter:?}")));
                 }
@@ -161,13 +161,13 @@ impl Store {
                             }),
                         ))
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     else {
                         continue;
                     };
                     let term_index = archive
                         .unarchive::<TermIndex>()
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     let mut batch = BatchBuilder::new();
                     term_index.delete_index(
                         &mut batch,
@@ -179,7 +179,7 @@ impl Store {
                     );
                     self.write(batch.build_all())
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                 }
             } else {
                 // Delete all documents for the account
@@ -202,7 +202,7 @@ impl Store {
                     })),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 self.delete_range(
                     ValueKey::from(ValueClass::SearchIndex(SearchIndexClass {
@@ -233,7 +233,7 @@ impl Store {
                     })),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
                 self.delete_range(
                     ValueKey::from(ValueClass::SearchIndex(SearchIndexClass {
@@ -260,7 +260,7 @@ impl Store {
                     })),
                 )
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             }
         }
 
@@ -275,18 +275,18 @@ impl Store {
                     },
                 )))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             else {
                 continue;
             };
             let term_index = archive
                 .unarchive::<TermIndex>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let mut batch = BatchBuilder::new();
             term_index.delete_index(&mut batch, index, SearchIndexId::Global { id });
             self.write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         // Delete ranges
@@ -322,12 +322,12 @@ impl Store {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
             for mut batch in batches {
                 self.write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
 

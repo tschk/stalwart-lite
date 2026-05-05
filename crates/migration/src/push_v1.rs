@@ -5,32 +5,32 @@
  */
 
 use super::object::Object;
-use crate::{
+use crate::common::Server;
+use crate::email::push::{Keys, PushSubscription, PushSubscriptions};
+use crate::migration::{
     get_document_ids,
     object::{FromLegacy, Property, Value},
 };
-use base64::{Engine, engine::general_purpose};
-use common::Server;
-use email::push::{Keys, PushSubscription, PushSubscriptions};
-use store::{
+use crate::store::{
     Serialize, ValueKey,
     write::{Archiver, BatchBuilder, ValueClass},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::Collection,
     field::{Field, PrincipalField},
     type_state::DataType,
 };
+use base64::{Engine, engine::general_purpose};
 
 pub(crate) async fn migrate_push_subscriptions_v011(
     server: &Server,
     account_id: u32,
-) -> trc::Result<u64> {
+) -> crate::trc::Result<u64> {
     // Obtain email ids
     let push_subscription_ids = get_document_ids(server, account_id, Collection::PushSubscription)
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let num_push_subscriptions = push_subscription_ids.len();
     if num_push_subscriptions == 0 {
@@ -59,7 +59,7 @@ pub(crate) async fn migrate_push_subscriptions_v011(
                 return Err(err
                     .account_id(account_id)
                     .document_id(push_subscription_id)
-                    .caused_by(trc::location!()));
+                    .caused_by(crate::trc::location!()));
             }
         }
     }
@@ -88,13 +88,13 @@ pub(crate) async fn migrate_push_subscriptions_v011(
                 PrincipalField::PushSubscriptions,
                 Archiver::new(PushSubscriptions { subscriptions })
                     .serialize()
-                    .caused_by(trc::location!())?,
+                    .caused_by(crate::trc::location!())?,
             );
 
         server
             .commit_batch(batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(num_push_subscriptions)
     } else {

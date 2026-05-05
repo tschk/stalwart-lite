@@ -6,14 +6,14 @@
 
 use compact_str::{CompactString, ToCompactString};
 
-use crate::Command;
-use crate::protocol::status;
-use crate::protocol::status::Status;
-use crate::receiver::{Request, Token, bad};
-use crate::utf7::utf7_maybe_decode;
+use crate::imap_proto::Command;
+use crate::imap_proto::protocol::status;
+use crate::imap_proto::protocol::status::Status;
+use crate::imap_proto::receiver::{Request, Token, bad};
+use crate::imap_proto::utf7::utf7_maybe_decode;
 
 impl Request<Command> {
-    pub fn parse_status(self, is_utf8: bool) -> trc::Result<status::Arguments> {
+    pub fn parse_status(self, is_utf8: bool) -> crate::trc::Result<status::Arguments> {
         match self.tokens.len() {
             0..=3 => Err(self.into_error("Missing arguments.")),
             len => {
@@ -100,7 +100,7 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::{protocol::status, receiver::Receiver};
+    use crate::imap_proto::{protocol::status, receiver::Receiver};
 
     #[test]
     fn parse_status() {

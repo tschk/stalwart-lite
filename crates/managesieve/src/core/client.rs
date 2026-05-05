@@ -5,14 +5,14 @@
  */
 
 use super::{Command, ResponseCode, SerializeResponse, Session, State};
-use common::{
+use crate::common::{
     KV_RATE_LIMIT_IMAP,
     listener::{SessionResult, SessionStream},
 };
-use imap_proto::receiver::{self, Request};
+use crate::imap_proto::receiver::{self, Request};
+use crate::trc::{AddContext, SecurityEvent};
+use crate::types::{collection::Collection, field::SieveField};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use trc::{AddContext, SecurityEvent};
-use types::{collection::Collection, field::SieveField};
 
 impl<T: SessionStream> Session<T> {
     pub async fn ingest(&mut self, bytes: &[u8]) -> SessionResult {
@@ -30,7 +30,7 @@ impl<T: SessionStream> Session<T> {
                         let mut disconnect = err.must_disconnect();
 
                         if let Err(err) = self.write_error(err).await {
-                            trc::error!(err.span_id(self.session_id));
+                            crate::trc::error!(err.span_id(self.session_id));
                             disconnect = true;
                         }
 
@@ -49,15 +49,15 @@ impl<T: SessionStream> Session<T> {
                 Err(receiver::Error::Error { response }) => {
                     // Check for port scanners
                     if matches!(
-                        (&self.state, response.key(trc::Key::Code)),
+                        (&self.state, response.key(crate::trc::Key::Code)),
                         (
                             State::NotAuthenticated { .. },
-                            Some(trc::Value::String(v))
+                            Some(crate::trc::Value::String(v))
                         ) if v == "PARSE"
                     ) {
                         match self.server.is_scanner_fail2banned(self.remote_addr).await {
                             Ok(true) => {
-                                trc::event!(
+                                crate::trc::event!(
                                     Security(SecurityEvent::ScanBan),
                                     SpanId = self.session_id,
                                     RemoteIp = self.remote_addr,
@@ -68,7 +68,7 @@ impl<T: SessionStream> Session<T> {
                             }
                             Ok(false) => {}
                             Err(err) => {
-                                trc::error!(
+                                crate::trc::error!(
                                     err.span_id(self.session_id)
                                         .details("Failed to check for fail2ban")
                                 );
@@ -77,7 +77,7 @@ impl<T: SessionStream> Session<T> {
                     }
 
                     if let Err(err) = self.write_error(response).await {
-                        trc::error!(err.span_id(self.session_id));
+                        crate::trc::error!(err.span_id(self.session_id));
                         return SessionResult::Close;
                     }
                     break;
@@ -105,7 +105,7 @@ impl<T: SessionStream> Session<T> {
             } {
                 Ok(response) => {
                     if let Err(err) = self.write(&response).await {
-                        trc::error!(err.span_id(self.session_id));
+                        crate::trc::error!(err.span_id(self.session_id));
                         return SessionResult::Close;
                     }
 
@@ -119,7 +119,7 @@ impl<T: SessionStream> Session<T> {
                     let mut disconnect = err.must_disconnect();
 
                     if let Err(err) = self.write_error(err).await {
-                        trc::error!(err.span_id(self.session_id));
+                        crate::trc::error!(err.span_id(self.session_id));
                         disconnect = true;
                     }
 
@@ -135,14 +135,17 @@ impl<T: SessionStream> Session<T> {
                 .write(format!("OK Ready for {} bytes.\r\n", needs_literal).as_bytes())
                 .await
         {
-            trc::error!(err.span_id(self.session_id));
+            crate::trc::error!(err.span_id(self.session_id));
             return SessionResult::Close;
         }
 
         SessionResult::Continue
     }
 
-    async fn validate_request(&self, command: Request<Command>) -> trc::Result<Request<Command>> {
+    async fn validate_request(
+        &self,
+        command: Request<Command>,
+    ) -> crate::trc::Result<Request<Command>> {
         match &command.command {
             Command::Capability | Command::Logout | Command::Noop => Ok(command),
             Command::Authenticate => {
@@ -150,13 +153,13 @@ impl<T: SessionStream> Session<T> {
                     if self.stream.is_tls() || self.server.core.imap.allow_plain_auth {
                         Ok(command)
                     } else {
-                        Err(trc::ManageSieveEvent::Error
+                        Err(crate::trc::ManageSieveEvent::Error
                             .into_err()
                             .code(ResponseCode::EncryptNeeded)
                             .details("Cannot authenticate over plain-text."))
                     }
                 } else {
-                    Err(trc::ManageSieveEvent::Error
+                    Err(crate::trc::ManageSieveEvent::Error
                         .into_err()
                         .details("Already authenticated."))
                 }
@@ -165,7 +168,7 @@ impl<T: SessionStream> Session<T> {
                 if !self.stream.is_tls() {
                     Ok(command)
                 } else {
-                    Err(trc::ManageSieveEvent::Error
+                    Err(crate::trc::ManageSieveEvent::Error
                         .into_err()
                         .details("Already in TLS mode."))
                 }
@@ -193,12 +196,12 @@ impl<T: SessionStream> Session<T> {
                                 true,
                             )
                             .await
-                            .caused_by(trc::location!())?
+                            .caused_by(crate::trc::location!())?
                             .is_none()
                         {
                             Ok(command)
                         } else {
-                            Err(trc::LimitEvent::TooManyRequests
+                            Err(crate::trc::LimitEvent::TooManyRequests
                                 .into_err()
                                 .code(ResponseCode::TryLater))
                         }
@@ -206,7 +209,7 @@ impl<T: SessionStream> Session<T> {
                         Ok(command)
                     }
                 } else {
-                    Err(trc::ManageSieveEvent::Error
+                    Err(crate::trc::ManageSieveEvent::Error
                         .into_err()
                         .details("Not authenticated."))
                 }
@@ -217,50 +220,50 @@ impl<T: SessionStream> Session<T> {
 
 impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
     #[inline(always)]
-    pub async fn write(&mut self, bytes: &[u8]) -> trc::Result<()> {
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::RawOutput),
+    pub async fn write(&mut self, bytes: &[u8]) -> crate::trc::Result<()> {
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::RawOutput),
             SpanId = self.session_id,
             Size = bytes.len(),
-            Contents = trc::Value::from_maybe_string(bytes),
+            Contents = crate::trc::Value::from_maybe_string(bytes),
         );
 
         self.stream.write_all(bytes).await.map_err(|err| {
-            trc::NetworkEvent::WriteError
+            crate::trc::NetworkEvent::WriteError
                 .into_err()
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })?;
         self.stream.flush().await.map_err(|err| {
-            trc::NetworkEvent::FlushError
+            crate::trc::NetworkEvent::FlushError
                 .into_err()
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })?;
 
         Ok(())
     }
 
-    pub async fn write_error(&mut self, error: trc::Error) -> trc::Result<()> {
+    pub async fn write_error(&mut self, error: crate::trc::Error) -> crate::trc::Result<()> {
         let bytes = error.serialize();
-        trc::error!(error.span_id(self.session_id));
+        crate::trc::error!(error.span_id(self.session_id));
         self.write(&bytes).await
     }
 
     #[inline(always)]
-    pub async fn read(&mut self, bytes: &mut [u8]) -> trc::Result<usize> {
+    pub async fn read(&mut self, bytes: &mut [u8]) -> crate::trc::Result<usize> {
         let len = self.stream.read(bytes).await.map_err(|err| {
-            trc::NetworkEvent::ReadError
+            crate::trc::NetworkEvent::ReadError
                 .into_err()
                 .reason(err)
-                .caused_by(trc::location!())
+                .caused_by(crate::trc::location!())
         })?;
 
-        trc::event!(
-            ManageSieve(trc::ManageSieveEvent::RawInput),
+        crate::trc::event!(
+            ManageSieve(crate::trc::ManageSieveEvent::RawInput),
             SpanId = self.session_id,
             Size = len,
-            Contents = trc::Value::from_maybe_string(bytes.get(0..len).unwrap_or_default()),
+            Contents = crate::trc::Value::from_maybe_string(bytes.get(0..len).unwrap_or_default()),
         );
 
         Ok(len)
@@ -268,7 +271,7 @@ impl<T: AsyncWrite + AsyncRead + Unpin> Session<T> {
 }
 
 impl<T: AsyncWrite + AsyncRead> Session<T> {
-    pub async fn get_script_id(&self, account_id: u32, name: &str) -> trc::Result<u32> {
+    pub async fn get_script_id(&self, account_id: u32, name: &str) -> crate::trc::Result<u32> {
         self.server
             .document_ids_matching(
                 account_id,
@@ -277,10 +280,10 @@ impl<T: AsyncWrite + AsyncRead> Session<T> {
                 name.to_lowercase().as_bytes(),
             )
             .await
-            .caused_by(trc::location!())
+            .caused_by(crate::trc::location!())
             .and_then(|results| {
                 results.min().ok_or_else(|| {
-                    trc::ManageSieveEvent::Error
+                    crate::trc::ManageSieveEvent::Error
                         .into_err()
                         .code(ResponseCode::NonExistent)
                         .reason("There is no script by that name")

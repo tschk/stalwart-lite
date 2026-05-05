@@ -16,7 +16,7 @@ pub mod text;
 use mail_parser::Message;
 use sieve::{FunctionMap, Input, runtime::Variable};
 
-use crate::{Core, Server, auth::AccessToken};
+use crate::common::{Core, Server, auth::AccessToken};
 
 use super::ScriptModification;
 
@@ -99,7 +99,7 @@ impl Core {
         match result {
             Ok(result) => result.into(),
             Err(err) => {
-                trc::error!(err.span_id(session_id).details("Sieve runtime error"));
+                crate::trc::error!(err.span_id(session_id).details("Sieve runtime error"));
                 Input::FncResult(Variable::default())
             }
         }

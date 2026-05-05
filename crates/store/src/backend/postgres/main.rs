@@ -5,7 +5,8 @@
  */
 
 use super::{PostgresStore, into_error};
-use crate::{
+use crate::nlp::language::Language;
+use crate::store::{
     backend::postgres::{PsqlSearchField, into_pool_error, tls::MakeRustlsConnect},
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, SearchableField,
@@ -13,12 +14,11 @@ use crate::{
     },
     *,
 };
+use crate::utils::{config::utils::AsKey, rustls_client_config};
 use deadpool::managed::Object;
 use deadpool_postgres::{Config, Manager, ManagerConfig, PoolConfig, RecyclingMethod, Runtime};
-use nlp::language::Language;
 use std::time::Duration;
 use tokio_postgres::NoTls;
-use utils::{config::utils::AsKey, rustls_client_config};
 
 impl PostgresStore {
     pub async fn open(
@@ -95,7 +95,7 @@ impl PostgresStore {
         Some(db)
     }
 
-    pub(crate) async fn create_storage_tables(&self) -> trc::Result<()> {
+    pub(crate) async fn create_storage_tables(&self) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
 
         for table in [
@@ -162,7 +162,7 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub(crate) async fn create_search_tables(&self) -> trc::Result<()> {
+    pub(crate) async fn create_search_tables(&self) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
 
         create_search_tables::<EmailSearchField>(&conn).await?;
@@ -177,7 +177,7 @@ impl PostgresStore {
 
 async fn create_search_tables<T: SearchableField + PsqlSearchField + 'static>(
     conn: &Object<Manager>,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     let table_name = T::index().psql_table();
     let mut query = format!("CREATE TABLE IF NOT EXISTS {} (", table_name);
 

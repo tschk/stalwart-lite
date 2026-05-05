@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::trc::{Collector, atomics::histogram::AtomicHistogram};
 use prometheus::{
     TextEncoder,
     proto::{Bucket, Counter, Gauge, Histogram, Metric, MetricFamily, MetricType},
 };
-use trc::{Collector, atomics::histogram::AtomicHistogram};
 
 use crate::Server;
 
 impl Server {
-    pub async fn export_prometheus_metrics(&self) -> trc::Result<String> {
+    pub async fn export_prometheus_metrics(&self) -> crate::trc::Result<String> {
         let mut metrics = Vec::new();
 
         // SPDX-SnippetBegin
@@ -57,7 +57,8 @@ impl Server {
         }
 
         TextEncoder::new().encode_to_string(&metrics).map_err(|e| {
-            trc::EventType::Telemetry(trc::TelemetryEvent::OtelExporterError).reason(e)
+            crate::trc::EventType::Telemetry(crate::trc::TelemetryEvent::OtelExporterError)
+                .reason(e)
         })
     }
 }

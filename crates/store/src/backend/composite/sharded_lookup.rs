@@ -8,9 +8,9 @@
  *
  */
 
-use utils::config::{Config, utils::AsKey};
+use crate::utils::config::{Config, utils::AsKey};
 
-use crate::{
+use crate::store::{
     Deserialize, InMemoryStore, Stores, Value,
     dispatch::lookup::{KeyValue, LookupKey},
 };
@@ -59,69 +59,69 @@ impl ShardedInMemory {
         &self.stores[xxhash_rust::xxh3::xxh3_64(key) as usize % self.stores.len()]
     }
 
-    pub async fn key_set(&self, kv: KeyValue<Vec<u8>>) -> trc::Result<()> {
+    pub async fn key_set(&self, kv: KeyValue<Vec<u8>>) -> crate::trc::Result<()> {
         Box::pin(async move {
             match self.get_store(&kv.key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_set(&kv.key, &kv.value, kv.expires).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
-    pub async fn counter_incr(&self, kv: KeyValue<i64>) -> trc::Result<i64> {
+    pub async fn counter_incr(&self, kv: KeyValue<i64>) -> crate::trc::Result<i64> {
         Box::pin(async move {
             match self.get_store(&kv.key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_incr(&kv.key, kv.value, kv.expires).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
-    pub async fn key_delete(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<()> {
+    pub async fn key_delete(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<()> {
         let key_ = key.into();
         let key = key_.as_bytes();
         Box::pin(async move {
             match self.get_store(key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_delete(key).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
-    pub async fn counter_delete(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<()> {
+    pub async fn counter_delete(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<()> {
         let key_ = key.into();
         let key = key_.as_bytes();
         Box::pin(async move {
             match self.get_store(key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_delete(key).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
     #[allow(unused_variables)]
-    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> trc::Result<()> {
+    pub async fn key_delete_prefix(&self, prefix: &[u8]) -> crate::trc::Result<()> {
         Box::pin(async move {
             #[cfg(feature = "redis")]
             for store in &self.stores {
                 match store {
                     InMemoryStore::Redis(store) => store.key_delete_prefix(prefix).await?,
                     InMemoryStore::Static(_) => {
-                        return Err(trc::StoreEvent::NotSupported.into_err());
+                        return Err(crate::trc::StoreEvent::NotSupported.into_err());
                     }
-                    _ => return Err(trc::StoreEvent::NotSupported.into_err()),
+                    _ => return Err(crate::trc::StoreEvent::NotSupported.into_err()),
                 }
             }
 
@@ -133,43 +133,43 @@ impl ShardedInMemory {
     pub async fn key_get<T: Deserialize + From<Value<'static>> + std::fmt::Debug + 'static>(
         &self,
         key: impl Into<LookupKey<'_>>,
-    ) -> trc::Result<Option<T>> {
+    ) -> crate::trc::Result<Option<T>> {
         let key_ = key.into();
         let key = key_.as_bytes();
         Box::pin(async move {
             match self.get_store(key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_get(key).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
-    pub async fn counter_get(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<i64> {
+    pub async fn counter_get(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<i64> {
         let key_ = key.into();
         let key = key_.as_bytes();
         Box::pin(async move {
             match self.get_store(key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.counter_get(key).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await
     }
 
-    pub async fn key_exists(&self, key: impl Into<LookupKey<'_>>) -> trc::Result<bool> {
+    pub async fn key_exists(&self, key: impl Into<LookupKey<'_>>) -> crate::trc::Result<bool> {
         let key_ = key.into();
         let key = key_.as_bytes();
         Box::pin(async move {
             match self.get_store(key) {
                 #[cfg(feature = "redis")]
                 InMemoryStore::Redis(store) => store.key_exists(key).await,
-                InMemoryStore::Static(_) => Err(trc::StoreEvent::NotSupported.into_err()),
-                _ => Err(trc::StoreEvent::NotSupported.into_err()),
+                InMemoryStore::Static(_) => Err(crate::trc::StoreEvent::NotSupported.into_err()),
+                _ => Err(crate::trc::StoreEvent::NotSupported.into_err()),
             }
         })
         .await

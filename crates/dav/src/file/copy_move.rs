@@ -5,7 +5,10 @@
  */
 
 use super::FromDavResource;
-use crate::{
+use crate::common::{
+    DavResourcePath, DavResources, Server, auth::AccessToken, storage::index::ObjectIndexBuilder,
+};
+use crate::dav::{
     DavError, DavMethod,
     common::{
         ExtractETag,
@@ -14,27 +17,24 @@ use crate::{
     },
     file::{DavFileResource, FileItemId},
 };
-use common::{
-    DavResourcePath, DavResources, Server, auth::AccessToken, storage::index::ObjectIndexBuilder,
-};
-use dav_proto::{Depth, RequestHeaders};
-use groupware::{DestroyArchive, cache::GroupwareCache, file::FileNode};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use std::sync::Arc;
-use store::{
+use crate::dav_proto::{Depth, RequestHeaders};
+use crate::groupware::{DestroyArchive, cache::GroupwareCache, file::FileNode};
+use crate::http_proto::HttpResponse;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use store::{
+use crate::store::{
     ahash::AHashMap,
     write::{BatchBuilder, now},
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection, VanishedCollection},
 };
+use hyper::StatusCode;
+use std::sync::Arc;
 
 pub(crate) trait FileCopyMoveRequestHandler: Sync + Send {
     fn handle_file_copy_move_request(
@@ -42,7 +42,7 @@ pub(crate) trait FileCopyMoveRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_move: bool,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl FileCopyMoveRequestHandler for Server {
@@ -51,7 +51,7 @@ impl FileCopyMoveRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         is_move: bool,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate source
         let from_resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -61,7 +61,7 @@ impl FileCopyMoveRequestHandler for Server {
         let from_resources = self
             .fetch_dav_resources(access_token, from_account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let from_resource = from_resources.map_resource::<FileItemId>(&from_resource_)?;
         let from_resource_name = from_resource_.resource.unwrap();
 
@@ -105,7 +105,7 @@ impl FileCopyMoveRequestHandler for Server {
         } else {
             self.fetch_dav_resources(access_token, to_account_id, SyncCollection::FileNode)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
         };
 
         // Map file item
@@ -256,7 +256,7 @@ impl FileCopyMoveRequestHandler for Server {
                 DestroyArchive(sorted_ids)
                     .delete(self, access_token, destination.account_id, None)
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
             }
         }
 
@@ -354,7 +354,7 @@ async fn move_container(
     from_resource_name: &str,
     destination: Destination,
     depth: Depth,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let to_account_id = destination.account_id;
     let from_document_id = from_resource.resource.document_id;
@@ -369,12 +369,14 @@ async fn move_container(
                 from_document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
         let node = node_
             .to_unarchived::<FileNode>()
-            .caused_by(trc::location!())?;
-        let mut new_node = node.deserialize::<FileNode>().caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
+        let mut new_node = node
+            .deserialize::<FileNode>()
+            .caused_by(crate::trc::location!())?;
         new_node.parent_id = parent_id;
         if let Some(new_name) = destination.new_name {
             new_node.name = new_name;
@@ -388,7 +390,7 @@ async fn move_container(
                 from_document_id,
                 &mut batch,
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .etag();
         batch.with_account_id(from_account_id).log_vanished_item(
             VanishedCollection::FileNode,
@@ -397,7 +399,7 @@ async fn move_container(
         server
             .commit_batch(batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))
     } else {
@@ -425,7 +427,7 @@ async fn copy_container(
     mut destination: Destination,
     depth: Depth,
     delete_source: bool,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let infinity_copy = match depth {
         Depth::Zero => {
             return copy_item(server, access_token, from_resource, destination).await;
@@ -465,7 +467,7 @@ async fn copy_container(
         .store()
         .assign_document_ids(to_account_id, Collection::FileNode, copy_files.len() as u64)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     for (document_id, _) in copy_files.into_iter() {
         let node_ = server
             .store()
@@ -475,10 +477,10 @@ async fn copy_container(
                 document_id,
             ))
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .ok_or(DavError::Code(StatusCode::NOT_FOUND))?
             .into_deserialized::<FileNode>()
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Build node
         let mut node = if !delete_source {
@@ -511,7 +513,7 @@ async fn copy_container(
                     .with_changes(node)
                     .with_access_token(access_token),
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .commit_point();
         id_map.insert(document_id + 1, new_document_id + 1);
     }
@@ -529,7 +531,7 @@ async fn copy_container(
                         .with_access_token(access_token)
                         .with_current(node),
                 )
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .commit_point();
         }
         batch.with_account_id(from_account_id).log_vanished_item(
@@ -543,7 +545,7 @@ async fn copy_container(
         server
             .commit_batch(batch)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     Ok(HttpResponse::new(StatusCode::CREATED))
@@ -556,7 +558,7 @@ async fn overwrite_and_delete_item(
     from_resource: UriResource<u32, FileItemId>,
     from_resource_path: String,
     destination: Destination,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let to_account_id = destination.account_id;
     let from_document_id = from_resource.resource.document_id;
@@ -571,12 +573,12 @@ async fn overwrite_and_delete_item(
             to_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
     let dest_node = dest_node_
         .to_unarchived::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // source_node is the file to be copied
     let source_node__ = server
@@ -587,14 +589,14 @@ async fn overwrite_and_delete_item(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let source_node_ = source_node__
         .to_unarchived::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let mut source_node = source_node_
         .deserialize::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     source_node.name = if let Some(new_name) = destination.new_name {
         new_name
     } else {
@@ -611,7 +613,7 @@ async fn overwrite_and_delete_item(
             to_document_id,
             &mut batch,
         )
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .etag();
     DestroyArchive(source_node_)
         .delete(
@@ -621,11 +623,11 @@ async fn overwrite_and_delete_item(
             &mut batch,
             from_resource_path,
         )
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(HttpResponse::new(StatusCode::NO_CONTENT).with_etag_opt(etag))
 }
@@ -636,7 +638,7 @@ async fn overwrite_item(
     access_token: &AccessToken,
     from_resource: UriResource<u32, FileItemId>,
     destination: Destination,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let to_account_id = destination.account_id;
     let from_document_id = from_resource.resource.document_id;
@@ -651,12 +653,12 @@ async fn overwrite_item(
             to_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
 
     let dest_node = dest_node_
         .to_unarchived::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     // source_node is the file to be copied
     let mut source_node = server
@@ -667,10 +669,10 @@ async fn overwrite_item(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?
         .deserialize::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     source_node.name = if let Some(new_name) = destination.new_name {
         new_name
     } else {
@@ -686,12 +688,12 @@ async fn overwrite_item(
             to_document_id,
             &mut batch,
         )
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .etag();
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(HttpResponse::new(StatusCode::NO_CONTENT).with_etag_opt(etag))
 }
@@ -703,7 +705,7 @@ async fn move_item(
     from_resource: UriResource<u32, FileItemId>,
     from_resource_path: String,
     destination: Destination,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let to_account_id = destination.account_id;
     let from_document_id = from_resource.resource.document_id;
@@ -717,12 +719,14 @@ async fn move_item(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let node = node_
         .to_unarchived::<FileNode>()
-        .caused_by(trc::location!())?;
-    let mut new_node = node.deserialize::<FileNode>().caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
+    let mut new_node = node
+        .deserialize::<FileNode>()
+        .caused_by(crate::trc::location!())?;
     new_node.parent_id = parent_id;
     if let Some(new_name) = destination.new_name {
         new_node.name = new_name;
@@ -740,7 +744,7 @@ async fn move_item(
                 from_document_id,
                 &mut batch,
             )
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .etag()
     } else {
         // Destination is in a different account: insert a new node, then delete the old one
@@ -748,10 +752,10 @@ async fn move_item(
             .store()
             .assign_document_ids(to_account_id, Collection::FileNode, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let etag = new_node
             .insert(access_token, to_account_id, to_document_id, &mut batch)
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .etag();
         DestroyArchive(node)
             .delete(
@@ -761,13 +765,13 @@ async fn move_item(
                 &mut batch,
                 from_resource_path,
             )
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         etag
     };
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))
 }
@@ -778,7 +782,7 @@ async fn copy_item(
     access_token: &AccessToken,
     from_resource: UriResource<u32, FileItemId>,
     destination: Destination,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let to_account_id = destination.account_id;
     let from_document_id = from_resource.resource.document_id;
@@ -792,10 +796,10 @@ async fn copy_item(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?
         .deserialize::<FileNode>()
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     node.parent_id = parent_id;
     if let Some(new_name) = destination.new_name {
         node.name = new_name;
@@ -805,15 +809,15 @@ async fn copy_item(
         .store()
         .assign_document_ids(to_account_id, Collection::FileNode, 1)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
     let etag = node
         .insert(access_token, to_account_id, to_document_id, &mut batch)
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .etag();
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))
 }
@@ -825,7 +829,7 @@ async fn rename_item(
     from_resource: UriResource<u32, FileItemId>,
     from_resource_path: String,
     destination: Destination,
-) -> crate::Result<HttpResponse> {
+) -> crate::dav::Result<HttpResponse> {
     let from_account_id = from_resource.account_id;
     let from_document_id = from_resource.resource.document_id;
 
@@ -837,12 +841,14 @@ async fn rename_item(
             from_document_id,
         ))
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .ok_or(DavError::Code(StatusCode::NOT_FOUND))?;
     let node = node_
         .to_unarchived::<FileNode>()
-        .caused_by(trc::location!())?;
-    let mut new_node = node.deserialize::<FileNode>().caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
+    let mut new_node = node
+        .deserialize::<FileNode>()
+        .caused_by(crate::trc::location!())?;
     if let Some(new_name) = destination.new_name {
         new_node.name = new_name;
     }
@@ -855,13 +861,13 @@ async fn rename_item(
             from_document_id,
             &mut batch,
         )
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .etag();
     batch.log_vanished_item(VanishedCollection::FileNode, from_resource_path);
     server
         .commit_batch(batch)
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     Ok(HttpResponse::new(StatusCode::CREATED).with_etag_opt(etag))
 }

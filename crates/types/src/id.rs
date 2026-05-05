@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::DocumentId;
+use crate::types::DocumentId;
+use crate::utils::codec::base32_custom::{BASE32_ALPHABET, BASE32_INVERSE};
 use jmap_tools::{Element, Property, Value};
 use std::{ops::Deref, str::FromStr};
-use utils::codec::base32_custom::{BASE32_ALPHABET, BASE32_INVERSE};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -222,7 +222,7 @@ impl<'x, P: Property, E: Element + From<Id>> From<Id> for Value<'x, P, E> {
 mod tests {
     use std::str::FromStr;
 
-    use crate::id::Id;
+    use crate::types::id::Id;
 
     #[test]
     fn parse_jmap_id() {

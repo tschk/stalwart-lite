@@ -19,7 +19,7 @@ use ipc::{
 };
 use parking_lot::Mutex;
 
-use crate::*;
+use super::super::*;
 
 pub(crate) type GlobalInterests = AtomicBitset<{ TOTAL_EVENT_COUNT.div_ceil(USIZE_BITS) }>;
 

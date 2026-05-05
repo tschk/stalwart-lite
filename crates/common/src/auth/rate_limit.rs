@@ -6,20 +6,20 @@
 
 use std::net::IpAddr;
 
-use crate::{
+use crate::common::{
     KV_RATE_LIMIT_HTTP_ANONYMOUS, KV_RATE_LIMIT_HTTP_AUTHENTICATED, Server, ip_to_bytes,
     listener::limiter::{InFlight, LimiterResult},
 };
-use directory::Permission;
-use trc::AddContext;
+use crate::directory::Permission;
+use crate::trc::AddContext;
 
-use crate::auth::AccessToken;
+use crate::common::auth::AccessToken;
 
 impl Server {
     pub async fn is_http_authenticated_request_allowed(
         &self,
         access_token: &AccessToken,
-    ) -> trc::Result<Option<InFlight>> {
+    ) -> crate::trc::Result<Option<InFlight>> {
         let is_rate_allowed = if let Some(rate) = &self.core.jmap.rate_authenticated {
             self.core
                 .storage
@@ -31,7 +31,7 @@ impl Server {
                     false,
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .is_none()
         } else {
             true
@@ -44,7 +44,7 @@ impl Server {
                     if access_token.has_permission(Permission::UnlimitedRequests) {
                         Ok(None)
                     } else {
-                        Err(trc::LimitEvent::ConcurrentRequest.into_err())
+                        Err(crate::trc::LimitEvent::ConcurrentRequest.into_err())
                     }
                 }
                 LimiterResult::Disabled => Ok(None),
@@ -52,11 +52,11 @@ impl Server {
         } else if access_token.has_permission(Permission::UnlimitedRequests) {
             Ok(None)
         } else {
-            Err(trc::LimitEvent::TooManyRequests.into_err())
+            Err(crate::trc::LimitEvent::TooManyRequests.into_err())
         }
     }
 
-    pub async fn is_http_anonymous_request_allowed(&self, addr: &IpAddr) -> trc::Result<()> {
+    pub async fn is_http_anonymous_request_allowed(&self, addr: &IpAddr) -> crate::trc::Result<()> {
         if let Some(rate) = &self.core.jmap.rate_anonymous
             && !self.is_ip_allowed(addr)
             && self
@@ -70,22 +70,25 @@ impl Server {
                     false,
                 )
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .is_some()
         {
-            return Err(trc::LimitEvent::TooManyRequests.into_err());
+            return Err(crate::trc::LimitEvent::TooManyRequests.into_err());
         }
         Ok(())
     }
 
-    pub fn is_upload_allowed(&self, access_token: &AccessToken) -> trc::Result<Option<InFlight>> {
+    pub fn is_upload_allowed(
+        &self,
+        access_token: &AccessToken,
+    ) -> crate::trc::Result<Option<InFlight>> {
         match access_token.is_upload_allowed() {
             LimiterResult::Allowed(in_flight) => Ok(Some(in_flight)),
             LimiterResult::Forbidden => {
                 if access_token.has_permission(Permission::UnlimitedRequests) {
                     Ok(None)
                 } else {
-                    Err(trc::LimitEvent::ConcurrentUpload.into_err())
+                    Err(crate::trc::LimitEvent::ConcurrentUpload.into_err())
                 }
             }
             LimiterResult::Disabled => Ok(None),

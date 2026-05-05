@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+use crate::utils::config::{Config, utils::AsKey};
 use r2d2::Pool;
 use tokio::sync::oneshot;
-use utils::config::{Config, utils::AsKey};
 
-use crate::*;
+use crate::store::*;
 
 use super::{SqliteStore, into_error, pool::SqliteConnectionManager};
 
@@ -66,7 +66,7 @@ impl SqliteStore {
     }
 
     #[cfg(feature = "test_mode")]
-    pub fn open_memory() -> trc::Result<Self> {
+    pub fn open_memory() -> crate::trc::Result<Self> {
         use super::into_error;
 
         let db = Self {
@@ -78,14 +78,14 @@ impl SqliteStore {
                 .num_threads(num_cpus::get())
                 .build()
                 .map_err(|err| {
-                    into_error(err).ctx(trc::Key::Reason, "Failed to build worker pool")
+                    into_error(err).ctx(crate::trc::Key::Reason, "Failed to build worker pool")
                 })?,
         };
         db.create_tables()?;
         Ok(db)
     }
 
-    pub(super) fn create_tables(&self) -> trc::Result<()> {
+    pub(super) fn create_tables(&self) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().map_err(into_error)?;
 
         for table in [
@@ -148,9 +148,9 @@ impl SqliteStore {
         Ok(())
     }
 
-    pub async fn spawn_worker<U, V>(&self, mut f: U) -> trc::Result<V>
+    pub async fn spawn_worker<U, V>(&self, mut f: U) -> crate::trc::Result<V>
     where
-        U: FnMut() -> trc::Result<V> + Send,
+        U: FnMut() -> crate::trc::Result<V> + Send,
         V: Sync + Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
@@ -163,7 +163,9 @@ impl SqliteStore {
 
         match rx.await {
             Ok(result) => result,
-            Err(err) => Err(trc::EventType::Server(trc::ServerEvent::ThreadError).reason(err)),
+            Err(err) => {
+                Err(crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError).reason(err))
+            }
         }
     }
 }

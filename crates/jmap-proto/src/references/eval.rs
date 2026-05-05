@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::jmap_proto::{
     object::{AnyId, JmapObjectId},
     references::{
         Graph,
@@ -13,12 +13,15 @@ use crate::{
     request::reference::ResultReference,
     response::{ChangesResponseMethod, GetResponseMethod, Response, ResponseMethod},
 };
+use crate::types::{blob::BlobId, id::Id};
 use compact_str::format_compact;
 use jmap_tools::{Element, Key, Property, Value};
-use types::{blob::BlobId, id::Id};
 
 impl Response<'_> {
-    pub(crate) fn eval_result_references(&self, rr: &ResultReference) -> trc::Result<EvalResults> {
+    pub(crate) fn eval_result_references(
+        &self,
+        rr: &ResultReference,
+    ) -> crate::trc::Result<EvalResults> {
         let mut results = EvalResults::default();
 
         for response in &self.method_responses {
@@ -139,7 +142,7 @@ impl Response<'_> {
             }
         }
 
-        Err(trc::JmapEvent::InvalidResultReference
+        Err(crate::trc::JmapEvent::InvalidResultReference
             .into_err()
             .details(format_compact!(
                 "Result reference to {}#{} not found.",
@@ -148,21 +151,21 @@ impl Response<'_> {
             )))
     }
 
-    pub(crate) fn eval_id_reference(&self, ir: &str) -> trc::Result<Id> {
+    pub(crate) fn eval_id_reference(&self, ir: &str) -> crate::trc::Result<Id> {
         if let Some(AnyId::Id(id)) = self.created_ids.get(ir) {
             Ok(*id)
         } else {
-            Err(trc::JmapEvent::InvalidResultReference
+            Err(crate::trc::JmapEvent::InvalidResultReference
                 .into_err()
                 .details(format_compact!("Id reference {ir:?} not found.")))
         }
     }
 
-    pub(crate) fn eval_blob_id_reference(&self, ir: &str) -> trc::Result<BlobId> {
+    pub(crate) fn eval_blob_id_reference(&self, ir: &str) -> crate::trc::Result<BlobId> {
         if let Some(AnyId::BlobId(id)) = self.created_ids.get(ir) {
             Ok(id.clone())
         } else {
-            Err(trc::JmapEvent::InvalidResultReference
+            Err(crate::trc::JmapEvent::InvalidResultReference
                 .into_err()
                 .details(format_compact!("blobId reference {ir:?} not found.")))
         }
@@ -175,7 +178,7 @@ pub(crate) trait EvalObjectReferences {
         response: &Response<'_>,
         graph: &mut Graph<'_>,
         depth: usize,
-    ) -> trc::Result<()>;
+    ) -> crate::trc::Result<()>;
 }
 
 impl<'x, P, E> EvalObjectReferences for Value<'x, P, E>
@@ -188,7 +191,7 @@ where
         response: &Response<'_>,
         graph: &mut Graph<'_>,
         depth: usize,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let Value::Object(obj) = self else {
             return Ok(());
         };
@@ -201,12 +204,12 @@ where
             {
                 if let Some(id) = response.created_ids.get(id_ref) {
                     if !property.try_set_id(id.clone()) {
-                        return Err(trc::JmapEvent::InvalidResultReference
+                        return Err(crate::trc::JmapEvent::InvalidResultReference
                             .into_err()
                             .details("Id reference points to invalid type."));
                     }
                 } else {
-                    return Err(trc::JmapEvent::InvalidResultReference
+                    return Err(crate::trc::JmapEvent::InvalidResultReference
                         .into_err()
                         .details(format_compact!("Id reference {id_ref:?} not found.")));
                 }
@@ -217,7 +220,7 @@ where
                     if let Some(id_ref) = element.as_id_ref() {
                         if let Some(id) = response.created_ids.get(id_ref) {
                             if !element.try_set_id(id.clone()) {
-                                return Err(trc::JmapEvent::InvalidResultReference
+                                return Err(crate::trc::JmapEvent::InvalidResultReference
                                     .into_err()
                                     .details("Id reference points to invalid type."));
                             }
@@ -227,7 +230,7 @@ where
                                 .or_insert_with(Vec::new)
                                 .push(id_ref.to_string());
                         } else {
-                            return Err(trc::JmapEvent::InvalidResultReference
+                            return Err(crate::trc::JmapEvent::InvalidResultReference
                                 .into_err()
                                 .details(format_compact!("Id reference {id_ref:?} not found.")));
                         }
@@ -247,12 +250,12 @@ where
                         {
                             if let Some(id) = response.created_ids.get(id_ref) {
                                 if !property.try_set_id(id.clone()) {
-                                    return Err(trc::JmapEvent::InvalidResultReference
+                                    return Err(crate::trc::JmapEvent::InvalidResultReference
                                         .into_err()
                                         .details("Id reference points to invalid type."));
                                 }
                             } else {
-                                return Err(trc::JmapEvent::InvalidResultReference
+                                return Err(crate::trc::JmapEvent::InvalidResultReference
                                     .into_err()
                                     .details(format_compact!(
                                         "Id reference {id_ref:?} not found."

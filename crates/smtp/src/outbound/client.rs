@@ -5,7 +5,8 @@
  */
 
 use super::session::SessionParams;
-use crate::queue::{Error, ErrorDetails, HostResponse, MessageWrapper, Status};
+use crate::smtp::queue::{Error, ErrorDetails, HostResponse, MessageWrapper, Status};
+use crate::trc::DeliveryEvent;
 use mail_send::{Credentials, smtp::AssertReply};
 use rustls::ClientConnection;
 use rustls_pki_types::ServerName;
@@ -26,7 +27,6 @@ use tokio::{
     net::{TcpSocket, TcpStream},
 };
 use tokio_rustls::{TlsConnector, client::TlsStream};
-use trc::DeliveryEvent;
 
 pub struct SmtpClient<T: AsyncRead + AsyncWrite> {
     pub stream: T,
@@ -185,7 +185,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
             Ok(Some(raw_message)) => {
                 tokio::time::timeout(params.conn_strategy.timeout_data, async {
                     if let Some(bdat_cmd) = bdat_cmd {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::RawOutput),
                             SpanId = self.session_id,
                             Contents = bdat_cmd.clone(),
@@ -195,7 +195,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
                         self.write_chunks(&[bdat_cmd.as_bytes(), &raw_message])
                             .await
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             Delivery(DeliveryEvent::RawOutput),
                             SpanId = self.session_id,
                             Contents = "DATA\r\n",
@@ -220,11 +220,11 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
                 })
             }
             Ok(None) => {
-                trc::event!(
-                    Queue(trc::QueueEvent::BlobNotFound),
+                crate::trc::event!(
+                    Queue(crate::trc::QueueEvent::BlobNotFound),
                     SpanId = message.span_id,
                     BlobId = message.message.blob_hash.to_hex(),
-                    CausedBy = trc::location!()
+                    CausedBy = crate::trc::location!()
                 );
                 Err(Status::TemporaryFailure(ErrorDetails {
                     entity: "localhost".into(),
@@ -232,10 +232,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
                 }))
             }
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.span_id(message.span_id)
                         .details("Failed to fetch blobId")
-                        .caused_by(trc::location!())
+                        .caused_by(crate::trc::location!())
                 );
 
                 Err(Status::TemporaryFailure(ErrorDetails {
@@ -256,7 +256,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
             format!("LHLO {}\r\n", params.local_hostname)
         };
 
-        trc::event!(
+        crate::trc::event!(
             Delivery(DeliveryEvent::RawOutput),
             SpanId = self.session_id,
             Contents = cmd.clone(),
@@ -274,7 +274,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
     }
 
     pub async fn quit(mut self: SmtpClient<T>) {
-        trc::event!(
+        crate::trc::event!(
             Delivery(DeliveryEvent::RawOutput),
             SpanId = self.session_id,
             Contents = "QUIT\r\n",
@@ -302,10 +302,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
                 return Err(mail_send::Error::UnparseableReply);
             }
 
-            trc::event!(
+            crate::trc::event!(
                 Delivery(DeliveryEvent::RawInput),
                 SpanId = self.session_id,
-                Contents = trc::Value::from_maybe_string(&buf[..br]),
+                Contents = crate::trc::Value::from_maybe_string(&buf[..br]),
                 Size = br,
             );
 
@@ -355,10 +355,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
             let br = self.stream.read(&mut buf).await?;
 
             if br > 0 {
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::RawInput),
                     SpanId = self.session_id,
-                    Contents = trc::Value::from_maybe_string(&buf[..br]),
+                    Contents = crate::trc::Value::from_maybe_string(&buf[..br]),
                     Size = br
                 );
 
@@ -388,10 +388,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
             if br > 0 {
                 let mut iter = buf[..br].iter();
 
-                trc::event!(
+                crate::trc::event!(
                     Delivery(DeliveryEvent::RawInput),
                     SpanId = self.session_id,
-                    Contents = trc::Value::from_maybe_string(&buf[..br]),
+                    Contents = crate::trc::Value::from_maybe_string(&buf[..br]),
                     Size = br
                 );
 
@@ -426,10 +426,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
         tokio::time::timeout(self.timeout, async {
             let cmd = cmd.as_ref();
 
-            trc::event!(
+            crate::trc::event!(
                 Delivery(DeliveryEvent::RawOutput),
                 SpanId = self.session_id,
-                Contents = trc::Value::from_maybe_string(cmd),
+                Contents = crate::trc::Value::from_maybe_string(cmd),
                 Size = cmd.len()
             );
 
@@ -451,7 +451,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin> SmtpClient<T> {
         // For this reason, we apply the transparency procedure when there is
         // a CR or LF followed by a dot.
 
-        trc::event!(
+        crate::trc::event!(
             Delivery(DeliveryEvent::RawOutput),
             SpanId = self.session_id,
             Contents = "[message]",
@@ -640,8 +640,8 @@ impl BoxResponse for Response<String> {
     }
 }
 
-pub(crate) fn from_mail_send_error(error: &mail_send::Error) -> trc::Error {
-    let event = trc::EventType::Smtp(trc::SmtpEvent::Error).into_err();
+pub(crate) fn from_mail_send_error(error: &mail_send::Error) -> crate::trc::Error {
+    let event = crate::trc::EventType::Smtp(crate::trc::SmtpEvent::Error).into_err();
     match error {
         mail_send::Error::Io(err) => event.details("I/O Error").reason(err),
         mail_send::Error::Tls(err) => event.details("TLS Error").reason(err),
@@ -650,12 +650,12 @@ pub(crate) fn from_mail_send_error(error: &mail_send::Error) -> trc::Error {
         mail_send::Error::UnparseableReply => event.details("Unparseable SMTP Reply"),
         mail_send::Error::UnexpectedReply(reply) => event
             .details("Unexpected SMTP Response")
-            .ctx(trc::Key::Code, reply.code)
-            .ctx(trc::Key::Reason, reply.message.clone()),
+            .ctx(crate::trc::Key::Code, reply.code)
+            .ctx(crate::trc::Key::Reason, reply.message.clone()),
         mail_send::Error::AuthenticationFailed(reply) => event
             .details("SMTP Authentication Failed")
-            .ctx(trc::Key::Code, reply.code)
-            .ctx(trc::Key::Reason, reply.message.clone()),
+            .ctx(crate::trc::Key::Code, reply.code)
+            .ctx(crate::trc::Key::Reason, reply.message.clone()),
         mail_send::Error::InvalidTLSName => event.details("Invalid TLS Name"),
         mail_send::Error::MissingCredentials => event.details("Missing Authentication Credentials"),
         mail_send::Error::MissingMailFrom => event.details("Missing Message Sender"),
@@ -668,10 +668,12 @@ pub(crate) fn from_mail_send_error(error: &mail_send::Error) -> trc::Error {
     }
 }
 
-pub(crate) fn from_error_status(err: &Status<HostResponse<Box<str>>, ErrorDetails>) -> trc::Error {
+pub(crate) fn from_error_status(
+    err: &Status<HostResponse<Box<str>>, ErrorDetails>,
+) -> crate::trc::Error {
     match err {
         Status::Scheduled | Status::Completed(_) => {
-            trc::EventType::Smtp(trc::SmtpEvent::Error).into_err()
+            crate::trc::EventType::Smtp(crate::trc::SmtpEvent::Error).into_err()
         }
         Status::TemporaryFailure(err) | Status::PermanentFailure(err) => {
             from_error_details(&err.details)
@@ -679,24 +681,24 @@ pub(crate) fn from_error_status(err: &Status<HostResponse<Box<str>>, ErrorDetail
     }
 }
 
-pub(crate) fn from_error_details(err: &Error) -> trc::Error {
-    let event = trc::EventType::Smtp(trc::SmtpEvent::Error).into_err();
+pub(crate) fn from_error_details(err: &Error) -> crate::trc::Error {
+    let event = crate::trc::EventType::Smtp(crate::trc::SmtpEvent::Error).into_err();
     match err {
         Error::DnsError(err) => event.details("DNS Error").reason(err),
         Error::UnexpectedResponse(reply) => event
             .details("Unexpected SMTP Response")
-            .ctx(trc::Key::Code, reply.response.code)
-            .ctx(trc::Key::Details, reply.command.clone())
-            .ctx(trc::Key::Reason, reply.response.message.clone()),
+            .ctx(crate::trc::Key::Code, reply.response.code)
+            .ctx(crate::trc::Key::Details, reply.command.clone())
+            .ctx(crate::trc::Key::Reason, reply.response.message.clone()),
         Error::ConnectionError(err) => event
             .details("Connection Error")
-            .ctx(trc::Key::Reason, err.clone()),
+            .ctx(crate::trc::Key::Reason, err.clone()),
         Error::TlsError(err) => event
             .details("TLS Error")
-            .ctx(trc::Key::Reason, err.clone()),
+            .ctx(crate::trc::Key::Reason, err.clone()),
         Error::DaneError(err) => event
             .details("DANE Error")
-            .ctx(trc::Key::Reason, err.clone()),
+            .ctx(crate::trc::Key::Reason, err.clone()),
         Error::MtaStsError(err) => event.details("MTA-STS Error").reason(err),
         Error::RateLimited => event.details("Rate Limited"),
         Error::ConcurrencyLimited => event.details("Concurrency Limited"),

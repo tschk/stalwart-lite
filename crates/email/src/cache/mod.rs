@@ -4,17 +4,17 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{CacheSwap, MessageStoreCache, Server};
-use email::{full_email_cache_build, update_email_cache};
-use mailbox::{full_mailbox_cache_build, update_mailbox_cache};
-use std::{collections::hash_map::Entry, sync::Arc, time::Instant};
-use store::{
+use crate::common::{CacheSwap, MessageStoreCache, Server};
+use crate::email::cache::email::{full_email_cache_build, update_email_cache};
+use crate::store::{
     ahash::AHashMap,
     query::log::{Change, Query},
 };
+use crate::trc::{AddContext, StoreEvent};
+use crate::types::collection::SyncCollection;
+use mailbox::{full_mailbox_cache_build, update_mailbox_cache};
+use std::{collections::hash_map::Entry, sync::Arc, time::Instant};
 use tokio::sync::Semaphore;
-use trc::{AddContext, StoreEvent};
-use types::collection::SyncCollection;
 
 pub mod email;
 pub mod mailbox;
@@ -23,11 +23,14 @@ pub trait MessageCacheFetch: Sync + Send {
     fn get_cached_messages(
         &self,
         account_id: u32,
-    ) -> impl Future<Output = trc::Result<Arc<MessageStoreCache>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Arc<MessageStoreCache>>> + Send;
 }
 
 impl MessageCacheFetch for Server {
-    async fn get_cached_messages(&self, account_id: u32) -> trc::Result<Arc<MessageStoreCache>> {
+    async fn get_cached_messages(
+        &self,
+        account_id: u32,
+    ) -> crate::trc::Result<Arc<MessageStoreCache>> {
         let cache_ = match self
             .inner
             .cache
@@ -47,7 +50,7 @@ impl MessageCacheFetch for Server {
                         .insert(account_id, CacheSwap::new(cache.clone()));
                 }
 
-                trc::event!(
+                crate::trc::event!(
                     Store(StoreEvent::CacheMiss),
                     AccountId = account_id,
                     Collection = SyncCollection::Email.as_str(),
@@ -73,14 +76,14 @@ impl MessageCacheFetch for Server {
                 Query::Since(cache.last_change_id),
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         // Regenerate cache if the change log has been truncated
         if changes.is_truncated {
             let cache = full_cache_build(self, account_id, cache.update_lock.clone()).await?;
             cache_.update(cache.clone());
 
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheStale),
                 AccountId = account_id,
                 Collection = SyncCollection::Email.as_str(),
@@ -94,7 +97,7 @@ impl MessageCacheFetch for Server {
 
         // Verify changes
         if changes.changes.is_empty() {
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheHit),
                 AccountId = account_id,
                 Collection = SyncCollection::Email.as_str(),
@@ -109,7 +112,7 @@ impl MessageCacheFetch for Server {
         let _permit = cache.update_lock.acquire().await;
         let cache = cache_.0.load();
         let mut cache = if cache.last_change_id >= changes.to_change_id {
-            trc::event!(
+            crate::trc::event!(
                 Store(StoreEvent::CacheHit),
                 AccountId = account_id,
                 Collection = SyncCollection::Email.as_str(),
@@ -186,7 +189,7 @@ impl MessageCacheFetch for Server {
         let cache = Arc::new(cache);
         cache_.update(cache.clone());
 
-        trc::event!(
+        crate::trc::event!(
             Store(StoreEvent::CacheUpdate),
             AccountId = account_id,
             Collection = SyncCollection::Email.as_str(),
@@ -204,14 +207,14 @@ async fn full_cache_build(
     server: &Server,
     account_id: u32,
     update_lock: Arc<Semaphore>,
-) -> trc::Result<Arc<MessageStoreCache>> {
+) -> crate::trc::Result<Arc<MessageStoreCache>> {
     let last_change_id = server
         .core
         .storage
         .data
         .get_last_change_id(account_id, SyncCollection::Email.into())
         .await
-        .caused_by(trc::location!())?
+        .caused_by(crate::trc::location!())?
         .unwrap_or_default();
     let mut emails = full_email_cache_build(server, account_id).await?;
     let mut mailboxes = full_mailbox_cache_build(server, account_id).await?;

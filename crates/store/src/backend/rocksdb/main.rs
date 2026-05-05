@@ -5,11 +5,11 @@
  */
 
 use super::{CF_BLOBS, RocksDbStore};
-use crate::*;
+use crate::store::*;
+use crate::utils::config::{Config, utils::AsKey};
 use rocksdb::{ColumnFamilyDescriptor, MergeOperands, OptimisticTransactionDB, Options};
 use std::path::PathBuf;
 use tokio::sync::oneshot;
-use utils::config::{Config, utils::AsKey};
 
 impl RocksDbStore {
     pub async fn open(config: &mut Config, prefix: impl AsKey) -> Option<Self> {
@@ -128,9 +128,9 @@ impl RocksDbStore {
         })
     }
 
-    pub async fn spawn_worker<U, V>(&self, mut f: U) -> trc::Result<V>
+    pub async fn spawn_worker<U, V>(&self, mut f: U) -> crate::trc::Result<V>
     where
-        U: FnMut() -> trc::Result<V> + Send,
+        U: FnMut() -> crate::trc::Result<V> + Send,
         V: Sync + Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
@@ -143,7 +143,9 @@ impl RocksDbStore {
 
         match rx.await {
             Ok(result) => result,
-            Err(err) => Err(trc::EventType::Server(trc::ServerEvent::ThreadError).reason(err)),
+            Err(err) => {
+                Err(crate::trc::EventType::Server(crate::trc::ServerEvent::ThreadError).reason(err))
+            }
         }
     }
 }

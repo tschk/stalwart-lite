@@ -5,7 +5,7 @@
  */
 
 use super::{PostgresStore, into_error};
-use crate::{
+use crate::store::{
     IndexKey, Key, LogKey, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER, SUBSPACE_QUOTA,
     backend::postgres::into_pool_error,
     write::{
@@ -22,12 +22,12 @@ use tokio_postgres::{IsolationLevel, error::SqlState};
 #[derive(Debug)]
 enum CommitError {
     Postgres(tokio_postgres::Error),
-    Internal(trc::Error),
+    Internal(crate::trc::Error),
     //Retry,
 }
 
 impl PostgresStore {
-    pub(crate) async fn write(&self, mut batch: Batch<'_>) -> trc::Result<AssignedIds> {
+    pub(crate) async fn write(&self, mut batch: Batch<'_>) -> crate::trc::Result<AssignedIds> {
         let mut conn = self.conn_pool.get().await.map_err(into_pool_error)?;
         let start = Instant::now();
         let mut retry_count = 0;
@@ -46,10 +46,10 @@ impl PostgresStore {
                             ) if retry_count < MAX_COMMIT_ATTEMPTS
                                 && start.elapsed() < MAX_COMMIT_TIME => {}
                             Some(&SqlState::UNIQUE_VIOLATION) => {
-                                return Err(trc::StoreEvent::AssertValueFailed
+                                return Err(crate::trc::StoreEvent::AssertValueFailed
                                     .into_err()
                                     .reason("Unique violation")
-                                    .caused_by(trc::location!()));
+                                    .caused_by(crate::trc::location!()));
                             }
                             _ => return Err(into_error(err)),
                         },
@@ -58,9 +58,9 @@ impl PostgresStore {
                             if retry_count > MAX_COMMIT_ATTEMPTS
                                 || start.elapsed() > MAX_COMMIT_TIME
                             {
-                                return Err(trc::StoreEvent::AssertValueFailed
+                                return Err(crate::trc::StoreEvent::AssertValueFailed
                                     .into_err()
-                                    .caused_by(trc::location!()));
+                                    .caused_by(crate::trc::location!()));
                             }
                         }*/
                     }
@@ -160,9 +160,9 @@ impl PostgresStore {
                             };
 
                             if trx.execute(&s, &[&key, &(*value)]).await? == 0 {
-                                return Err(trc::StoreEvent::AssertValueFailed
+                                return Err(crate::trc::StoreEvent::AssertValueFailed
                                     .into_err()
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                                     .into());
                             }
                         }
@@ -195,9 +195,9 @@ impl PostgresStore {
                             };
 
                             if trx.execute(&s, &[&key, &value]).await? == 0 {
-                                return Err(trc::StoreEvent::AssertValueFailed
+                                return Err(crate::trc::StoreEvent::AssertValueFailed
                                     .into_err()
-                                    .caused_by(trc::location!())
+                                    .caused_by(crate::trc::location!())
                                     .into());
                             }
                         }
@@ -367,9 +367,9 @@ impl PostgresStore {
                         })
                         .unwrap_or_else(|| (false, assert_value.is_none()));
                     if !matches {
-                        return Err(trc::StoreEvent::AssertValueFailed
+                        return Err(crate::trc::StoreEvent::AssertValueFailed
                             .into_err()
-                            .caused_by(trc::location!())
+                            .caused_by(crate::trc::location!())
                             .into());
                     }
                     asserted_values.insert(key, exists);
@@ -380,7 +380,7 @@ impl PostgresStore {
         trx.commit().await.map(|_| result).map_err(Into::into)
     }
 
-    pub(crate) async fn purge_store(&self) -> trc::Result<()> {
+    pub(crate) async fn purge_store(&self) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
 
         for subspace in [SUBSPACE_QUOTA, SUBSPACE_COUNTER, SUBSPACE_IN_MEMORY_COUNTER] {
@@ -397,7 +397,11 @@ impl PostgresStore {
         Ok(())
     }
 
-    pub(crate) async fn delete_range(&self, from: impl Key, to: impl Key) -> trc::Result<()> {
+    pub(crate) async fn delete_range(
+        &self,
+        from: impl Key,
+        to: impl Key,
+    ) -> crate::trc::Result<()> {
         let conn = self.conn_pool.get().await.map_err(into_pool_error)?;
 
         let s = conn
@@ -414,8 +418,8 @@ impl PostgresStore {
     }
 }
 
-impl From<trc::Error> for CommitError {
-    fn from(err: trc::Error) -> Self {
+impl From<crate::trc::Error> for CommitError {
+    fn from(err: crate::trc::Error) -> Self {
         CommitError::Internal(err)
     }
 }

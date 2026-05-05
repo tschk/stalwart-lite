@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use types::ChangeId;
-use utils::codec::{
+use crate::types::ChangeId;
+use crate::utils::codec::{
     base32_custom::{Base32Reader, Base32Writer},
     leb128::{Leb128Iterator, Leb128Writer},
 };
@@ -148,7 +148,7 @@ impl std::fmt::Display for State {
 #[cfg(test)]
 mod tests {
     use super::State;
-    use types::ChangeId;
+    use crate::types::ChangeId;
 
     #[test]
     fn test_state_id() {

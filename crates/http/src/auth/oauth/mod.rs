@@ -4,10 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use http_proto::{HttpRequest, request::fetch_body};
+use crate::http_proto::{HttpRequest, request::fetch_body};
+use crate::utils::map::vec_map::VecMap;
 use hyper::header::CONTENT_TYPE;
 use serde::{Deserialize, Serialize};
-use utils::map::vec_map::VecMap;
 
 pub mod auth;
 pub mod openid;
@@ -187,7 +187,7 @@ impl FormData {
         req: &mut HttpRequest,
         max_len: usize,
         session_id: u64,
-    ) -> trc::Result<Self> {
+    ) -> crate::trc::Result<Self> {
         match (
             req.headers()
                 .get(CONTENT_TYPE)
@@ -206,13 +206,13 @@ impl FormData {
                         fields.append(field.name, value);
                     }
                 } else {
-                    for (key, value) in http_proto::form_urlencoded::parse(&body) {
+                    for (key, value) in crate::http_proto::form_urlencoded::parse(&body) {
                         fields.append(key.into_owned(), value.into_owned());
                     }
                 }
                 Ok(FormData { fields })
             }
-            _ => Err(trc::ResourceEvent::BadParameters
+            _ => Err(crate::trc::ResourceEvent::BadParameters
                 .into_err()
                 .details("Invalid post request")),
         }

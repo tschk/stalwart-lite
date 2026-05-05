@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, Token, tokenizer::Tokenizer},
     schema::{
         Element, NamedElement, Namespace,
@@ -18,7 +18,7 @@ use crate::{
 };
 
 impl DavParser for Acl {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         stream.expect_named_element(NamedElement::dav(Element::Acl))?;
 
         let mut acl = Acl { aces: vec![] };
@@ -52,7 +52,7 @@ impl DavParser for Acl {
 }
 
 impl DavParser for Ace {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut ace = Ace {
             principal: Principal::All,
             invert: false,
@@ -148,7 +148,7 @@ impl DavParser for Ace {
 }
 
 impl DavParser for Principal {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let result = match stream.unwrap_named_element()? {
             NamedElement {
                 ns: Namespace::Dav,
@@ -202,7 +202,7 @@ impl DavParser for Principal {
 }
 
 impl Tokenizer<'_> {
-    pub fn collect_privileges(&mut self) -> crate::parser::Result<Vec<Privilege>> {
+    pub fn collect_privileges(&mut self) -> crate::dav_proto::parser::Result<Vec<Privilege>> {
         let mut privileges = Vec::new();
         let mut depth = 1;
 
@@ -274,7 +274,7 @@ impl Privilege {
 }
 
 impl DavParser for AclPrincipalPropSet {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut acps = AclPrincipalPropSet { properties: vec![] };
 
         loop {
@@ -306,7 +306,7 @@ impl DavParser for AclPrincipalPropSet {
 }
 
 impl DavParser for PrincipalMatch {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut pm = PrincipalMatch {
             principal_properties: PrincipalMatchProperties::Self_,
             properties: vec![],
@@ -364,7 +364,7 @@ impl DavParser for PrincipalMatch {
 }
 
 impl DavParser for PrincipalPropertySearch {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut pps = PrincipalPropertySearch {
             property_search: vec![],
             properties: vec![],
@@ -423,7 +423,7 @@ impl DavParser for PrincipalPropertySearch {
 }
 
 impl PropertySearch {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Option<Self>> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Option<Self>> {
         let mut property = None;
         let mut match_ = None;
 

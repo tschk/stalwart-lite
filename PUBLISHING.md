@@ -1,11 +1,10 @@
 # Publishing
 
-`stalwart-lite` currently publishes release artifacts through GitHub releases.
-Release workflows are triggered by tags that match `v*.*.*`.
+`stalwart-lite` publishes release artifacts through GitHub releases and crates.io.
 
 ## GitHub Releases
 
-Use GitHub releases as the primary distribution channel:
+Release workflows trigger on tags matching `v*.*.*`.
 
 1. Confirm CI is green on `main`.
 2. Create and push a version tag:
@@ -19,51 +18,41 @@ Use GitHub releases as the primary distribution channel:
 4. Verify the release assets and install script still point at
    `tschk/stalwart-lite`.
 
-## crates.io Status
+## crates.io
 
-The crate name `stalwart-lite` appears to be unused as of 2026-05-04, but this
-workspace is not ready for `cargo publish`.
+### Package layout
 
-The server package depends on many local workspace crates with path-only
-dependencies:
+`stalwart-lite` is published from the repository root. Internal Stalwart modules
+remain under `crates/*/src`, but they are compiled as modules of the root
+`stalwart-lite` package.
 
-```text
-common, directory, email, http, imap, migration, services, smtp, store, trc,
-types, utils, and related protocol crates
-```
+Rust proc macros must live in separate crates, so two helper crates are
+published first:
 
-Cargo does not allow publishing a crate that depends on unpublished local path
-dependencies. Adding `version = "0.15.5"` to those dependency declarations only
-moves resolution to crates.io for published consumers; each internal dependency
-would also need to exist on crates.io under an owned package name.
+- `stalwart-lite-event-macro`
+- `stalwart-lite-proc-macros`
 
-Current packaging check:
+### Publish order
 
 ```bash
-cargo package -p stalwart --allow-dirty --no-verify
+cargo publish --dry-run -p stalwart-lite-event-macro
+cargo publish -p stalwart-lite-event-macro
+cargo publish --dry-run -p stalwart-lite-proc-macros
+cargo publish -p stalwart-lite-proc-macros
+cargo publish --dry-run -p stalwart-lite
+cargo publish -p stalwart-lite
 ```
 
-Expected blocker:
+The main crate depends on the helper crates by registry version, so crates.io
+must finish indexing the helpers before publishing `stalwart-lite`.
 
-```text
-all dependencies must have a version requirement specified when packaging.
-dependency `common` does not specify a version
+### Validation
+
+Before publishing, confirm:
+
+```bash
+cargo fmt --all --check
+cargo check --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
-
-## Required crates.io Plan
-
-To publish this fork to crates.io, do the registry migration deliberately:
-
-1. Reserve/own `stalwart-lite` on crates.io.
-2. Choose names for every internal crate, preferably fork-prefixed names such as
-   `stalwart-lite-common`, `stalwart-lite-store`, and
-   `stalwart-lite-jmap-proto`.
-3. Rename internal package names or add dependency aliases so source imports can
-   keep using existing crate names while registry package names are unique.
-4. Add registry `version` requirements to every internal path dependency.
-5. Publish internal crates in dependency order.
-6. Run `cargo publish --dry-run -p stalwart-lite`.
-7. Publish the final server crate only after the dry run resolves all registry
-   dependencies and ownership checks.
-
-Do not run `cargo publish` from this repository until these steps are complete.

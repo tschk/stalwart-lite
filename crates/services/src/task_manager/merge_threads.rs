@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, storage::index::ObjectIndexBuilder};
-use email::message::{
+use crate::common::{Server, storage::index::ObjectIndexBuilder};
+use crate::email::message::{
     ingest::{MergeThreadIds, ThreadMerge},
     metadata::MessageData,
 };
-use std::time::Duration;
-use store::{
+use crate::store::{
     IndexKeyPrefix, IterateParams, U32_LEN, ValueKey,
     ahash::{AHashMap, AHashSet},
     rand::Rng,
@@ -19,11 +18,12 @@ use store::{
         key::DeserializeBigEndian,
     },
 };
-use trc::AddContext;
-use types::{
+use crate::trc::AddContext;
+use crate::types::{
     collection::{Collection, SyncCollection},
     field::EmailField,
 };
+use std::time::Duration;
 
 const MAX_RETRIES: usize = 5;
 
@@ -44,7 +44,7 @@ impl MergeThreadsTask for Server {
         match merge_threads(self, account_id, threads).await {
             Ok(_) => true,
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.account_id(account_id)
                         .details("Failed to merge threads")
                 );
@@ -58,7 +58,7 @@ async fn merge_threads(
     server: &Server,
     account_id: u32,
     merge_threads: &MergeThreadIds<AHashSet<u32>>,
-) -> trc::Result<()> {
+) -> crate::trc::Result<()> {
     let key_len = IndexKeyPrefix::len() + merge_threads.thread_hash.len() + U32_LEN;
     let document_id_pos = key_len - U32_LEN;
     let mut thread_merge = ThreadMerge::new();
@@ -106,7 +106,7 @@ async fn merge_threads(
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if thread_merge.num_thread_ids() < 2 {
             // Another process merged the threads already?
@@ -142,11 +142,11 @@ async fn merge_threads(
                             document_id,
                         ))
                         .await
-                        .caused_by(trc::location!())?
+                        .caused_by(crate::trc::location!())?
                     {
                         let data = data_
                             .to_unarchived::<MessageData>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         if data.inner.thread_id != group_thread_id {
                             try_count += 1;
                             continue 'retry;
@@ -155,7 +155,7 @@ async fn merge_threads(
                         // Update thread id
                         let mut new_data = data
                             .deserialize::<MessageData>()
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         new_data.thread_id = thread_id;
                         batch
                             .with_document(document_id)
@@ -164,7 +164,7 @@ async fn merge_threads(
                                     .with_current(data)
                                     .with_changes(new_data),
                             )
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
 
                         // Update thread index property
                         let mut thread_index = thread_index.remove(&document_id).unwrap();
@@ -184,12 +184,12 @@ async fn merge_threads(
         match server.commit_batch(batch).await {
             Ok(_) => return Ok(()),
             Err(err) if err.is_assertion_failure() && try_count < MAX_RETRIES => {
-                let backoff = store::rand::rng().random_range(50..=300);
+                let backoff = crate::store::rand::rng().random_range(50..=300);
                 tokio::time::sleep(Duration::from_millis(backoff)).await;
                 try_count += 1;
             }
             Err(err) => {
-                return Err(err.caused_by(trc::location!()));
+                return Err(err.caused_by(crate::trc::location!()));
             }
         }
     }

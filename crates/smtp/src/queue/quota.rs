@@ -5,16 +5,16 @@
  */
 
 use super::{QueueEnvelope, QuotaKey, Status};
-use crate::{core::throttle::NewKey, queue::MessageWrapper};
-use ahash::AHashSet;
-use common::{Server, config::smtp::queue::QueueQuota, expr::functions::ResolveVariable};
-use std::future::Future;
-use store::{
+use crate::common::{Server, config::smtp::queue::QueueQuota, expr::functions::ResolveVariable};
+use crate::smtp::{core::throttle::NewKey, queue::MessageWrapper};
+use crate::store::{
     ValueKey,
     write::{BatchBuilder, QueueClass, ValueClass},
 };
-use trc::QueueEvent;
-use utils::DomainPart;
+use crate::trc::QueueEvent;
+use crate::utils::DomainPart;
+use ahash::AHashSet;
+use std::future::Future;
 
 pub trait HasQueueQuota: Sync + Send {
     fn has_quota(&self, message: &mut MessageWrapper) -> impl Future<Output = bool> + Send;
@@ -46,7 +46,7 @@ impl HasQueueQuota for Server {
                     )
                     .await
                 {
-                    trc::event!(
+                    crate::trc::event!(
                         Queue(QueueEvent::QuotaExceeded),
                         SpanId = message.span_id,
                         Id = quota.id.clone(),
@@ -74,7 +74,7 @@ impl HasQueueQuota for Server {
                             )
                             .await
                     {
-                        trc::event!(
+                        crate::trc::event!(
                             Queue(QueueEvent::QuotaExceeded),
                             SpanId = message.span_id,
                             Id = quota.id.clone(),
@@ -100,7 +100,7 @@ impl HasQueueQuota for Server {
                     )
                     .await
                 {
-                    trc::event!(
+                    crate::trc::event!(
                         Queue(QueueEvent::QuotaExceeded),
                         SpanId = message.span_id,
                         Id = quota.id.clone(),

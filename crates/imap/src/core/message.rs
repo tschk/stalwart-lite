@@ -7,27 +7,27 @@
 use super::{
     ImapUidToId, Mailbox, MailboxId, MailboxState, NextMailboxState, SelectedMailbox, SessionData,
 };
-use crate::core::ImapId;
+use crate::common::listener::SessionStream;
+use crate::email::cache::MessageCacheFetch;
+use crate::imap::core::ImapId;
+use crate::imap_proto::protocol::{Sequence, expunge, select::Exists};
+use crate::store::{ValueKey, write::ValueClass};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::MailboxField};
 use ahash::AHashMap;
-use common::listener::SessionStream;
-use email::cache::MessageCacheFetch;
-use imap_proto::protocol::{Sequence, expunge, select::Exists};
 use std::collections::BTreeMap;
-use store::{ValueKey, write::ValueClass};
-use trc::AddContext;
-use types::{collection::Collection, field::MailboxField};
 
 impl<T: SessionStream> SessionData<T> {
     pub async fn fetch_messages(
         &self,
         mailbox: &MailboxId,
         current_state: Option<u64>,
-    ) -> trc::Result<Option<MailboxState>> {
+    ) -> crate::trc::Result<Option<MailboxState>> {
         let cached_messages = self
             .server
             .get_cached_messages(mailbox.account_id)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         if current_state.is_some_and(|state| state == cached_messages.emails.change_id) {
             return Ok(None);
@@ -76,7 +76,7 @@ impl<T: SessionStream> SessionData<T> {
         }))
     }
 
-    pub async fn synchronize_messages(&self, mailbox: &SelectedMailbox) -> trc::Result<u64> {
+    pub async fn synchronize_messages(&self, mailbox: &SelectedMailbox) -> crate::trc::Result<u64> {
         // Obtain current modseq
         let mut current_modseq = mailbox.state.lock().modseq;
         if let Some(new_state) = self
@@ -122,7 +122,7 @@ impl<T: SessionStream> SessionData<T> {
         &self,
         mailbox: &SelectedMailbox,
         is_qresync: bool,
-    ) -> trc::Result<u64> {
+    ) -> crate::trc::Result<u64> {
         // Resync mailbox
         let modseq = self.synchronize_messages(mailbox).await?;
         let mut buf = Vec::new();
@@ -160,7 +160,7 @@ impl<T: SessionStream> SessionData<T> {
         Ok(modseq)
     }
 
-    pub async fn get_uid_next(&self, mailbox: &MailboxId) -> trc::Result<u32> {
+    pub async fn get_uid_next(&self, mailbox: &MailboxId) -> crate::trc::Result<u32> {
         self.server
             .core
             .storage
@@ -190,7 +190,7 @@ impl SelectedMailbox {
         &self,
         sequence: &Sequence,
         is_uid: bool,
-    ) -> trc::Result<AHashMap<u32, ImapId>> {
+    ) -> crate::trc::Result<AHashMap<u32, ImapId>> {
         if !sequence.is_saved_search() {
             let mut ids = AHashMap::new();
             let state = self.state.lock();
@@ -219,7 +219,7 @@ impl SelectedMailbox {
             Ok(ids)
         } else {
             let saved_ids = self.get_saved_search().await.ok_or_else(|| {
-                trc::ImapEvent::Error
+                crate::trc::ImapEvent::Error
                     .into_err()
                     .details("No saved search found.")
             })?;

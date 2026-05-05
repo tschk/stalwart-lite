@@ -23,6 +23,6 @@ pub struct SqliteStore {
 }
 
 #[inline(always)]
-fn into_error(err: impl Display) -> trc::Error {
-    trc::StoreEvent::SqliteError.reason(err)
+fn into_error(err: impl Display) -> crate::trc::Error {
+    crate::trc::StoreEvent::SqliteError.reason(err)
 }

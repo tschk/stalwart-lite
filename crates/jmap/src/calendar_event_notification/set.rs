@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::{Server, auth::AccessToken};
-use groupware::{DestroyArchive, cache::GroupwareCache, calendar::CalendarEventNotification};
-use http_proto::HttpSessionData;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{DestroyArchive, cache::GroupwareCache, calendar::CalendarEventNotification};
+use crate::http_proto::HttpSessionData;
+use crate::jmap_proto::{
     error::set::SetError,
     method::set::{SetRequest, SetResponse},
     object::calendar_event_notification,
     request::IntoValid,
     types::state::State,
 };
-use store::{ValueKey, write::{AlignedBytes, Archive, BatchBuilder}};
-use trc::AddContext;
-use types::collection::{Collection, SyncCollection};
+use crate::store::{ValueKey, write::{AlignedBytes, Archive, BatchBuilder}};
+use crate::trc::AddContext;
+use crate::types::collection::{Collection, SyncCollection};
 
 pub trait CalendarEventNotificationSet: Sync + Send {
     fn calendar_event_notification_set(
@@ -25,7 +25,7 @@ pub trait CalendarEventNotificationSet: Sync + Send {
         access_token: &AccessToken,
         session: &HttpSessionData,
     ) -> impl Future<
-        Output = trc::Result<SetResponse<calendar_event_notification::CalendarEventNotification>>,
+        Output = crate::trc::Result<SetResponse<calendar_event_notification::CalendarEventNotification>>,
     > + Send;
 }
 
@@ -35,7 +35,7 @@ impl CalendarEventNotificationSet for Server {
         mut request: SetRequest<'_, calendar_event_notification::CalendarEventNotification>,
         access_token: &AccessToken,
         _session: &HttpSessionData,
-    ) -> trc::Result<SetResponse<calendar_event_notification::CalendarEventNotification>> {
+    ) -> crate::trc::Result<SetResponse<calendar_event_notification::CalendarEventNotification>> {
         let account_id = request.account_id.document_id();
         let cache = self
             .fetch_dav_resources(
@@ -87,11 +87,11 @@ impl CalendarEventNotificationSet for Server {
             };
             let event = _event
                 .to_unarchived::<CalendarEventNotification>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             DestroyArchive(event)
                 .delete(access_token, account_id, document_id, &mut batch)
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.destroyed.push(id);
         }
@@ -102,7 +102,7 @@ impl CalendarEventNotificationSet for Server {
                 .commit_batch(batch)
                 .await
                 .and_then(|ids| ids.last_change_id(account_id))
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             response.new_state = State::Exact(change_id).into();
         }

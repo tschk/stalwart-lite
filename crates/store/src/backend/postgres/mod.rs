@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::language::Language;
+use crate::store::{
     search::{
         CalendarSearchField, ContactSearchField, EmailSearchField, FileSearchField, SearchField,
         TracingSearchField,
@@ -13,7 +14,6 @@ use crate::{
 };
 use ahash::AHashSet;
 use deadpool_postgres::Pool;
-use nlp::language::Language;
 
 pub mod blob;
 pub mod lookup;
@@ -29,8 +29,8 @@ pub struct PostgresStore {
 }
 
 #[inline(always)]
-fn into_error(err: tokio_postgres::error::Error) -> trc::Error {
-    let mut local_err = trc::StoreEvent::PostgresqlError.reason(err.to_string());
+fn into_error(err: tokio_postgres::error::Error) -> crate::trc::Error {
+    let mut local_err = crate::trc::StoreEvent::PostgresqlError.reason(err.to_string());
     if let Some(db_err) = err.as_db_error() {
         local_err = local_err.code(db_err.code().code().to_string());
         if let Some(detail) = db_err.detail() {
@@ -45,8 +45,8 @@ fn into_error(err: tokio_postgres::error::Error) -> trc::Error {
 }
 
 #[inline(always)]
-fn into_pool_error(err: deadpool::managed::PoolError<tokio_postgres::Error>) -> trc::Error {
-    trc::StoreEvent::PostgresqlError.reason(err)
+fn into_pool_error(err: deadpool::managed::PoolError<tokio_postgres::Error>) -> crate::trc::Error {
+    crate::trc::StoreEvent::PostgresqlError.reason(err)
 }
 
 impl SearchIndex {

@@ -4,7 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::nlp::tokenizers::word::WordTokenizer;
+use crate::store::{
     backend::{
         MAX_TOKEN_LENGTH,
         mysql::{MysqlSearchField, MysqlStore, into_error},
@@ -16,11 +17,10 @@ use crate::{
     write::SearchIndex,
 };
 use mysql_async::{IsolationLevel, TxOpts, Value, prelude::Queryable};
-use nlp::tokenizers::word::WordTokenizer;
 use std::fmt::Write;
 
 impl MysqlStore {
-    pub async fn index(&self, documents: Vec<IndexDocument>) -> trc::Result<()> {
+    pub async fn index(&self, documents: Vec<IndexDocument>) -> crate::trc::Result<()> {
         let mut conn = self.conn_pool.get_conn().await.map_err(into_error)?;
         let mut tx_opts = TxOpts::default();
         tx_opts
@@ -80,7 +80,7 @@ impl MysqlStore {
         index: SearchIndex,
         filters: &[SearchFilter],
         sort: &[SearchComparator],
-    ) -> trc::Result<Vec<R>> {
+    ) -> crate::trc::Result<Vec<R>> {
         let mut query = format!(
             "SELECT {} FROM {}",
             R::field().column(),
@@ -100,7 +100,7 @@ impl MysqlStore {
             .map_err(into_error)
     }
 
-    pub async fn unindex(&self, filter: SearchQuery) -> trc::Result<u64> {
+    pub async fn unindex(&self, filter: SearchQuery) -> crate::trc::Result<u64> {
         let mut query = format!("DELETE FROM {} ", filter.index.mysql_table());
         let params = build_filter(&mut query, &filter.filters);
 

@@ -4,8 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::mailbox::{ArchivedUidMailbox, UidMailbox};
-use common::storage::index::IndexableAndSerializableObject;
+use crate::common::storage::index::IndexableAndSerializableObject;
+use crate::email::mailbox::{ArchivedUidMailbox, UidMailbox};
+use crate::types::{
+    blob_hash::BlobHash,
+    keyword::{ArchivedKeyword, Keyword},
+};
+use crate::utils::chained_bytes::ChainedBytes;
 use mail_parser::{
     Addr, Address, Attribute, ContentType, DateTime, Encoding, Group, HeaderName, HeaderValue,
     PartType,
@@ -16,11 +21,6 @@ use mail_parser::{
 };
 use rkyv::{boxed::ArchivedBox, rend::u16_le};
 use std::{borrow::Cow, collections::VecDeque, ops::Range};
-use types::{
-    blob_hash::BlobHash,
-    keyword::{ArchivedKeyword, Keyword},
-};
-use utils::chained_bytes::ChainedBytes;
 
 #[derive(rkyv::Serialize, rkyv::Deserialize, rkyv::Archive, Debug)]
 pub struct MessageData {

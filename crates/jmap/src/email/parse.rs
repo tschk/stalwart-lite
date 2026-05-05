@@ -8,27 +8,27 @@ use super::{
     body::{ToBodyPart, TruncateBody},
     headers::HeaderToValue,
 };
-use crate::blob::download::BlobDownload;
-use common::{Server, auth::AccessToken};
-use email::message::index::PREVIEW_LENGTH;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::email::message::index::PREVIEW_LENGTH;
+use crate::jmap::blob::download::BlobDownload;
+use crate::jmap_proto::{
     method::parse::{ParseRequest, ParseResponse},
     object::email::{Email, EmailProperty},
     request::IntoValid,
 };
+use crate::utils::{chained_bytes::ChainedBytes, map::vec_map::VecMap};
 use jmap_tools::{Key, Map, Value};
 use mail_parser::{
     MessageParser, PartType, decoders::html::html_to_text, parsers::preview::preview_text,
 };
 use std::future::Future;
-use utils::{chained_bytes::ChainedBytes, map::vec_map::VecMap};
 
 pub trait EmailParse: Sync + Send {
     fn email_parse(
         &self,
         request: ParseRequest<Email>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<ParseResponse<Email>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<ParseResponse<Email>>> + Send;
 }
 
 impl EmailParse for Server {
@@ -36,9 +36,9 @@ impl EmailParse for Server {
         &self,
         request: ParseRequest<Email>,
         access_token: &AccessToken,
-    ) -> trc::Result<ParseResponse<Email>> {
+    ) -> crate::trc::Result<ParseResponse<Email>> {
         if request.blob_ids.len() > self.core.jmap.mail_parse_max_items {
-            return Err(trc::JmapEvent::RequestTooLarge.into_err());
+            return Err(crate::trc::JmapEvent::RequestTooLarge.into_err());
         }
         let properties = request
             .properties
@@ -263,7 +263,7 @@ impl EmailParse for Server {
                     }
 
                     _ => {
-                        return Err(trc::JmapEvent::InvalidArguments
+                        return Err(crate::trc::JmapEvent::InvalidArguments
                             .into_err()
                             .details(format!("Invalid property {property:?}")));
                     }

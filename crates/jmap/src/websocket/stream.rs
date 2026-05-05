@@ -4,25 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::{IntoPushObject, ToRequestError, request::RequestHandler};
-use common::{Server, auth::AccessToken, ipc::PushNotification};
-use futures_util::{SinkExt, StreamExt};
-use http_proto::HttpSessionData;
-use hyper::upgrade::Upgraded;
-use hyper_util::rt::TokioIo;
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken, ipc::PushNotification};
+use crate::http_proto::HttpSessionData;
+use crate::jmap::api::{IntoPushObject, ToRequestError, request::RequestHandler};
+use crate::jmap_proto::{
     error::request::RequestError,
     request::websocket::{
         WebSocketMessage, WebSocketPushObject, WebSocketRequestError, WebSocketResponse,
     },
 };
+use crate::trc::JmapEvent;
+use crate::types::type_state::{DataType, StateChange};
+use crate::utils::map::bitmap::Bitmap;
+use futures_util::{SinkExt, StreamExt};
+use hyper::upgrade::Upgraded;
+use hyper_util::rt::TokioIo;
 use std::future::Future;
 use std::{sync::Arc, time::Instant};
 use tokio_tungstenite::WebSocketStream;
-use trc::JmapEvent;
 use tungstenite::Message;
-use types::type_state::{DataType, StateChange};
-use utils::map::bitmap::Bitmap;
 
 pub trait WebSocketHandler: Sync + Send {
     fn handle_websocket_stream(
@@ -41,7 +41,7 @@ impl WebSocketHandler for Server {
         access_token: Arc<AccessToken>,
         session: HttpSessionData,
     ) {
-        trc::event!(
+        crate::trc::event!(
             Jmap(JmapEvent::WebsocketStart),
             SpanId = session.session_id,
             AccountId = access_token.primary_id(),
@@ -63,7 +63,7 @@ impl WebSocketHandler for Server {
         {
             Ok(push_rx) => push_rx,
             Err(err) => {
-                trc::error!(
+                crate::trc::error!(
                     err.details("Failed to subscribe to push manager")
                         .span_id(session.session_id)
                 );
@@ -119,12 +119,12 @@ impl WebSocketHandler for Server {
                                         }
                                         Err(err) => {
                                             let response = WebSocketRequestError::from(err.to_request_error()).to_json();
-                                            trc::error!(err.details("Failed to parse WebSocket message").span_id(session.session_id));
+                                            crate::trc::error!(err.details("Failed to parse WebSocket message").span_id(session.session_id));
                                             response
                                         },
                                     };
                                     if let Err(err) = stream.send(Message::Text(response.into())).await {
-                                        trc::event!(Jmap(JmapEvent::WebsocketError),
+                                        crate::trc::event!(Jmap(JmapEvent::WebsocketError),
                                                     Details = "Failed to send text message",
                                                     SpanId = session.session_id,
                                                     Reason = err.to_string()
@@ -133,7 +133,7 @@ impl WebSocketHandler for Server {
                                 }
                                 Message::Ping(bytes) => {
                                     if let Err(err) = stream.send(Message::Pong(bytes)).await {
-                                        trc::event!(Jmap(JmapEvent::WebsocketError),
+                                        crate::trc::event!(Jmap(JmapEvent::WebsocketError),
                                                     Details = "Failed to send pong message",
                                                     SpanId = session.session_id,
                                                     Reason = err.to_string()
@@ -151,7 +151,7 @@ impl WebSocketHandler for Server {
                             last_heartbeat = Instant::now();
                         }
                         Ok(Some(Err(err))) => {
-                            trc::event!(Jmap(JmapEvent::WebsocketError),
+                            crate::trc::event!(Jmap(JmapEvent::WebsocketError),
                                                     Details = "Websocket error",
                                                     SpanId = session.session_id,
                                                     Reason = err.to_string()
@@ -162,7 +162,7 @@ impl WebSocketHandler for Server {
                         Err(_) => {
                             // Verify timeout
                             if last_request.elapsed() > timeout {
-                                trc::event!(
+                                crate::trc::event!(
                                     Jmap(JmapEvent::WebsocketStop),
                                     SpanId = session.session_id,
                                     Reason = "Idle client"
@@ -215,7 +215,7 @@ impl WebSocketHandler for Server {
                         }
 
                     } else {
-                        trc::event!(
+                        crate::trc::event!(
                             Jmap(JmapEvent::WebsocketStop),
                             SpanId = session.session_id,
                             Reason = "State manager channel closed"
@@ -235,7 +235,7 @@ impl WebSocketHandler for Server {
                         push_state: None,
                     };
                     if let Err(err) = stream.send(Message::Text(payload.to_json().into())).await {
-                        trc::event!(
+                        crate::trc::event!(
                             Jmap(JmapEvent::WebsocketError),
                             Details = "Failed to send state change message.",
                             SpanId = session.session_id,
@@ -250,7 +250,7 @@ impl WebSocketHandler for Server {
                 }
             } else if last_heartbeat.elapsed() > heartbeat {
                 if let Err(err) = stream.send(Message::Ping(Vec::<u8>::new().into())).await {
-                    trc::event!(
+                    crate::trc::event!(
                         Jmap(JmapEvent::WebsocketError),
                         Details = "Failed to send ping message.",
                         SpanId = session.session_id,

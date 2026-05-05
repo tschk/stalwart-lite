@@ -5,14 +5,14 @@
  */
 
 use super::SieveScript;
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use store::write::BatchBuilder;
-use store::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::store::write::BatchBuilder;
+use crate::store::{
     ValueKey,
     write::{AlignedBytes, Archive},
 };
-use trc::AddContext;
-use types::{collection::Collection, field::SieveField};
+use crate::trc::AddContext;
+use crate::types::{collection::Collection, field::SieveField};
 
 pub trait SieveScriptDelete: Sync + Send {
     fn sieve_script_delete(
@@ -21,7 +21,7 @@ pub trait SieveScriptDelete: Sync + Send {
         document_id: u32,
         access_token: &AccessToken,
         batch: &mut BatchBuilder,
-    ) -> impl Future<Output = trc::Result<bool>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<bool>> + Send;
 }
 
 impl SieveScriptDelete for Server {
@@ -31,7 +31,7 @@ impl SieveScriptDelete for Server {
         document_id: u32,
         access_token: &AccessToken,
         batch: &mut BatchBuilder,
-    ) -> trc::Result<bool> {
+    ) -> crate::trc::Result<bool> {
         // Fetch record
         if let Some(obj_) = self
             .store()
@@ -52,11 +52,11 @@ impl SieveScriptDelete for Server {
                     ObjectIndexBuilder::<_, ()>::new()
                         .with_current(
                             obj_.to_unarchived::<SieveScript>()
-                                .caused_by(trc::location!())?,
+                                .caused_by(crate::trc::location!())?,
                         )
                         .with_access_token(access_token),
                 )
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
                 .commit_point();
 
             Ok(true)

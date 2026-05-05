@@ -6,16 +6,16 @@
 
 use std::{fmt::Display, io::Write, ops::Range, time::Duration};
 
+use crate::utils::{
+    codec::base32_custom::Base32Writer,
+    config::{Config, utils::AsKey},
+};
 use azure_core::error::ErrorKind;
 use azure_core::{ExponentialRetryOptions, RetryOptions, StatusCode, TransportOptions};
 use azure_storage::StorageCredentials;
 use azure_storage_blobs::prelude::{ClientBuilder, ContainerClient};
 use futures::stream::StreamExt;
 use std::sync::Arc;
-use utils::{
-    codec::base32_custom::Base32Writer,
-    config::{Config, utils::AsKey},
-};
 
 pub struct AzureStore {
     client: ContainerClient,
@@ -99,7 +99,7 @@ impl AzureStore {
         &self,
         key: &[u8],
         range: Range<usize>,
-    ) -> trc::Result<Option<Vec<u8>>> {
+    ) -> crate::trc::Result<Option<Vec<u8>>> {
         let blob_client = self.client.blob_client(self.build_key(key));
 
         let mut stream = blob_client.get();
@@ -145,7 +145,7 @@ impl AzureStore {
                 ) {
                     Ok(None)
                 } else {
-                    Err(trc::StoreEvent::AzureError.reason(e))
+                    Err(crate::trc::StoreEvent::AzureError.reason(e))
                 };
             }
         }
@@ -153,7 +153,7 @@ impl AzureStore {
         Ok(Some(buf))
     }
 
-    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> trc::Result<()> {
+    pub(crate) async fn put_blob(&self, key: &[u8], data: &[u8]) -> crate::trc::Result<()> {
         let blob_client = self.client.blob_client(self.build_key(key));
 
         // We unfortunately have to make a copy of `data`. This is because the Azure SDK wants to
@@ -170,7 +170,7 @@ impl AzureStore {
         Ok(())
     }
 
-    pub(crate) async fn delete_blob(&self, key: &[u8]) -> trc::Result<bool> {
+    pub(crate) async fn delete_blob(&self, key: &[u8]) -> crate::trc::Result<bool> {
         let blob_client = self.client.blob_client(self.build_key(key));
 
         if let Err(e) = blob_client.delete().into_future().await {
@@ -183,7 +183,7 @@ impl AzureStore {
             ) {
                 Ok(false)
             } else {
-                Err(trc::StoreEvent::AzureError.reason(e))
+                Err(crate::trc::StoreEvent::AzureError.reason(e))
             }
         } else {
             Ok(true)
@@ -204,6 +204,6 @@ impl AzureStore {
 }
 
 #[inline(always)]
-fn into_error(err: impl Display) -> trc::Error {
-    trc::StoreEvent::AzureError.reason(err)
+fn into_error(err: impl Display) -> crate::trc::Error {
+    crate::trc::StoreEvent::AzureError.reason(err)
 }

@@ -5,7 +5,8 @@
  */
 
 use super::proppatch::FilePropPatchRequestHandler;
-use crate::{
+use crate::common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
+use crate::dav::{
     DavMethod, PropStatBuilder,
     common::{
         ExtractETag,
@@ -15,20 +16,19 @@ use crate::{
     },
     file::DavFileResource,
 };
-use common::{Server, auth::AccessToken, storage::index::ObjectIndexBuilder};
-use dav_proto::{
+use crate::dav_proto::{
     RequestHeaders, Return,
     schema::{Namespace, request::MkCol, response::MkColResponse},
 };
-use groupware::{cache::GroupwareCache, file::FileNode};
-use http_proto::HttpResponse;
-use hyper::StatusCode;
-use store::write::{BatchBuilder, now};
-use trc::AddContext;
-use types::{
+use crate::groupware::{cache::GroupwareCache, file::FileNode};
+use crate::http_proto::HttpResponse;
+use crate::store::write::{BatchBuilder, now};
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     collection::{Collection, SyncCollection},
 };
+use hyper::StatusCode;
 
 pub(crate) trait FileMkColRequestHandler: Sync + Send {
     fn handle_file_mkcol_request(
@@ -36,7 +36,7 @@ pub(crate) trait FileMkColRequestHandler: Sync + Send {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: Option<MkCol>,
-    ) -> impl Future<Output = crate::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::dav::Result<HttpResponse>> + Send;
 }
 
 impl FileMkColRequestHandler for Server {
@@ -45,7 +45,7 @@ impl FileMkColRequestHandler for Server {
         access_token: &AccessToken,
         headers: &RequestHeaders<'_>,
         request: Option<MkCol>,
-    ) -> crate::Result<HttpResponse> {
+    ) -> crate::dav::Result<HttpResponse> {
         // Validate URI
         let resource_ = self
             .validate_uri(access_token, headers.uri)
@@ -55,7 +55,7 @@ impl FileMkColRequestHandler for Server {
         let resources = self
             .fetch_dav_resources(access_token, account_id, SyncCollection::FileNode)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let resource = resources.map_parent_resource(&resource_)?;
 
         // Validate and map parent ACL
@@ -116,16 +116,18 @@ impl FileMkColRequestHandler for Server {
             .store()
             .assign_document_ids(account_id, Collection::FileNode, 1)
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let mut batch = BatchBuilder::new();
         batch
             .with_account_id(account_id)
             .with_collection(Collection::FileNode)
             .with_document(document_id)
             .custom(ObjectIndexBuilder::<(), _>::new().with_changes(node))
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
         let etag = batch.etag();
-        self.commit_batch(batch).await.caused_by(trc::location!())?;
+        self.commit_batch(batch)
+            .await
+            .caused_by(crate::trc::location!())?;
 
         if let Some(prop_stat) = return_prop_stat {
             Ok(HttpResponse::new(StatusCode::CREATED)

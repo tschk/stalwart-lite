@@ -5,8 +5,8 @@
  */
 
 use super::{ArchivedMailbox, Mailbox};
-use common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
-use types::{acl::AclGrant, collection::SyncCollection};
+use crate::common::storage::index::{IndexValue, IndexableAndSerializableObject, IndexableObject};
+use crate::types::{acl::AclGrant, collection::SyncCollection};
 
 impl IndexableObject for Mailbox {
     fn index_values(&self) -> impl Iterator<Item = IndexValue<'_>> {

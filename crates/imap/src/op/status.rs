@@ -5,26 +5,29 @@
  */
 
 use super::ToModSeq;
-use crate::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::email::cache::{MessageCacheFetch, email::MessageCacheAccess};
+use crate::imap::{
     core::{Mailbox, Session, SessionData},
     op::ImapContext,
     spawn_op,
 };
-use common::listener::SessionStream;
-use directory::Permission;
-use email::cache::{MessageCacheFetch, email::MessageCacheAccess};
-use imap_proto::{
+use crate::imap_proto::{
     Command, ResponseCode, StatusResponse,
     parser::PushUnique,
     protocol::status::{Status, StatusItem, StatusItemType},
     receiver::Request,
 };
+use crate::trc::AddContext;
+use crate::types::{id::Id, keyword::Keyword};
 use std::time::Instant;
-use trc::AddContext;
-use types::{id::Id, keyword::Keyword};
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_status(&mut self, requests: Vec<Request<Command>>) -> trc::Result<()> {
+    pub async fn handle_status(
+        &mut self,
+        requests: Vec<Request<Command>>,
+    ) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapStatus)?;
 
@@ -42,7 +45,7 @@ impl<T: SessionStream> Session<T> {
                             // Refresh mailboxes
                             data.synchronize_mailboxes(false)
                                 .await
-                                .imap_ctx(&arguments.tag, trc::location!())?;
+                                .imap_ctx(&arguments.tag, crate::trc::location!())?;
                             did_sync = true;
                         }
 
@@ -50,16 +53,16 @@ impl<T: SessionStream> Session<T> {
                         let status = data
                             .status(arguments.mailbox_name, &arguments.items)
                             .await
-                            .imap_ctx(&arguments.tag, trc::location!())?;
+                            .imap_ctx(&arguments.tag, crate::trc::location!())?;
 
-                        trc::event!(
-                            Imap(trc::ImapEvent::Status),
+                        crate::trc::event!(
+                            Imap(crate::trc::ImapEvent::Status),
                             SpanId = data.session_id,
                             MailboxName = status.mailbox_name.clone(),
                             Details = arguments
                                 .items
                                 .iter()
-                                .map(|c| trc::Value::from(format!("{c:?}")))
+                                .map(|c| crate::trc::Value::from(format!("{c:?}")))
                                 .collect::<Vec<_>>(),
                             Elapsed = op_start.elapsed()
                         );
@@ -83,7 +86,11 @@ impl<T: SessionStream> Session<T> {
 }
 
 impl<T: SessionStream> SessionData<T> {
-    pub async fn status(&self, mailbox_name: String, items: &[Status]) -> trc::Result<StatusItem> {
+    pub async fn status(
+        &self,
+        mailbox_name: String,
+        items: &[Status],
+    ) -> crate::trc::Result<StatusItem> {
         // Get mailbox id
         let mailbox = if let Some(mailbox) = self.get_mailbox_by_name(&mailbox_name) {
             mailbox
@@ -121,7 +128,7 @@ impl<T: SessionStream> SessionData<T> {
                         .collect(),
                 })
             } else {
-                Err(trc::ImapEvent::Error
+                Err(crate::trc::ImapEvent::Error
                     .into_err()
                     .details("Mailbox does not exist.")
                     .code(ResponseCode::NonExistent))
@@ -210,7 +217,7 @@ impl<T: SessionStream> SessionData<T> {
                 .server
                 .get_cached_messages(mailbox.account_id)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             for item in items_update {
                 let result = match item {

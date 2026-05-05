@@ -66,7 +66,7 @@ impl AcmeProvider {
         eab: Option<EabSettings>,
         renew_before: Duration,
         default: bool,
-    ) -> trc::Result<Self> {
+    ) -> crate::trc::Result<Self> {
         Ok(AcmeProvider {
             id,
             directory_url,
@@ -91,7 +91,7 @@ impl AcmeProvider {
 }
 
 impl Server {
-    pub async fn init_acme(&self, provider: &AcmeProvider) -> trc::Result<Duration> {
+    pub async fn init_acme(&self, provider: &AcmeProvider) -> crate::trc::Result<Duration> {
         // Load account key from cache or generate a new one
         if let Some(account_key) = self.load_account(provider).await? {
             provider.account_key.store(Arc::new(account_key));

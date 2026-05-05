@@ -5,7 +5,7 @@
  */
 
 use super::{Error, RawElement, Token, UnexpectedToken, XmlValueParser};
-use crate::schema::{Attribute, AttributeValue, Element, NamedElement, Namespace};
+use crate::dav_proto::schema::{Attribute, AttributeValue, Element, NamedElement, Namespace};
 use quick_xml::{
     NsReader,
     events::{Event, attributes::AttrError},
@@ -307,7 +307,7 @@ mod tests {
 
     use std::borrow::Cow;
 
-    use crate::schema::{Collation, MatchType};
+    use crate::dav_proto::schema::{Collation, MatchType};
 
     use super::*;
 

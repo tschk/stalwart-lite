@@ -6,9 +6,9 @@
 
 use std::{future::Future, time::Instant};
 
-use common::Server;
+use crate::common::Server;
 
-use crate::{SpamFilterContext, modules::pyzor::pyzor_check};
+use crate::spam_filter::{SpamFilterContext, modules::pyzor::pyzor_check};
 
 pub trait SpamFilterAnalyzePyzor: Sync + Send {
     fn spam_filter_analyze_pyzor(
@@ -30,13 +30,13 @@ impl SpamFilterAnalyzePyzor for Server {
                     if is_spam {
                         ctx.result.add_tag("PYZOR");
                     }
-                    trc::event!(
-                        Spam(trc::SpamEvent::Pyzor),
+                    crate::trc::event!(
+                        Spam(crate::trc::SpamEvent::Pyzor),
                         Result = is_spam,
                         Details = vec![
-                            trc::Value::from(result.code),
-                            trc::Value::from(result.count),
-                            trc::Value::from(result.wl_count)
+                            crate::trc::Value::from(result.code),
+                            crate::trc::Value::from(result.count),
+                            crate::trc::Value::from(result.wl_count)
                         ],
                         SpanId = ctx.input.span_id,
                         Elapsed = time.elapsed()
@@ -44,9 +44,9 @@ impl SpamFilterAnalyzePyzor for Server {
                 }
                 Ok(None) => {}
                 Err(err) => {
-                    trc::error!(
+                    crate::trc::error!(
                         err.span_id(ctx.input.span_id)
-                            .ctx(trc::Key::Elapsed, time.elapsed())
+                            .ctx(crate::trc::Key::Elapsed, time.elapsed())
                     );
                 }
             }

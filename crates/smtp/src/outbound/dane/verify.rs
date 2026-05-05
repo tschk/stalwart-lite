@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::config::smtp::resolver::Tlsa;
+use crate::common::config::smtp::resolver::Tlsa;
+use crate::trc::DaneEvent;
 use rustls_pki_types::CertificateDer;
 use sha1::Digest;
 use sha2::{Sha256, Sha512};
-use trc::DaneEvent;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
-use crate::queue::{Error, ErrorDetails, HostResponse, Status};
+use crate::smtp::queue::{Error, ErrorDetails, HostResponse, Status};
 
 pub trait TlsaVerify {
     fn verify(
@@ -32,7 +32,7 @@ impl TlsaVerify for Tlsa {
         let certificates = if let Some(certificates) = certificates {
             certificates
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Dane(DaneEvent::NoCertificatesFound),
                 SpanId = session_id,
                 Hostname = hostname.to_string(),
@@ -51,7 +51,7 @@ impl TlsaVerify for Tlsa {
             let certificate = match X509Certificate::from_der(der_certificate.as_ref()) {
                 Ok((_, certificate)) => certificate,
                 Err(err) => {
-                    trc::event!(
+                    crate::trc::event!(
                         Dane(DaneEvent::CertificateParseError),
                         SpanId = session_id,
                         Hostname = hostname.to_string(),
@@ -94,7 +94,7 @@ impl TlsaVerify for Tlsa {
                     };
 
                     if hash == record.data {
-                        trc::event!(
+                        crate::trc::event!(
                             Dane(DaneEvent::TlsaRecordMatch),
                             SpanId = session_id,
                             Hostname = hostname.to_string(),
@@ -128,7 +128,7 @@ impl TlsaVerify for Tlsa {
             || ((self.has_end_entities == matched_end_entity)
                 && (self.has_intermediates == matched_intermediate))
         {
-            trc::event!(
+            crate::trc::event!(
                 Dane(DaneEvent::AuthenticationSuccess),
                 SpanId = session_id,
                 Hostname = hostname.to_string(),
@@ -136,7 +136,7 @@ impl TlsaVerify for Tlsa {
 
             Ok(())
         } else {
-            trc::event!(
+            crate::trc::event!(
                 Dane(DaneEvent::AuthenticationFailure),
                 SpanId = session_id,
                 Hostname = hostname.to_string(),

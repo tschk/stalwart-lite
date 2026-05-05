@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::utf7::utf7_encode;
+use crate::imap_proto::utf7::utf7_encode;
 
 use super::quoted_string;
 
@@ -85,7 +85,7 @@ impl StatusItem {
 
 #[cfg(test)]
 mod tests {
-    use crate::protocol::status::{Status, StatusItem, StatusItemType};
+    use crate::imap_proto::protocol::status::{Status, StatusItem, StatusItemType};
 
     #[test]
     fn serialize_status() {

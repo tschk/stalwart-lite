@@ -4,12 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use jmap_proto::{
+use crate::jmap_proto::{
     method::query::{QueryRequest, QueryResponse},
     object::JmapObject,
     types::state::State,
 };
-use types::id::Id;
+use crate::types::id::Id;
 
 pub struct QueryResponseBuilder {
     requested_position: i32,
@@ -129,7 +129,7 @@ impl QueryResponseBuilder {
         self.response.ids.len() == self.limit
     }
 
-    pub fn build(mut self) -> trc::Result<QueryResponse> {
+    pub fn build(mut self) -> crate::trc::Result<QueryResponse> {
         if !self.has_anchor || self.anchor_found {
             if !self.has_anchor && self.requested_position >= 0 {
                 self.response.position = if self.position == 0 {
@@ -158,7 +158,7 @@ impl QueryResponseBuilder {
 
             Ok(self.response)
         } else {
-            Err(trc::JmapEvent::AnchorNotFound.into_err())
+            Err(crate::trc::JmapEvent::AnchorNotFound.into_err())
         }
     }
 }

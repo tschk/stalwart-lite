@@ -4,7 +4,13 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{
+use crate::common::{
+    DavName, Server,
+    auth::{AccessToken, ResourceToken, oauth::GrantType},
+    config::groupware::CalendarTemplateVariable,
+    i18n,
+};
+use crate::groupware::{
     RFC_3986,
     cache::GroupwareCache,
     calendar::{
@@ -19,6 +25,16 @@ use crate::{
         snapshot::itip_snapshot,
     },
 };
+use crate::store::{
+    ValueKey, rand,
+    write::{AlignedBytes, Archive, BatchBuilder, now},
+};
+use crate::trc::AddContext;
+use crate::types::{
+    collection::Collection,
+    field::{CalendarEventField, ContactField},
+};
+use crate::utils::{template::Variables, url_params::UrlParams};
 use calcard::{
     common::{IanaString, timezone::Tz},
     icalendar::{
@@ -27,26 +43,10 @@ use calcard::{
         ICalendarProperty, ICalendarValue,
     },
 };
-use common::{
-    DavName, Server,
-    auth::{AccessToken, ResourceToken, oauth::GrantType},
-    config::groupware::CalendarTemplateVariable,
-    i18n,
-};
-use store::{
-    ValueKey, rand,
-    write::{AlignedBytes, Archive, BatchBuilder, now},
-};
-use trc::AddContext;
-use types::{
-    collection::Collection,
-    field::{CalendarEventField, ContactField},
-};
-use utils::{template::Variables, url_params::UrlParams};
 
 pub enum ItipIngestError {
     Message(ItipError),
-    Internal(trc::Error),
+    Internal(crate::trc::Error),
 }
 
 #[derive(Default)]
@@ -73,7 +73,7 @@ pub trait ItipIngest: Sync + Send {
         &self,
         query: &str,
         language: &str,
-    ) -> impl Future<Output = trc::Result<String>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<String>> + Send;
 }
 
 impl ItipIngest for Server {
@@ -158,7 +158,7 @@ impl ItipIngest for Server {
                 itip_snapshots.uid.as_bytes(),
             )
             .await
-            .caused_by(trc::location!())?
+            .caused_by(crate::trc::location!())?
             .iter()
             .next();
 
@@ -171,14 +171,14 @@ impl ItipIngest for Server {
                     document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let event_ = archive
                     .to_unarchived::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let mut event = event_
                     .deserialize::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
 
                 // Process the iTIP message
                 let snapshots =
@@ -240,7 +240,7 @@ impl ItipIngest for Server {
                                 1,
                             )
                             .await
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         let itip_message = CalendarEventNotification {
                             event: itip,
                             changed_by,
@@ -254,7 +254,7 @@ impl ItipIngest for Server {
                         let mut batch = BatchBuilder::new();
                         event
                             .update(access_token, event_, account_id, document_id, &mut batch)
-                            .caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
                         if prev_email_alarm != next_email_alarm {
                             if let Some(prev_alarm) = prev_email_alarm {
                                 prev_alarm.delete_task(&mut batch);
@@ -265,8 +265,10 @@ impl ItipIngest for Server {
                         }
                         itip_message
                             .insert(access_token, account_id, itip_document_id, &mut batch)
-                            .caused_by(trc::location!())?;
-                        self.commit_batch(batch).await.caused_by(trc::location!())?;
+                            .caused_by(crate::trc::location!())?;
+                        self.commit_batch(batch)
+                            .await
+                            .caused_by(crate::trc::location!())?;
 
                         Ok(None)
                     }
@@ -288,7 +290,7 @@ impl ItipIngest for Server {
                         sender.as_bytes(),
                     )
                     .await
-                    .caused_by(trc::location!())?
+                    .caused_by(crate::trc::location!())?
             {
                 return Err(ItipIngestError::Message(ItipError::AutoAddDisabled));
             } else if itip_method(&itip)? != &ICalendarMethod::Request {
@@ -312,7 +314,7 @@ impl ItipIngest for Server {
             let Some(parent_id) = self
                 .get_or_create_default_calendar(access_token, account_id)
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             else {
                 return Err(ItipIngestError::Message(ItipError::NoDefaultCalendar));
             };
@@ -341,12 +343,12 @@ impl ItipIngest for Server {
                 .store()
                 .assign_document_ids(account_id, Collection::CalendarEvent, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let itip_document_id = self
                 .store()
                 .assign_document_ids(account_id, Collection::CalendarEventNotification, 1)
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             let itip_message = CalendarEventNotification {
                 event: itip,
                 event_id: Some(document_id),
@@ -365,11 +367,13 @@ impl ItipIngest for Server {
                     next_email_alarm,
                     &mut batch,
                 )
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             itip_message
                 .insert(access_token, account_id, itip_document_id, &mut batch)
-                .caused_by(trc::location!())?;
-            self.commit_batch(batch).await.caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
+            self.commit_batch(batch)
+                .await
+                .caused_by(crate::trc::location!())?;
 
             Ok(None)
         }
@@ -396,7 +400,7 @@ impl ItipIngest for Server {
                     percent_encoding::percent_encode(access_token.as_bytes(), RFC_3986)
                 ))),
                 Err(err) => {
-                    trc::error!(err.caused_by(trc::location!()));
+                    crate::trc::error!(err.caused_by(crate::trc::location!()));
                     None
                 }
             }
@@ -405,7 +409,7 @@ impl ItipIngest for Server {
         }
     }
 
-    async fn http_rsvp_handle(&self, query: &str, language: &str) -> trc::Result<String> {
+    async fn http_rsvp_handle(&self, query: &str, language: &str) -> crate::trc::Result<String> {
         let response = if let Some(rsvp) = decode_rsvp_response(self, query).await {
             if let Some(archive) = self
                 .store()
@@ -415,14 +419,14 @@ impl ItipIngest for Server {
                     rsvp.document_id,
                 ))
                 .await
-                .caused_by(trc::location!())?
+                .caused_by(crate::trc::location!())?
             {
                 let event = archive
                     .to_unarchived::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let mut new_event = event
                     .deserialize::<CalendarEvent>()
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 let mut did_change = false;
                 let mut summary = None;
                 let mut description = None;
@@ -484,7 +488,7 @@ impl ItipIngest for Server {
                     let access_token = self
                         .get_access_token(rsvp.account_id)
                         .await
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
                     let mut batch = BatchBuilder::new();
                     new_event
                         .update(
@@ -494,9 +498,11 @@ impl ItipIngest for Server {
                             rsvp.document_id,
                             &mut batch,
                         )
-                        .caused_by(trc::location!())?;
+                        .caused_by(crate::trc::location!())?;
 
-                    self.commit_batch(batch).await.caused_by(trc::location!())?;
+                    self.commit_batch(batch)
+                        .await
+                        .caused_by(crate::trc::location!())?;
                 }
 
                 if found_participant {
@@ -682,8 +688,8 @@ impl From<ItipError> for ItipIngestError {
     }
 }
 
-impl From<trc::Error> for ItipIngestError {
-    fn from(err: trc::Error) -> Self {
+impl From<crate::trc::Error> for ItipIngestError {
+    fn from(err: crate::trc::Error) -> Self {
         ItipIngestError::Internal(err)
     }
 }

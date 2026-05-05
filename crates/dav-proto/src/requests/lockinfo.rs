@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use types::dead_property::DeadProperty;
+use crate::types::dead_property::DeadProperty;
 
-use crate::{
+use crate::dav_proto::{
     parser::{DavParser, Token, tokenizer::Tokenizer},
     schema::{
         Element, NamedElement, Namespace,
@@ -16,7 +16,7 @@ use crate::{
 };
 
 impl DavParser for LockInfo {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         let mut lockinfo = LockInfo {
             lock_scope: LockScope::Exclusive,
             lock_type: LockType::Write,
@@ -71,7 +71,7 @@ impl DavParser for LockInfo {
 }
 
 impl DavParser for LockScope {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         match stream.unwrap_named_element()? {
             NamedElement {
                 ns: Namespace::Dav,
@@ -95,7 +95,7 @@ impl DavParser for LockScope {
 }
 
 impl DavParser for LockType {
-    fn parse(stream: &mut Tokenizer<'_>) -> crate::parser::Result<Self> {
+    fn parse(stream: &mut Tokenizer<'_>) -> crate::dav_proto::parser::Result<Self> {
         match stream.unwrap_named_element()? {
             NamedElement {
                 ns: Namespace::Dav,

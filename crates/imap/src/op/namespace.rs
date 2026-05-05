@@ -4,24 +4,24 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::core::Session;
-use common::listener::SessionStream;
-use directory::Permission;
-use imap_proto::{
+use crate::common::listener::SessionStream;
+use crate::directory::Permission;
+use crate::imap::core::Session;
+use crate::imap_proto::{
     Command, StatusResponse,
     protocol::{ImapResponse, namespace::Response},
     receiver::Request,
 };
 
 impl<T: SessionStream> Session<T> {
-    pub async fn handle_namespace(&mut self, request: Request<Command>) -> trc::Result<()> {
+    pub async fn handle_namespace(&mut self, request: Request<Command>) -> crate::trc::Result<()> {
         // Validate access
         self.assert_has_permission(Permission::ImapNamespace)?;
 
-        trc::event!(
-            Imap(trc::ImapEvent::Namespace),
+        crate::trc::event!(
+            Imap(crate::trc::ImapEvent::Namespace),
             SpanId = self.session_id,
-            Elapsed = trc::Value::Duration(0)
+            Elapsed = crate::trc::Value::Duration(0)
         );
 
         self.write_bytes(

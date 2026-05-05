@@ -5,10 +5,10 @@
  */
 
 use self::config::ConfigManager;
-use crate::USER_AGENT;
+use crate::common::USER_AGENT;
+use crate::utils::HttpLimitResponse;
 use hyper::HeaderMap;
 use std::time::Duration;
-use utils::HttpLimitResponse;
 
 pub mod backup;
 pub mod boot;

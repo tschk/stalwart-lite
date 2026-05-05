@@ -6,7 +6,7 @@
 
 use std::net::IpAddr;
 
-use crate::inbound::milter::Action;
+use crate::smtp::inbound::milter::Action;
 
 use super::{Command, Error, Modification, Options, Response};
 

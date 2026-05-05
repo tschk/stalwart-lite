@@ -10,10 +10,7 @@
 
 use std::{future::Future, sync::Arc, time::Duration};
 
-use ahash::AHashMap;
-use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
-use store::{
+use crate::store::{
     IterateParams, Store, U32_LEN, U64_LEN, ValueKey,
     write::{
         BatchBuilder, TelemetryClass, ValueClass,
@@ -21,10 +18,13 @@ use store::{
         now,
     },
 };
-use trc::*;
-use utils::codec::leb128::Leb128Reader;
+use crate::trc::*;
+use crate::utils::codec::leb128::Leb128Reader;
+use ahash::AHashMap;
+use parking_lot::Mutex;
+use serde::{Deserialize, Serialize};
 
-use crate::Core;
+use crate::common::Core;
 
 pub trait MetricsStore: Sync + Send {
     fn write_metrics(
@@ -32,13 +32,16 @@ pub trait MetricsStore: Sync + Send {
         core: Arc<Core>,
         timestamp: u64,
         history: SharedMetricHistory,
-    ) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
     fn query_metrics(
         &self,
         from_timestamp: u64,
         to_timestamp: u64,
-    ) -> impl Future<Output = trc::Result<Vec<Metric<EventType, MetricType, u64>>>> + Send;
-    fn purge_metrics(&self, period: Duration) -> impl Future<Output = trc::Result<()>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<Vec<Metric<EventType, MetricType, u64>>>> + Send;
+    fn purge_metrics(
+        &self,
+        period: Duration,
+    ) -> impl Future<Output = crate::trc::Result<()>> + Send;
 }
 
 #[derive(Default)]
@@ -87,7 +90,7 @@ impl MetricsStore for Store {
         core: Arc<Core>,
         timestamp: u64,
         history_: SharedMetricHistory,
-    ) -> trc::Result<()> {
+    ) -> crate::trc::Result<()> {
         let mut batch = BatchBuilder::new();
         {
             let node_id = core.network.node_id;
@@ -188,7 +191,7 @@ impl MetricsStore for Store {
         if !batch.is_empty() {
             self.write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
 
         Ok(())
@@ -198,7 +201,7 @@ impl MetricsStore for Store {
         &self,
         from_timestamp: u64,
         to_timestamp: u64,
-    ) -> trc::Result<Vec<Metric<EventType, MetricType, u64>>> {
+    ) -> crate::trc::Result<Vec<Metric<EventType, MetricType, u64>>> {
         let mut metrics = Vec::new();
         self.iterate(
             IterateParams::new(
@@ -214,18 +217,26 @@ impl MetricsStore for Store {
                 })),
             ),
             |key, value| {
-                let timestamp = key.deserialize_be_u64(0).caused_by(trc::location!())?;
+                let timestamp = key
+                    .deserialize_be_u64(0)
+                    .caused_by(crate::trc::location!())?;
                 let (metric_type, _) = key
                     .get(U64_LEN..)
                     .and_then(|bytes| bytes.read_leb128::<u64>())
-                    .ok_or_else(|| trc::Error::corrupted_key(key, None, trc::location!()))?;
+                    .ok_or_else(|| {
+                        crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
+                    })?;
                 match metric_type & 0x03 {
                     TYPE_COUNTER => {
                         let id = EventType::from_code(metric_type >> 2).ok_or_else(|| {
-                            trc::Error::corrupted_key(key, None, trc::location!())
+                            crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
                         })?;
                         let (value, _) = value.read_leb128::<u64>().ok_or_else(|| {
-                            trc::Error::corrupted_key(key, value.into(), trc::location!())
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
                         })?;
                         metrics.push(Metric::Counter {
                             id,
@@ -235,16 +246,24 @@ impl MetricsStore for Store {
                     }
                     TYPE_HISTOGRAM => {
                         let id = MetricType::from_code(metric_type >> 2).ok_or_else(|| {
-                            trc::Error::corrupted_key(key, None, trc::location!())
+                            crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
                         })?;
                         let (count, bytes_read) = value.read_leb128::<u64>().ok_or_else(|| {
-                            trc::Error::corrupted_key(key, value.into(), trc::location!())
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
                         })?;
                         let (sum, _) = value
                             .get(bytes_read..)
                             .and_then(|bytes| bytes.read_leb128::<u64>())
                             .ok_or_else(|| {
-                                trc::Error::corrupted_key(key, value.into(), trc::location!())
+                                crate::trc::Error::corrupted_key(
+                                    key,
+                                    value.into(),
+                                    crate::trc::location!(),
+                                )
                             })?;
                         metrics.push(Metric::Histogram {
                             id,
@@ -255,10 +274,14 @@ impl MetricsStore for Store {
                     }
                     TYPE_GAUGE => {
                         let id = MetricType::from_code(metric_type >> 2).ok_or_else(|| {
-                            trc::Error::corrupted_key(key, None, trc::location!())
+                            crate::trc::Error::corrupted_key(key, None, crate::trc::location!())
                         })?;
                         let (value, _) = value.read_leb128::<u64>().ok_or_else(|| {
-                            trc::Error::corrupted_key(key, value.into(), trc::location!())
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
                         })?;
                         metrics.push(Metric::Gauge {
                             id,
@@ -266,19 +289,25 @@ impl MetricsStore for Store {
                             value,
                         });
                     }
-                    _ => return Err(trc::Error::corrupted_key(key, None, trc::location!())),
+                    _ => {
+                        return Err(crate::trc::Error::corrupted_key(
+                            key,
+                            None,
+                            crate::trc::location!(),
+                        ));
+                    }
                 }
 
                 Ok(true)
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
         Ok(metrics)
     }
 
-    async fn purge_metrics(&self, period: Duration) -> trc::Result<()> {
+    async fn purge_metrics(&self, period: Duration) -> crate::trc::Result<()> {
         self.delete_range(
             ValueKey::from(ValueClass::Telemetry(TelemetryClass::Metric {
                 timestamp: 0,
@@ -292,7 +321,7 @@ impl MetricsStore for Store {
             })),
         )
         .await
-        .caused_by(trc::location!())
+        .caused_by(crate::trc::location!())
     }
 }
 

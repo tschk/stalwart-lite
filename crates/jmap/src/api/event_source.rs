@@ -4,22 +4,22 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::api::IntoPushObject;
-use common::{LONG_1D_SLUMBER, Server, auth::AccessToken, ipc::PushNotification};
+use crate::common::{LONG_1D_SLUMBER, Server, auth::AccessToken, ipc::PushNotification};
+use crate::http_proto::*;
+use crate::jmap::api::IntoPushObject;
+use crate::jmap_proto::{response::status::PushObject, types::state::State};
+use crate::types::{id::Id, type_state::DataType};
+use crate::utils::map::{bitmap::Bitmap, vec_map::VecMap};
 use http_body_util::{StreamBody, combinators::BoxBody};
-use http_proto::*;
 use hyper::{
     StatusCode,
     body::{Bytes, Frame},
 };
-use jmap_proto::{response::status::PushObject, types::state::State};
 use std::{future::Future, str::FromStr};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use types::{id::Id, type_state::DataType};
-use utils::map::{bitmap::Bitmap, vec_map::VecMap};
 
 struct Ping {
     interval: Duration,
@@ -32,7 +32,7 @@ pub trait EventSourceHandler: Sync + Send {
         &self,
         req: HttpRequest,
         access_token: Arc<AccessToken>,
-    ) -> impl Future<Output = trc::Result<HttpResponse>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<HttpResponse>> + Send;
 }
 
 impl EventSourceHandler for Server {
@@ -40,15 +40,15 @@ impl EventSourceHandler for Server {
         &self,
         req: HttpRequest,
         access_token: Arc<AccessToken>,
-    ) -> trc::Result<HttpResponse> {
+    ) -> crate::trc::Result<HttpResponse> {
         // Parse query
         let mut ping = 0;
         let mut types = Bitmap::default();
         let mut close_after_state = false;
 
-        for (key, value) in
-            http_proto::form_urlencoded::parse(req.uri().query().unwrap_or_default().as_bytes())
-        {
+        for (key, value) in crate::http_proto::form_urlencoded::parse(
+            req.uri().query().unwrap_or_default().as_bytes(),
+        ) {
             hashify::fnc_map!(key.as_bytes(),
                 "types" => {
                     for type_state in value.split(',') {
@@ -58,7 +58,7 @@ impl EventSourceHandler for Server {
                         } else if let Ok(type_state) = DataType::from_str(type_state) {
                             types.insert(type_state);
                         } else {
-                            return Err(trc::ResourceEvent::BadParameters.into_err());
+                            return Err(crate::trc::ResourceEvent::BadParameters.into_err());
                         }
                     }
                 },
@@ -67,13 +67,13 @@ impl EventSourceHandler for Server {
                         close_after_state = true;
                     }
                     "no" => {}
-                    _ => return Err(trc::ResourceEvent::BadParameters.into_err()),
+                    _ => return Err(crate::trc::ResourceEvent::BadParameters.into_err()),
                 },
                 "ping" => match value.parse::<u32>() {
                     Ok(value) => {
                         ping = value;
                     }
-                    Err(_) => return Err(trc::ResourceEvent::BadParameters.into_err()),
+                    Err(_) => return Err(crate::trc::ResourceEvent::BadParameters.into_err()),
                 },
                 _ => {}
             );

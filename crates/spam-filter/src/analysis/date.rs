@@ -6,11 +6,11 @@
 
 use std::future::Future;
 
-use common::Server;
+use crate::common::Server;
+use crate::store::write::now;
 use mail_parser::HeaderName;
-use store::write::now;
 
-use crate::SpamFilterContext;
+use crate::spam_filter::SpamFilterContext;
 
 pub trait SpamFilterAnalyzeDate: Sync + Send {
     fn spam_filter_analyze_date(

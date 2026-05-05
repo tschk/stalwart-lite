@@ -6,7 +6,7 @@
 
 use sieve::{Context, runtime::Variable};
 
-use crate::scripts::IsMixedCharset;
+use crate::common::scripts::IsMixedCharset;
 
 pub fn fn_is_ascii<'x>(_: &'x Context<'x>, v: Vec<Variable>) -> Variable {
     match &v[0] {

@@ -4,19 +4,19 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::changes::state::JmapCacheState;
+use crate::jmap::changes::state::JmapCacheState;
 use calcard::jscontact::{JSContactProperty, JSContactValue, import::ConversionOptions};
-use common::{Server, auth::AccessToken};
-use groupware::{cache::GroupwareCache, contact::ContactCard};
-use jmap_proto::{
+use crate::common::{Server, auth::AccessToken};
+use crate::groupware::{cache::GroupwareCache, contact::ContactCard};
+use crate::jmap_proto::{
     method::get::{GetRequest, GetResponse},
     object::contact,
     request::reference::MaybeResultReference,
 };
 use jmap_tools::{Map, Value};
-use store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive}};
-use trc::AddContext;
-use types::{
+use crate::store::{ValueKey, roaring::RoaringBitmap, write::{AlignedBytes, Archive}};
+use crate::trc::AddContext;
+use crate::types::{
     acl::Acl,
     blob::BlobId,
     collection::{Collection, SyncCollection},
@@ -28,7 +28,7 @@ pub trait ContactCardGet: Sync + Send {
         &self,
         request: GetRequest<contact::ContactCard>,
         access_token: &AccessToken,
-    ) -> impl Future<Output = trc::Result<GetResponse<contact::ContactCard>>> + Send;
+    ) -> impl Future<Output = crate::trc::Result<GetResponse<contact::ContactCard>>> + Send;
 }
 
 impl ContactCardGet for Server {
@@ -36,7 +36,7 @@ impl ContactCardGet for Server {
         &self,
         mut request: GetRequest<contact::ContactCard>,
         access_token: &AccessToken,
-    ) -> trc::Result<GetResponse<contact::ContactCard>> {
+    ) -> crate::trc::Result<GetResponse<contact::ContactCard>> {
         let ids = request.unwrap_ids(self.core.jmap.get_max_objects)?;
         let return_all_properties = request
             .properties
@@ -114,7 +114,7 @@ impl ContactCardGet for Server {
 
             let contact = _contact
                 .deserialize::<ContactCard>()
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
 
             let jscontact = contact
                 .card

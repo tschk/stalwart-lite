@@ -6,7 +6,7 @@
 
 use std::fmt::Display;
 
-use crate::schema::{
+use crate::dav_proto::schema::{
     Namespace, Namespaces,
     response::{BaseCondition, CalCondition, CardCondition, Condition, ErrorResponse},
 };

@@ -4,20 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use common::Server;
-use store::{
+use crate::common::Server;
+use crate::store::{
     IterateParams, SUBSPACE_BLOB_LINK, Serialize, SerializeInfallible, U32_LEN, U64_LEN, ValueKey,
     write::{
         AnyClass, Archiver, BatchBuilder, BlobLink, BlobOp, ValueClass, key::DeserializeBigEndian,
         now,
     },
 };
-use trc::AddContext;
-use types::blob_hash::{BLOB_HASH_LEN, BlobHash};
+use crate::trc::AddContext;
+use crate::types::blob_hash::{BLOB_HASH_LEN, BlobHash};
 
 const SUBSPACE_BLOB_RESERVE: u8 = b'j';
 
-pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
+pub(crate) async fn migrate_blobs_v014(server: &Server) -> crate::trc::Result<()> {
     let mut num_blobs = 0;
     for byte in 0..=u8::MAX {
         // Validate linked blobs
@@ -48,11 +48,16 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                 IterateParams::new(from_key, to_key).ascending().no_values(),
                 |key, value| {
                     if key.len() == BLOB_HASH_LEN + U64_LEN + 1 {
-                        let hash =
-                            BlobHash::try_from_hash_slice(key.get(0..BLOB_HASH_LEN).ok_or_else(
-                                || trc::Error::corrupted_key(key, value.into(), trc::location!()),
-                            )?)
-                            .unwrap();
+                        let hash = BlobHash::try_from_hash_slice(
+                            key.get(0..BLOB_HASH_LEN).ok_or_else(|| {
+                                crate::trc::Error::corrupted_key(
+                                    key,
+                                    value.into(),
+                                    crate::trc::location!(),
+                                )
+                            })?,
+                        )
+                        .unwrap();
                         let account_id = key.deserialize_be_u32(BLOB_HASH_LEN)?;
                         let document_id = key.deserialize_be_u32(BLOB_HASH_LEN + U32_LEN + 1)?;
                         let collection = key[BLOB_HASH_LEN + U32_LEN];
@@ -76,7 +81,7 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                 },
             )
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
 
         let mut batch = BatchBuilder::new();
         num_blobs += keys.len();
@@ -93,7 +98,7 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                     .store()
                     .write(batch.build_all())
                     .await
-                    .caused_by(trc::location!())?;
+                    .caused_by(crate::trc::location!())?;
                 batch = BatchBuilder::new();
             }
         }
@@ -102,12 +107,12 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
         }
     }
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migrated {num_blobs} blob links")
     );
 
@@ -147,7 +152,11 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                     let account_id = key.deserialize_be_u32(0)?;
                     let hash = BlobHash::try_from_hash_slice(
                         key.get(U32_LEN..BLOB_HASH_LEN + U32_LEN).ok_or_else(|| {
-                            trc::Error::corrupted_key(key, value.into(), trc::location!())
+                            crate::trc::Error::corrupted_key(
+                                key,
+                                value.into(),
+                                crate::trc::location!(),
+                            )
                         })?,
                     )
                     .unwrap();
@@ -185,7 +194,7 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
             },
         )
         .await
-        .caused_by(trc::location!())?;
+        .caused_by(crate::trc::location!())?;
 
     let mut batch = BatchBuilder::new();
     let num_entries = entries.len();
@@ -235,8 +244,8 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                                 hash: entry.hash,
                                 until: entry.until,
                             },
-                            Archiver::new(common::enterprise::undelete::DeletedItem {
-                                typ: common::enterprise::undelete::DeletedItemType::Email {
+                            Archiver::new(crate::common::enterprise::undelete::DeletedItem {
+                                typ: crate::common::enterprise::undelete::DeletedItemType::Email {
                                     from: "unknown".into(),
                                     subject: "unknown".into(),
                                     received_at: deleted_at,
@@ -245,7 +254,7 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                                 deleted_at,
                             })
                             .serialize()
-                            .caused_by(trc::location!())?,
+                            .caused_by(crate::trc::location!())?,
                         );
                 }
 
@@ -268,13 +277,13 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
                 .store()
                 .write(batch.build_all())
                 .await
-                .caused_by(trc::location!())?;
+                .caused_by(crate::trc::location!())?;
             batch = BatchBuilder::new();
         }
     }
 
-    trc::event!(
-        Server(trc::ServerEvent::Startup),
+    crate::trc::event!(
+        Server(crate::trc::ServerEvent::Startup),
         Details = format!("Migrated {num_entries} temporary blob links")
     );
 
@@ -283,7 +292,7 @@ pub(crate) async fn migrate_blobs_v014(server: &Server) -> trc::Result<()> {
             .store()
             .write(batch.build_all())
             .await
-            .caused_by(trc::location!())?;
+            .caused_by(crate::trc::location!())?;
     }
 
     Ok(())

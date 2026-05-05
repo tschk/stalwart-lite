@@ -6,10 +6,10 @@
 
 use std::borrow::Cow;
 
+use crate::utils::chained_bytes::SliceRange;
 use mail_parser::DateTime;
-use utils::chained_bytes::SliceRange;
 
-use crate::protocol::literal_string_slice;
+use crate::imap_proto::protocol::literal_string_slice;
 
 use super::{
     Flag, ImapResponse, Sequence, literal_string, quoted_or_literal_string,
@@ -919,10 +919,10 @@ impl ImapResponse for Response<'_> {
 #[cfg(test)]
 mod tests {
 
+    use crate::utils::chained_bytes::SliceRange;
     use mail_parser::DateTime;
-    use utils::chained_bytes::SliceRange;
 
-    use crate::protocol::{Flag, ImapResponse};
+    use crate::imap_proto::protocol::{Flag, ImapResponse};
 
     use super::{
         Address, AddressGroup, BodyPart, BodyPartExtension, BodyPartFields, DataItem, EmailAddress,

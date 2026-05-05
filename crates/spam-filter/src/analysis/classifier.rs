@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-use crate::{SpamFilterContext, modules::classifier::SpamClassifier};
-use common::Server;
+use crate::common::Server;
+use crate::spam_filter::{SpamFilterContext, modules::classifier::SpamClassifier};
 use std::future::Future;
 
 pub trait SpamFilterAnalyzeClassify: Sync + Send {
@@ -26,7 +26,10 @@ impl SpamFilterAnalyzeClassify for Server {
             && !ctx.result.has_tag("SPAM_TRAP")
             && let Err(err) = self.spam_classify(ctx).await
         {
-            trc::error!(err.span_id(ctx.input.span_id).caused_by(trc::location!()));
+            crate::trc::error!(
+                err.span_id(ctx.input.span_id)
+                    .caused_by(crate::trc::location!())
+            );
         }
     }
 
@@ -40,7 +43,10 @@ impl SpamFilterAnalyzeClassify for Server {
                     }
                     Ok(false) => (),
                     Err(err) => {
-                        trc::error!(err.span_id(ctx.input.span_id).caused_by(trc::location!()));
+                        crate::trc::error!(
+                            err.span_id(ctx.input.span_id)
+                                .caused_by(crate::trc::location!())
+                        );
                     }
                 }
             }
