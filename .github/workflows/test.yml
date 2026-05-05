@@ -26,13 +26,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: JMAP Protocol Tests
-        run: cargo test -p stalwart-lite jmap_proto:: -- --nocapture
+        run: |
+          cargo test -p stalwart-lite jmap_proto:: -- --nocapture
 
       - name: IMAP Protocol Tests
-        run: cargo test -p stalwart-lite imap_proto:: -- --nocapture
+        run: |
+          cargo test -p stalwart-lite imap_proto:: -- --nocapture
 
       - name: Full-text search Tests
-        run: cargo test -p stalwart-lite store:: -- --nocapture
+        run: |
+          cargo test -p stalwart-lite store:: -- --nocapture
 
       - name: Workspace Tests
         run: cargo test --workspace
