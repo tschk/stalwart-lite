@@ -237,7 +237,9 @@ impl QueueManagement for Server {
                                 for recipient in &mut message.message.recipients {
                                     if matches!(
                                         recipient.status,
-                                        Status::Scheduled | Status::TemporaryFailure(_)
+                                        Status::Scheduled
+                                            | Status::TemporaryFailure(_)
+                                            | Status::PermanentFailure(_)
                                     ) {
                                         recipient.retry.due = time;
                                         if recipient
@@ -290,7 +292,9 @@ impl QueueManagement for Server {
                     for recipient in &mut message.message.recipients {
                         if matches!(
                             recipient.status,
-                            Status::Scheduled | Status::TemporaryFailure(_)
+                            Status::Scheduled
+                                | Status::TemporaryFailure(_)
+                                | Status::PermanentFailure(_)
                         ) && item
                             .as_ref()
                             .is_none_or(|item| recipient.address().contains(item))

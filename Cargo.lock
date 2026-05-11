@@ -6653,7 +6653,7 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stalwart-lite"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -6797,7 +6797,7 @@ dependencies = [
 
 [[package]]
 name = "stalwart-lite-cli"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "clap",
  "console",
@@ -6822,7 +6822,7 @@ dependencies = [
 
 [[package]]
 name = "stalwart-lite-event-macro"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6831,7 +6831,7 @@ dependencies = [
 
 [[package]]
 name = "stalwart-lite-proc-macros"
-version = "0.15.5"
+version = "0.15.6"
 dependencies = [
  "proc-macro2",
  "quote",

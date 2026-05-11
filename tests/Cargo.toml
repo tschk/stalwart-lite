@@ -20,29 +20,29 @@ nats = ["store/nats"]
 azure = ["store/azure"]
 
 [dev-dependencies]
-store = { path = "../crates/store", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-store"}
-nlp = { path = "../crates/nlp", version = "0.15.5" , package = "stalwart-lite-nlp"}
-directory = { path = "../crates/directory", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-directory"}
-jmap = { path = "../crates/jmap", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-jmap"}
-jmap_proto = { path = "../crates/jmap-proto", version = "0.15.5" , package = "stalwart-lite-jmap-proto"}
-imap = { path = "../crates/imap", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-imap"}
-imap_proto = { path = "../crates/imap-proto", version = "0.15.5" , package = "stalwart-lite-imap-proto"}
-types = { path = "../crates/types", version = "0.15.5" , package = "stalwart-lite-types"}
-dav = { path = "../crates/dav", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-dav"}
-dav-proto = { path = "../crates/dav-proto", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-dav-proto"}
-groupware = { path = "../crates/groupware", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-groupware"}
-http = { path = "../crates/http", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-http"}
-http_proto = { path = "../crates/http-proto", version = "0.15.5" , package = "stalwart-lite-http-proto"}
-services = { path = "../crates/services", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-services"}
-pop3 = { path = "../crates/pop3", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-pop3"}
-smtp = { path = "../crates/smtp", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-smtp"}
-common = { path = "../crates/common", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-common"}
-email = { path = "../crates/email", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-email"}
-spam-filter = { path = "../crates/spam-filter", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-spam-filter"}
-migration = { path = "../crates/migration", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-migration"}
-trc = { path = "../crates/trc", version = "0.15.5", features = ["enterprise"] , package = "stalwart-lite-trc"}
-managesieve = { path = "../crates/managesieve", version = "0.15.5", features = ["test_mode", "enterprise"] , package = "stalwart-lite-managesieve"}
-utils = { path = "../crates/utils", version = "0.15.5", features = ["test_mode"] , package = "stalwart-lite-utils"}
+store = { path = "../crates/store", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-store"}
+nlp = { path = "../crates/nlp", version = "0.15.6" , package = "stalwart-lite-nlp"}
+directory = { path = "../crates/directory", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-directory"}
+jmap = { path = "../crates/jmap", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-jmap"}
+jmap_proto = { path = "../crates/jmap-proto", version = "0.15.6" , package = "stalwart-lite-jmap-proto"}
+imap = { path = "../crates/imap", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-imap"}
+imap_proto = { path = "../crates/imap-proto", version = "0.15.6" , package = "stalwart-lite-imap-proto"}
+types = { path = "../crates/types", version = "0.15.6" , package = "stalwart-lite-types"}
+dav = { path = "../crates/dav", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-dav"}
+dav-proto = { path = "../crates/dav-proto", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-dav-proto"}
+groupware = { path = "../crates/groupware", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-groupware"}
+http = { path = "../crates/http", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-http"}
+http_proto = { path = "../crates/http-proto", version = "0.15.6" , package = "stalwart-lite-http-proto"}
+services = { path = "../crates/services", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-services"}
+pop3 = { path = "../crates/pop3", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-pop3"}
+smtp = { path = "../crates/smtp", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-smtp"}
+common = { path = "../crates/common", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-common"}
+email = { path = "../crates/email", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-email"}
+spam-filter = { path = "../crates/spam-filter", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-spam-filter"}
+migration = { path = "../crates/migration", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-migration"}
+trc = { path = "../crates/trc", version = "0.15.6", features = ["enterprise"] , package = "stalwart-lite-trc"}
+managesieve = { path = "../crates/managesieve", version = "0.15.6", features = ["test_mode", "enterprise"] , package = "stalwart-lite-managesieve"}
+utils = { path = "../crates/utils", version = "0.15.6", features = ["test_mode"] , package = "stalwart-lite-utils"}
 jmap-client = { version = "0.4", features = ["websockets", "debug", "async"] } 
 tokio = { version = "1.47", features = ["full"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }

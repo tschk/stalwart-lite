@@ -10,8 +10,8 @@ Release workflows trigger on tags matching `v*.*.*`.
 2. Create and push a version tag:
 
    ```bash
-   git tag v0.15.5-lite.1
-   git push origin v0.15.5-lite.1
+   git tag v0.15.6
+   git push origin v0.15.6
    ```
 
 3. Wait for the release workflow to finish.

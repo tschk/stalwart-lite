@@ -21,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.15.5"
+version = "0.15.6"
 license = "AGPL-3.0-only"
 
 [[bin]]
@@ -33,8 +33,8 @@ name = "stalwart_lib"
 path = "crates/main/src/lib.rs"
 
 [dependencies]
-event_macro = { path = "crates/trc/event-macro", version = "0.15.5", package = "stalwart-lite-event-macro" }
-proc_macros = { path = "crates/utils/proc-macros", version = "0.15.5", package = "stalwart-lite-proc-macros" }
+event_macro = { path = "crates/trc/event-macro", version = "0.15.6", package = "stalwart-lite-event-macro" }
+proc_macros = { path = "crates/utils/proc-macros", version = "0.15.6", package = "stalwart-lite-proc-macros" }
 sieve-rs = { version = "0.7", features = ["rkyv", "serde"] }
 mail-parser = { version = "0.11", features = ["full_encoding", "rkyv"] }
 mail-builder = { version = "0.4" }
